@@ -48,6 +48,7 @@ class DualAxisSequencer:
         logger,
         grace_mgr,
         get_current_position: Callable[[str], int | None],
+        set_commanded_position: Callable[[str, int], None],
         position_tolerance: int,
         is_dry_run: Callable[[], bool],
     ) -> None:
@@ -56,6 +57,7 @@ class DualAxisSequencer:
         self._logger = logger
         self._grace_mgr = grace_mgr
         self._get_current_position = get_current_position
+        self._set_commanded_position = set_commanded_position
         self._position_tolerance = position_tolerance
         self._is_dry_run = is_dry_run
         # Per-entity timestamps. Keep these in the sequencer (rather than on
@@ -132,6 +134,33 @@ class DualAxisSequencer:
                 entity_id,
                 err,
             )
+            return
+
+        self._rebase_commanded_position(entity_id, position_target)
+
+    def _rebase_commanded_position(self, entity_id: str, position_target: int) -> None:
+        """Reset the cmd_svc target to the actual post-tilt position.
+
+        After set_cover_tilt_position returns, the motor has finished its
+        mechanical back-drive of the vertical axis. Reading current_position now
+        and pushing that value into set_commanded_position() makes the next
+        reconciliation pass compute zero delta — closing the loop where
+        reconciliation re-issued set_cover_position, which re-fired the
+        sequencer, which back-drove the cover again.
+        """
+        actual = self._get_current_position(entity_id)
+        if actual is None:
+            return
+        if abs(actual - position_target) <= self._position_tolerance:
+            return
+        self._logger.debug(
+            "Venetian post-tilt rebase: %s commanded %s%% → actual %s%% "
+            "(absorbing motor back-drive)",
+            entity_id,
+            position_target,
+            actual,
+        )
+        self._set_commanded_position(entity_id, actual)
 
     async def _wait_for_position_settle(
         self, entity_id: str, target: int

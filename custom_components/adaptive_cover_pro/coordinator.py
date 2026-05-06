@@ -352,6 +352,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             logger=self.logger,
             grace_mgr=self._grace_mgr,
             get_current_position=self._cmd_svc._get_current_position,
+            set_commanded_position=self._cmd_svc.set_target,
             position_tolerance=POSITION_TOLERANCE_PERCENT,
             is_dry_run=lambda: self._cmd_svc.dry_run,
         )
