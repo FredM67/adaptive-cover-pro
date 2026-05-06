@@ -177,6 +177,20 @@ POSITION_CHECK_INTERVAL_MINUTES = 1  # Fixed interval for position verification
 POSITION_TOLERANCE_PERCENT = 3  # Fixed tolerance for position matching
 MAX_POSITION_RETRIES = 3  # Maximum retry attempts before giving up
 
+# Dual-axis venetian sequencing (Issue #33). After a position command lands,
+# the service polls current_position every poll-interval seconds, declares
+# the cover "settled" when the position matches the target within the standard
+# tolerance OR has not changed for three consecutive samples, and proceeds to
+# the tilt command.  Hard cap at the timeout so a stuck cover does not block
+# the rest of the update cycle indefinitely.
+VENETIAN_POSITION_SETTLE_POLL_SECONDS = 0.5
+VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS = 60.0
+VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES = 3
+# Suppress tilt-axis manual override detection for this many seconds after a
+# venetian position command. Real motors back-rotate the slats while moving
+# vertically, and that drift would otherwise read as a user touch.
+VENETIAN_TILT_SUPPRESSION_SECONDS = 90.0
+
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command
 STARTUP_GRACE_PERIOD_SECONDS = (
@@ -245,6 +259,7 @@ class SensorType:
     BLIND = "cover_blind"
     AWNING = "cover_awning"
     TILT = "cover_tilt"
+    VENETIAN = "cover_venetian"
 
 
 class ControlStatus:

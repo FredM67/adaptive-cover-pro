@@ -142,7 +142,12 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-SENSOR_TYPE_MENU = [SensorType.BLIND, SensorType.AWNING, SensorType.TILT]
+SENSOR_TYPE_MENU = [
+    SensorType.BLIND,
+    SensorType.AWNING,
+    SensorType.TILT,
+    SensorType.VENETIAN,
+]
 
 _STANDALONE_SENTINEL = "__standalone__"
 
@@ -150,6 +155,7 @@ _GEOMETRY_WIKI_URL: dict[str, str] = {
     SensorType.BLIND: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Vertical",
     SensorType.AWNING: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Horizontal",
     SensorType.TILT: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Tilt",
+    SensorType.VENETIAN: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Venetian-Blinds",
 }
 
 
@@ -281,6 +287,8 @@ GEOMETRY_TILT_SCHEMA = vol.Schema(
         ),
     }
 )
+
+GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(GEOMETRY_TILT_SCHEMA.schema)
 
 SUN_TRACKING_SCHEMA = vol.Schema(
     {
@@ -1033,6 +1041,28 @@ def _check_cover_capabilities(
                     "⚠️ Configured as tilt (venetian) but no bound cover "
                     "advertises set_tilt_position."
                 )
+        elif sensor_type == SensorType.VENETIAN:
+            missing_pos = [
+                eid for eid, caps in known.items() if not caps.get("has_set_position")
+            ]
+            missing_tilt = [
+                eid
+                for eid, caps in known.items()
+                if not caps.get("has_set_tilt_position")
+            ]
+            if missing_pos:
+                warnings.append(
+                    "⚠️ Configured as venetian but "
+                    f"{', '.join(missing_pos)} does not support set_position — "
+                    "venetian requires both set_position and set_tilt_position."
+                )
+            if missing_tilt:
+                warnings.append(
+                    "⚠️ Configured as venetian but "
+                    f"{', '.join(missing_tilt)} does not support "
+                    "set_tilt_position — venetian requires both set_position "
+                    "and set_tilt_position."
+                )
         elif sensor_type in (SensorType.BLIND, SensorType.AWNING):
             if not any(caps.get("has_set_position") for caps in known.values()):
                 type_word = (
@@ -1185,6 +1215,7 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
         SensorType.BLIND: "Vertical Blind",
         SensorType.AWNING: "Horizontal Awning",
         SensorType.TILT: "Venetian / Tilt Blind",
+        SensorType.VENETIAN: "Venetian Blind (Dual-Axis)",
     }
     type_label = type_labels.get(sensor_type, "Cover") if sensor_type else "Cover"
 
@@ -1271,7 +1302,7 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
         lines.append(type_label)
 
     # Physical dimensions in plain English
-    if sensor_type in (SensorType.BLIND, None):
+    if sensor_type in (SensorType.BLIND, SensorType.VENETIAN, None):
         h = config.get(CONF_HEIGHT_WIN)
         d = config.get(CONF_DISTANCE)
         depth = config.get(CONF_WINDOW_DEPTH) or 0
@@ -1291,6 +1322,16 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
             dim_str += f" ({', '.join(extras)})"
         if dim_str:
             lines.append(dim_str)
+        if sensor_type == SensorType.VENETIAN:
+            tilt_parts = []
+            if (v := config.get(CONF_TILT_DEPTH)) is not None:
+                tilt_parts.append(f"slat depth {v}cm")
+            if (v := config.get(CONF_TILT_DISTANCE)) is not None:
+                tilt_parts.append(f"spacing {v}cm")
+            if (v := config.get(CONF_TILT_MODE)) is not None:
+                tilt_parts.append(f"mode: {v}")
+            if tilt_parts:
+                lines.append(", ".join(tilt_parts))
     elif sensor_type == SensorType.AWNING:
         parts = []
         if (v := config.get(CONF_LENGTH_AWNING)) is not None:
@@ -2127,6 +2168,21 @@ def _build_cover_entity_schema(
                 ),
             )
         )
+    elif sensor_type == SensorType.VENETIAN:
+        # Dual-axis venetian needs BOTH set_position and set_tilt_position.
+        # The HA EntitySelector supported_features filter is OR-of-listed-features,
+        # not AND, so we filter on set_tilt_position (the rarer capability) and
+        # let the capability check at config_flow.py:1036 surface a warning when
+        # the bound entity is missing set_position.
+        entity_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                multiple=True,
+                filter=selector.EntityFilterSelectorConfig(
+                    domain="cover",
+                    supported_features=["cover.CoverEntityFeature.SET_TILT_POSITION"],
+                ),
+            )
+        )
     else:
         entity_selector = selector.EntitySelector(
             selector.EntitySelectorConfig(
@@ -2162,6 +2218,8 @@ def _get_geometry_schema(sensor_type: str) -> vol.Schema:
         return GEOMETRY_HORIZONTAL_SCHEMA
     if sensor_type == SensorType.TILT:
         return GEOMETRY_TILT_SCHEMA
+    if sensor_type == SensorType.VENETIAN:
+        return GEOMETRY_VENETIAN_SCHEMA
     return GEOMETRY_VERTICAL_SCHEMA
 
 
@@ -2747,6 +2805,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             "cover_blind": "Vertical",
             "cover_awning": "Horizontal",
             "cover_tilt": "Tilt",
+            "cover_venetian": "Venetian",
         }
         return self.async_create_entry(
             title=f"{type_mapping[self.type_blind]} {self.config['name']}",
@@ -2903,6 +2962,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 "cover_blind": "Vertical",
                 "cover_awning": "Horizontal",
                 "cover_tilt": "Tilt",
+                "cover_venetian": "Venetian",
             }
 
             return self.async_create_entry(  # type: ignore[return-value]
@@ -2918,7 +2978,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
         source_azimuth = source_entry.options.get(CONF_AZIMUTH, 180)
         sensor_type = source_entry.data.get(CONF_SENSOR_TYPE)
-        if sensor_type == SensorType.TILT:
+        if sensor_type in (SensorType.TILT, SensorType.VENETIAN):
             cover_entity_selector = selector.EntitySelector(
                 selector.EntitySelectorConfig(
                     multiple=True,

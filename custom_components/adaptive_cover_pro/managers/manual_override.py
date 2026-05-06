@@ -103,6 +103,9 @@ class AdaptiveCoverManager:
         allow_reset,
         is_waiting,
         manual_threshold,
+        *,
+        our_tilt: int | None = None,
+        is_in_tilt_suppression=None,
     ):
         """Process state change for manual override.
 
@@ -114,11 +117,20 @@ class AdaptiveCoverManager:
         Args:
             states_data: StateChangedData with entity_id, old_state, new_state
             our_state: Expected position from coordinator calculation
-            blind_type: Cover type (cover_blind, cover_awning, cover_tilt)
+            blind_type: Cover type (cover_blind, cover_awning, cover_tilt,
+                cover_venetian)
             allow_reset: If True, updates timestamp on subsequent changes
             is_waiting: Callable(entity_id) -> bool indicating whether the cover
                 is currently expected to be moving toward a commanded target.
             manual_threshold: Minimum position delta to trigger manual detection
+            our_tilt: Expected tilt for venetian (Issue #33). When provided
+                with blind_type=="cover_venetian", a tilt-axis delta from this
+                value also marks the cover as manual — but only outside the
+                tilt-suppression window (see ``is_in_tilt_suppression``).
+            is_in_tilt_suppression: Callable(entity_id) -> bool. When True,
+                tilt-axis drift is treated as motor back-rotate (real venetian
+                motors rotate the slats while moving vertically) and ignored.
+                Position-axis drift is always evaluated regardless.
 
         """
         event = states_data
@@ -138,6 +150,55 @@ class AdaptiveCoverManager:
             return
 
         new_state = event.new_state
+
+        # Venetian: evaluate the tilt axis up-front. The position axis falls
+        # through to the existing logic below. tilt_in_suppression() is True
+        # for the suppression window after a position command — drift inside
+        # that window is the motor's back-rotate, not a user touch.
+        if blind_type == "cover_venetian" and our_tilt is not None:
+            new_tilt = new_state.attributes.get("current_tilt_position")
+            if new_tilt is not None and new_tilt != our_tilt:
+                tilt_suppressed = bool(
+                    is_in_tilt_suppression and is_in_tilt_suppression(entity_id)
+                )
+                effective_threshold = max(
+                    manual_threshold if manual_threshold is not None else 0,
+                    POSITION_TOLERANCE_PERCENT,
+                )
+                tilt_delta = abs(our_tilt - new_tilt)
+                if tilt_suppressed:
+                    self._record_event(
+                        entity_id,
+                        "manual_override_rejected_tilt_suppression",
+                        our_state=our_tilt,
+                        new_position=new_tilt,
+                        effective_threshold=effective_threshold,
+                        reason=(
+                            f"tilt delta {tilt_delta:.1f}% within "
+                            "venetian tilt-suppression window"
+                        ),
+                    )
+                elif tilt_delta >= effective_threshold:
+                    self.logger.debug(
+                        "Manual tilt change for %s: ours=%s, new=%s",
+                        entity_id,
+                        our_tilt,
+                        new_tilt,
+                    )
+                    self._record_event(
+                        entity_id,
+                        "manual_override_set",
+                        our_state=our_tilt,
+                        new_position=new_tilt,
+                        effective_threshold=effective_threshold,
+                        reason=(
+                            f"tilt delta {tilt_delta:.1f}% >= threshold "
+                            f"{effective_threshold}% (no recent position cmd)"
+                        ),
+                    )
+                    self.mark_manual_control(entity_id)
+                    self.set_last_updated(entity_id, new_state, allow_reset)
+                    return
 
         caps = check_cover_features(self.hass, entity_id)
         if should_use_tilt(

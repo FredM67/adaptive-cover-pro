@@ -69,12 +69,28 @@ class VenetianCoverCalculation:
 
         """
         position = round(self._vertical.calculate_percentage())
+        return DualAxisResult(position=position, tilt=self._compute_tilt())
+
+    def tilt_for_position(self, position: int) -> int:
+        """Return the engine-derived tilt for a position resolved upstream.
+
+        The pipeline picks the position (solar / climate / overrides /
+        sunset / default).  This call exists so the coordinator can keep
+        position decision-making in the pipeline and ask the engine only
+        for the matching slat angle.  ``position`` is unused for the slat
+        math itself — slat angle is a function of sun geometry — but the
+        argument keeps the call site self-documenting.
+        """
+        return self._compute_tilt()
+
+    def _compute_tilt(self) -> int:
         try:
             raw_tilt = self._tilt.calculate_percentage()
-            tilt = 0 if math.isnan(raw_tilt) else round(raw_tilt)
         except (ValueError, ZeroDivisionError):
-            tilt = self._tilt.config.h_def
-        return DualAxisResult(position=position, tilt=tilt)
+            return self._tilt.config.h_def
+        if math.isnan(raw_tilt):
+            return 0
+        return round(raw_tilt)
 
     @property
     def direct_sun_valid(self) -> bool:
