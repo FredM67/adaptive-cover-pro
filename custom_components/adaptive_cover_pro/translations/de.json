@@ -1056,7 +1056,8 @@
       "options": {
         "cover_blind": "Vertikale Jalousie",
         "cover_awning": "Horizontale Markise",
-        "cover_tilt": "Dreh-Jalousie"
+        "cover_tilt": "Dreh-Jalousie",
+        "cover_venetian": "Jalousette (zweiachsig)"
       }
     },
     "tilt_mode": {
