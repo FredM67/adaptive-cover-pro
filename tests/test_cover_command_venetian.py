@@ -1,25 +1,27 @@
-"""Dual-axis venetian command sequencing tests for CoverCommandService.
+"""Dual-axis venetian command sequencing tests.
 
 Issue #33: a venetian instance owns BOTH set_cover_position AND
-set_cover_tilt_position on a single HA entity. apply_position must:
+set_cover_tilt_position on a single HA entity. The work is split between:
 
-  1. Send set_cover_position with the resolved position.
-  2. Poll current_position until the cover settles or the timeout fires.
-  3. Send set_cover_tilt_position with the engine-derived tilt.
-  4. Stamp ``position_command_at`` so manual_override's tilt-suppression
-     window covers the motor back-rotate.
+  * ``CoverCommandService.apply_position`` — fires ``set_cover_position``
+    and then calls ``context.policy.after_position_command``.
+  * ``VenetianPolicy`` — owns a ``DualAxisSequencer`` that polls
+    ``current_position`` until the cover settles, fires
+    ``set_cover_tilt_position``, and answers
+    ``is_in_tilt_suppression(entity_id)`` for manual_override.
+
+The settle / suppression unit tests live in
+``tests/test_managers/test_dual_axis_sequencer.py``; this file pins the
+``apply_position`` ↔ policy contract end-to-end.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.adaptive_cover_pro.const import (
-    VENETIAN_TILT_SUPPRESSION_SECONDS,
-)
+from custom_components.adaptive_cover_pro.cover_types import VenetianPolicy
 from custom_components.adaptive_cover_pro.managers.cover_command import (
     CoverCommandService,
     PositionContext,
@@ -46,7 +48,24 @@ def svc(hass):
     return s
 
 
-def _ctx_venetian(*, tilt: int | None) -> PositionContext:
+@pytest.fixture
+def attached_policy(svc, hass):
+    """Return a VenetianPolicy with a DualAxisSequencer attached and pre-stubbed."""
+    policy = VenetianPolicy()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=svc._get_current_position,
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+    )
+    # Skip the real polling loop — covered in dual_axis_sequencer unit tests.
+    policy._sequencer._wait_for_position_settle = AsyncMock(return_value=(True, 60))
+    return policy
+
+
+def _ctx_venetian(policy, *, tilt: int | None) -> PositionContext:
     return PositionContext(
         auto_control=True,
         manual_override=False,
@@ -55,8 +74,8 @@ def _ctx_venetian(*, tilt: int | None) -> PositionContext:
         time_threshold=0,
         special_positions=[0, 100],
         force=True,  # Bypass delta/time gates for unit tests
-        is_venetian=True,
         tilt=tilt,
+        policy=policy,
     )
 
 
@@ -81,68 +100,59 @@ def _state_with_position(pos: int):
 
 
 @pytest.mark.asyncio
-async def test_apply_position_emits_position_then_tilt(svc, hass) -> None:
+async def test_apply_position_emits_position_then_tilt(svc, hass, attached_policy):
     """Both services fire on a venetian apply_position with tilt set."""
     entity_id = "cover.venetian_kitchen"
-    # Cover is at 0% (closed), the request is to move to 60% — non-trivial delta.
     hass.states.get.return_value = _state_with_position(0)
 
-    with (
-        _patch_caps_dual_axis(),
-        patch.object(
-            svc, "_wait_for_position_settle", new=AsyncMock(return_value=(True, 60))
-        ),
-    ):
+    with _patch_caps_dual_axis():
         outcome, _ = await svc.apply_position(
-            entity_id, 60, "solar", _ctx_venetian(tilt=80)
+            entity_id, 60, "solar", _ctx_venetian(attached_policy, tilt=80)
         )
 
     assert outcome == "sent"
     assert hass.services.async_call.call_count == 2
     services_called = [call.args[1] for call in hass.services.async_call.call_args_list]
     assert services_called == ["set_cover_position", "set_cover_tilt_position"]
-    # Tilt service carries the requested tilt target
     last_data = hass.services.async_call.call_args_list[-1].args[2]
     assert last_data["tilt_position"] == 80
 
 
 @pytest.mark.asyncio
-async def test_position_command_at_stamped_for_tilt_suppression(svc, hass) -> None:
-    """The position-axis command stamps the suppression window."""
+async def test_apply_position_stamps_suppression_window(svc, hass, attached_policy):
+    """The position-axis command stamps the policy's suppression window."""
     entity_id = "cover.venetian_lounge"
     hass.states.get.return_value = _state_with_position(0)
 
-    with (
-        _patch_caps_dual_axis(),
-        patch.object(
-            svc, "_wait_for_position_settle", new=AsyncMock(return_value=(True, 40))
-        ),
-    ):
-        await svc.apply_position(entity_id, 40, "solar", _ctx_venetian(tilt=70))
+    with _patch_caps_dual_axis():
+        await svc.apply_position(
+            entity_id, 40, "solar", _ctx_venetian(attached_policy, tilt=70)
+        )
 
-    state = svc.state(entity_id)
-    assert state.position_command_at is not None
-    assert svc.is_in_venetian_tilt_suppression(entity_id) is True
-
-
-def test_is_in_venetian_tilt_suppression_expires(svc) -> None:
-    """The suppression window expires after VENETIAN_TILT_SUPPRESSION_SECONDS."""
-    entity_id = "cover.venetian"
-    state = svc.state(entity_id)
-    state.position_command_at = dt.datetime.now(dt.UTC) - dt.timedelta(
-        seconds=VENETIAN_TILT_SUPPRESSION_SECONDS + 1
-    )
-    assert svc.is_in_venetian_tilt_suppression(entity_id) is False
-
-
-def test_is_in_venetian_tilt_suppression_unknown_entity(svc) -> None:
-    """No prior position command means no suppression window."""
-    assert svc.is_in_venetian_tilt_suppression("cover.never_touched") is False
+    assert attached_policy.is_in_tilt_suppression(entity_id) is True
 
 
 @pytest.mark.asyncio
-async def test_apply_position_skips_tilt_for_non_venetian_context(svc, hass) -> None:
-    """Without is_venetian=True, only the position service fires."""
+async def test_apply_position_skips_tilt_when_no_tilt_target(
+    svc, hass, attached_policy
+):
+    """Without ``context.tilt``, only the position service fires."""
+    entity_id = "cover.venetian_no_tilt"
+    hass.states.get.return_value = _state_with_position(0)
+
+    with _patch_caps_dual_axis():
+        outcome, _ = await svc.apply_position(
+            entity_id, 60, "solar", _ctx_venetian(attached_policy, tilt=None)
+        )
+
+    assert outcome == "sent"
+    assert hass.services.async_call.call_count == 1
+    assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
+
+
+@pytest.mark.asyncio
+async def test_apply_position_no_policy_skips_tilt_entirely(svc, hass):
+    """When PositionContext.policy is None (non-venetian path), no tilt fires."""
     entity_id = "cover.kitchen"
     hass.states.get.return_value = _state_with_position(0)
     ctx = PositionContext(
@@ -153,56 +163,13 @@ async def test_apply_position_skips_tilt_for_non_venetian_context(svc, hass) -> 
         time_threshold=0,
         special_positions=[0, 100],
         force=True,
-        is_venetian=False,
-        tilt=80,  # Set but ignored because is_venetian=False
+        tilt=80,  # Set but ignored because policy is None
+        policy=None,
     )
 
-    with (
-        _patch_caps_dual_axis(),
-        patch.object(
-            svc, "_wait_for_position_settle", new=AsyncMock(return_value=(True, 60))
-        ),
-    ):
+    with _patch_caps_dual_axis():
         outcome, _ = await svc.apply_position(entity_id, 60, "solar", ctx)
 
     assert outcome == "sent"
     assert hass.services.async_call.call_count == 1
     assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
-
-
-@pytest.mark.asyncio
-async def test_settle_helper_returns_when_target_reached(svc, hass) -> None:
-    """The settle poll returns True as soon as current_position is within tolerance."""
-    entity_id = "cover.venetian"
-    samples = iter([_state_with_position(80), _state_with_position(50)])
-    hass.states.get.side_effect = lambda _eid: next(samples)
-
-    with patch(
-        "custom_components.adaptive_cover_pro.managers.cover_command.check_cover_features",
-        return_value={
-            "has_set_position": True,
-            "has_set_tilt_position": True,
-            "has_open": True,
-            "has_close": True,
-            "has_stop": True,
-        },
-    ):
-        reached, last = await svc._wait_for_position_settle(entity_id, target=50)
-
-    assert reached is True
-    assert last == 50
-
-
-@pytest.mark.asyncio
-async def test_settle_helper_returns_on_unavailable_position(svc, hass) -> None:
-    """If current_position drops to None, settle bails out instead of looping."""
-    entity_id = "cover.flaky"
-    state = MagicMock()
-    state.state = "unknown"
-    state.attributes = {}
-    hass.states.get.return_value = state
-
-    reached, last = await svc._wait_for_position_settle(entity_id, target=50)
-
-    assert reached is False
-    assert last is None

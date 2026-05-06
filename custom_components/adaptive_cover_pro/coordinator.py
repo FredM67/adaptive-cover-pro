@@ -27,13 +27,8 @@ except ImportError:
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .helpers import compute_effective_default, state_attr
-from .engine.covers import (
-    AdaptiveHorizontalCover,
-    AdaptiveTiltCover,
-    AdaptiveVerticalCover,
-    VenetianCoverCalculation,
-)
 from .config_context_adapter import ConfigContextAdapter
+from .cover_types import CoverTypePolicy, get_policy
 from .services.configuration_service import ConfigurationService
 from .const import (
     _LOGGER,
@@ -116,6 +111,7 @@ from .const import (
     CONF_TRANSIT_TIMEOUT,
     DEFAULT_DEBUG_EVENT_BUFFER_SIZE,
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
+    POSITION_TOLERANCE_PERCENT,
     DOMAIN,
     LOGGER,
     STARTUP_GRACE_PERIOD_SECONDS,
@@ -155,7 +151,6 @@ from .pipeline.registry import PipelineRegistry
 from .pipeline.types import (
     ClimateOptions,
     CustomPositionSensorState,
-    DecisionStep,
     PipelineSnapshot,
 )
 from .enums import ControlMethod
@@ -208,6 +203,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.logger = ConfigContextAdapter(_LOGGER)
         self.logger.set_config_name(self.config_entry.data.get("name"))
         self._cover_type = self.config_entry.data.get("sensor_type")
+        self._policy: CoverTypePolicy = get_policy(self._cover_type)
         self._climate_mode = self.config_entry.options.get(CONF_CLIMATE_MODE, False)
         self._inverse_state = self.config_entry.options.get(CONF_INVERSE_STATE, False)
         self._use_interpolation = self.config_entry.options.get(CONF_INTERP, False)
@@ -349,6 +345,18 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             event_buffer=self._event_buffer,
         )
 
+        # Late-bind cover-type policy dependencies (e.g. VenetianPolicy
+        # constructs its DualAxisSequencer here once cmd_svc + grace_mgr are
+        # available).  Default policies have a no-op attach.
+        self._policy.attach(
+            hass=self.hass,
+            logger=self.logger,
+            grace_mgr=self._grace_mgr,
+            get_current_position=self._cmd_svc._get_current_position,
+            position_tolerance=POSITION_TOLERANCE_PERCENT,
+            is_dry_run=lambda: self._cmd_svc.dry_run,
+        )
+
         # Time window manager (start/end time checks)
         self._time_mgr = TimeWindowManager(
             hass=self.hass, logger=self.logger, event_buffer=self._event_buffer
@@ -377,26 +385,6 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def last_skipped_action(self) -> dict:
         """Delegate to CoverCommandService.last_skipped_action."""
         return self._cmd_svc.last_skipped_action
-
-    @property
-    def is_tilt_cover(self) -> bool:
-        """Check if this is a tilt cover."""
-        return self._cover_type == "cover_tilt"
-
-    @property
-    def is_blind_cover(self) -> bool:
-        """Check if this is a vertical blind."""
-        return self._cover_type == "cover_blind"
-
-    @property
-    def is_awning_cover(self) -> bool:
-        """Check if this is a horizontal awning."""
-        return self._cover_type == "cover_awning"
-
-    @property
-    def is_venetian_cover(self) -> bool:
-        """Check if this is a dual-axis venetian (single entity, position + tilt)."""
-        return self._cover_type == "cover_venetian"
 
     @property
     def is_force_override_active(self) -> bool:
@@ -1088,15 +1076,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._cover_data = cover_data
 
         # Build snapshot with raw state — handlers evaluate their own conditions
-        glare_zones_cfg = None
+        glare_zones_cfg = self._policy.glare_zones_config(
+            self._config_service, self.config_entry.options
+        )
         active_zone_names: set[str] = set()
-        if self.is_blind_cover:
-            options_local = self.config_entry.options
-            glare_zones_cfg = self._config_service.get_glare_zones_config(options_local)
-            if glare_zones_cfg is not None:
-                for idx, zone in enumerate(glare_zones_cfg.zones):
-                    if getattr(self, f"glare_zone_{idx}", True):
-                        active_zone_names.add(zone.name)
+        if glare_zones_cfg is not None:
+            for idx, zone in enumerate(glare_zones_cfg.zones):
+                if getattr(self, f"glare_zone_{idx}", True):
+                    active_zone_names.add(zone.name)
 
         snapshot = PipelineSnapshot(
             cover=cover_data,
@@ -1154,29 +1141,19 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             configured_cloudy_pos=options.get(CONF_CLOUDY_POSITION),
         )
 
-        # Venetian dual-axis: fill the tilt that pairs with the resolved
-        # position, and append a synthetic terminal "venetian_engine" step
-        # to the decision trace so diagnostics show how tilt was derived.
-        if self.is_venetian_cover:
-            venetian_calc = self._build_venetian_calc(options)
-            tilt = venetian_calc.tilt_for_position(self._pipeline_result.position)
-            trace = list(self._pipeline_result.decision_trace) + [
-                DecisionStep(
-                    handler="venetian_engine",
-                    matched=True,
-                    reason=(
-                        f"slat angle for position {self._pipeline_result.position}% — "
-                        f"tilt {tilt}%"
-                    ),
-                    position=self._pipeline_result.position,
-                    tilt=tilt,
-                )
-            ]
-            self._pipeline_result = replace(
-                self._pipeline_result,
-                tilt=tilt,
-                decision_trace=trace,
-            )
+        # Cover-type policy hook: dual-axis covers (venetian) compose the
+        # secondary-axis target here and append a synthetic decision-trace
+        # step. Default policies return the result unchanged.
+        self._pipeline_result = self._policy.post_pipeline_resolve(
+            self._pipeline_result,
+            logger=self.logger,
+            sol_azi=cover_data.sol_azi,
+            sol_elev=cover_data.sol_elev,
+            sun_data=cover_data.sun_data,
+            config=cover_data.config,
+            config_service=self._config_service,
+            options=options,
+        )
 
         self.logger.debug(
             "Pipeline result: %s → %s",
@@ -1432,12 +1409,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 if self._pipeline_result
                 else False
             ),
-            is_venetian=self.is_venetian_cover,
-            tilt=(
-                self._pipeline_result.tilt
-                if self._pipeline_result is not None and self.is_venetian_cover
-                else None
-            ),
+            policy=self._policy,
+            **self._policy.position_context_overrides(self._pipeline_result),
         )
 
     async def _dispatch_to_cover(
@@ -1676,11 +1649,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             expected_position = state if recorded_target is None else recorded_target
 
             was_manual = self.manager.is_cover_manual(entity_id)
-            expected_tilt: int | None = None
-            tilt_suppression_check = None
-            if self.is_venetian_cover and self._pipeline_result is not None:
-                expected_tilt = self._pipeline_result.tilt
-                tilt_suppression_check = self._cmd_svc.is_in_venetian_tilt_suppression
+            secondary_axis_check = (
+                self._policy.secondary_axis_check(self._pipeline_result, self._cmd_svc)
+                if self._pipeline_result is not None
+                else None
+            )
             self.manager.handle_state_change(
                 event_data,
                 expected_position,
@@ -1688,8 +1661,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self.manual_reset,
                 self._cmd_svc.is_waiting_for_target,
                 self.manual_threshold,
-                our_tilt=expected_tilt,
-                is_in_tilt_suppression=tilt_suppression_check,
+                secondary_axis_check=secondary_axis_check,
             )
             # When a cover transitions into manual override, discard any
             # pre-existing integration target (including safety-tagged
@@ -1882,75 +1854,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         _raw_azi, _raw_elev = self.pos_sun
         sol_azi = _raw_azi if _raw_azi is not None else 0.0
         sol_elev = _raw_elev if _raw_elev is not None else 0.0
-
-        if self.is_blind_cover:
-            vert_config = self._config_service.get_vertical_data(options)
-            glare_zones_cfg = self._config_service.get_glare_zones_config(options)
-            if glare_zones_cfg is not None:
-                vert_config = replace(vert_config, glare_zones=glare_zones_cfg)
-            cover_data = AdaptiveVerticalCover(
-                logger=self.logger,
-                sol_azi=sol_azi,
-                sol_elev=sol_elev,
-                sun_data=sun_data,
-                config=config,
-                vert_config=vert_config,
-            )
-        elif self.is_awning_cover:
-            cover_data = AdaptiveHorizontalCover(
-                logger=self.logger,
-                sol_azi=sol_azi,
-                sol_elev=sol_elev,
-                sun_data=sun_data,
-                config=config,
-                vert_config=self._config_service.get_vertical_data(options),
-                horiz_config=self._config_service.get_horizontal_data(options),
-            )
-        elif self.is_tilt_cover:
-            cover_data = AdaptiveTiltCover(
-                logger=self.logger,
-                sol_azi=sol_azi,
-                sol_elev=sol_elev,
-                sun_data=sun_data,
-                config=config,
-                tilt_config=self._config_service.get_tilt_data(options),
-            )
-        elif self.is_venetian_cover:
-            # Venetian: the pipeline picks position using the vertical cover
-            # (same handlers, same math as cover_blind). The tilt is filled
-            # post-pipeline via VenetianCoverCalculation.tilt_for_position().
-            cover_data = AdaptiveVerticalCover(
-                logger=self.logger,
-                sol_azi=sol_azi,
-                sol_elev=sol_elev,
-                sun_data=sun_data,
-                config=config,
-                vert_config=self._config_service.get_vertical_data(options),
-            )
-        else:
-            msg = f"Unsupported cover type: {self._cover_type!r}"
-            raise ValueError(msg)
-        return cover_data
-
-    def _build_venetian_calc(self, options) -> VenetianCoverCalculation:
-        """Build a venetian dual-axis calculator for the current cover.
-
-        Used by ``_calculate_cover_state`` to derive the tilt that pairs with
-        the position resolved by the pipeline. Cheap — no I/O.
-        """
-        sun_data = self._sun_provider.create_sun_data(self.hass.config.time_zone)
-        config = self._config_service.get_common_data(options)
-        _raw_azi, _raw_elev = self.pos_sun
-        sol_azi = _raw_azi if _raw_azi is not None else 0.0
-        sol_elev = _raw_elev if _raw_elev is not None else 0.0
-        return VenetianCoverCalculation(
-            config=config,
-            vert_config=self._config_service.get_vertical_data(options),
-            tilt_config=self._config_service.get_tilt_data(options),
-            sun_data=sun_data,
+        return self._policy.build_calc_engine(
+            logger=self.logger,
             sol_azi=sol_azi,
             sol_elev=sol_elev,
-            logger=self.logger,
+            sun_data=sun_data,
+            config=config,
+            config_service=self._config_service,
+            options=options,
         )
 
     @property

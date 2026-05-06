@@ -1035,43 +1035,13 @@ def _check_cover_capabilities(
                 "others are open/close-only — they will be driven differently."
             )
 
-        if sensor_type == SensorType.TILT:
-            if not any(caps.get("has_set_tilt_position") for caps in known.values()):
-                warnings.append(
-                    "⚠️ Configured as tilt (venetian) but no bound cover "
-                    "advertises set_tilt_position."
-                )
-        elif sensor_type == SensorType.VENETIAN:
-            missing_pos = [
-                eid for eid, caps in known.items() if not caps.get("has_set_position")
-            ]
-            missing_tilt = [
-                eid
-                for eid, caps in known.items()
-                if not caps.get("has_set_tilt_position")
-            ]
-            if missing_pos:
-                warnings.append(
-                    "⚠️ Configured as venetian but "
-                    f"{', '.join(missing_pos)} does not support set_position — "
-                    "venetian requires both set_position and set_tilt_position."
-                )
-            if missing_tilt:
-                warnings.append(
-                    "⚠️ Configured as venetian but "
-                    f"{', '.join(missing_tilt)} does not support "
-                    "set_tilt_position — venetian requires both set_position "
-                    "and set_tilt_position."
-                )
-        elif sensor_type in (SensorType.BLIND, SensorType.AWNING):
-            if not any(caps.get("has_set_position") for caps in known.values()):
-                type_word = (
-                    "vertical blind" if sensor_type == SensorType.BLIND else "awning"
-                )
-                warnings.append(
-                    f"⚠️ Configured as {type_word} but no bound cover supports "
-                    "set_position — only open/close will be issued."
-                )
+        if sensor_type is not None:
+            from .cover_types import get_policy
+
+            policy = get_policy(
+                sensor_type.value if hasattr(sensor_type, "value") else sensor_type
+            )
+            warnings.extend(policy.cover_capability_warnings(known))
 
         min_pos_val = config.get(CONF_MIN_POSITION)
         max_pos_val = config.get(CONF_MAX_POSITION)
@@ -1322,16 +1292,13 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
             dim_str += f" ({', '.join(extras)})"
         if dim_str:
             lines.append(dim_str)
-        if sensor_type == SensorType.VENETIAN:
-            tilt_parts = []
-            if (v := config.get(CONF_TILT_DEPTH)) is not None:
-                tilt_parts.append(f"slat depth {v}cm")
-            if (v := config.get(CONF_TILT_DISTANCE)) is not None:
-                tilt_parts.append(f"spacing {v}cm")
-            if (v := config.get(CONF_TILT_MODE)) is not None:
-                tilt_parts.append(f"mode: {v}")
-            if tilt_parts:
-                lines.append(", ".join(tilt_parts))
+        if sensor_type is not None:
+            from .cover_types import get_policy
+
+            policy = get_policy(
+                sensor_type.value if hasattr(sensor_type, "value") else sensor_type
+            )
+            lines.extend(policy.summary_extra_lines(config))
     elif sensor_type == SensorType.AWNING:
         parts = []
         if (v := config.get(CONF_LENGTH_AWNING)) is not None:
