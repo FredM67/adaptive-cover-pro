@@ -109,14 +109,6 @@ class CoverTypePolicy(ABC):
         """
         return []
 
-    def summary_extra_lines(self, config: dict[str, Any]) -> list[str]:
-        """Extra lines for ``_build_config_summary``'s geometry section.
-
-        Default: empty. ``VenetianPolicy`` overrides to surface its slat
-        configuration alongside the window dimensions.
-        """
-        return []
-
     def glare_zones_config(self, config_service, options: dict) -> Any | None:
         """Return a ``GlareZonesConfig`` for this cover, or ``None``.
 
