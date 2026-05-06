@@ -60,6 +60,7 @@ GEOMETRY_HORIZONTAL_SCHEMA = vol.Schema(
 )
 
 
+
 class AwningPolicy(CoverTypePolicy):
     """Cover that extends horizontally (in/out)."""
 
@@ -95,6 +96,7 @@ class AwningPolicy(CoverTypePolicy):
         if (v := config.get(CONF_DISTANCE)) is not None:
             parts.append(f"blocking sun {v}m from wall")
         return [", ".join(parts)] if parts else []
+
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""
