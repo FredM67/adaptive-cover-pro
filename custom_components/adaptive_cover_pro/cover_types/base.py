@@ -33,6 +33,7 @@ class CoverTypePolicy(ABC):
     # without touching every gate site.
     supports_glare_zones: ClassVar[bool] = False
 
+
     @abstractmethod
     def build_calc_engine(
         self,

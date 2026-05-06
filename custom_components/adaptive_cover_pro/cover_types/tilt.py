@@ -55,6 +55,7 @@ TILT_CAPABLE_ENTITY_FILTER = selector.EntityFilterSelectorConfig(
 )
 
 
+
 class TiltPolicy(CoverTypePolicy):
     """Cover that rotates slats only (no vertical movement)."""
 
@@ -88,6 +89,7 @@ class TiltPolicy(CoverTypePolicy):
         if (v := config.get(CONF_TILT_MODE)) is not None:
             parts.append(f"mode: {v}")
         return [", ".join(parts)] if parts else []
+
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_tilt_position``."""
