@@ -57,6 +57,7 @@ def attached_policy(svc, hass):
         logger=MagicMock(),
         grace_mgr=MagicMock(),
         get_current_position=svc._get_current_position,
+        set_commanded_position=svc.set_target,
         position_tolerance=5,
         is_dry_run=lambda: False,
     )
@@ -173,3 +174,82 @@ async def test_apply_position_no_policy_skips_tilt_entirely(svc, hass):
     assert outcome == "sent"
     assert hass.services.async_call.call_count == 1
     assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_no_op_after_post_tilt_rebase(svc, hass, attached_policy):
+    """Reconciliation must not re-fire when the rebase absorbed the motor drift.
+
+    Scenario: commanded 60%, motor back-drives cover to 67% after tilt.
+    The sequencer rebases svc.target to 67%. Next reconciliation tick reads
+    actual=67% vs target=67% → zero delta → no resend.
+    """
+    import datetime as dt
+
+    entity_id = "cover.venetian_kitchen"
+    # After the tilt command lands, the cover reports 67% (7% drift from 60%).
+    # This exceeds the sequencer's tolerance (5) so the rebase fires.
+    hass.states.get.return_value = _state_with_position(67)
+
+    with _patch_caps_dual_axis():
+        outcome, _ = await svc.apply_position(
+            entity_id, 60, "solar", _ctx_venetian(attached_policy, tilt=80)
+        )
+
+    assert outcome == "sent"
+    assert hass.services.async_call.call_count == 2  # position + tilt only
+    # Rebase must have updated the target to the actual post-tilt position.
+    assert svc.get_target(entity_id) == 67
+
+    # Clear wait_for_target: in production this is cleared when HA fires a
+    # cover-position state update; in unit tests we do it manually.
+    svc.set_waiting(entity_id, False)
+
+    # Prepare reconciliation pre-conditions (mirrors coordinator setup).
+    svc._enabled = True
+    svc._auto_control_enabled = True
+    svc._in_time_window = True
+
+    with _patch_caps_dual_axis():
+        await svc._reconcile(dt.datetime.now(dt.UTC))
+
+    # No 3rd service call — reconciliation saw actual==target and skipped resend.
+    assert hass.services.async_call.call_count == 2
+    assert svc.state(entity_id).retry_count == 0
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_would_loop_without_rebase(svc, hass, attached_policy):
+    """Regression guard: without the rebase, reconciliation re-fires set_cover_position.
+
+    This test documents the loop that _rebase_commanded_position closes. By
+    disabling the rebase after apply_position, the svc target stays at 60%
+    while the cover reports 67% — causing reconciliation to issue a 3rd command.
+    """
+    import datetime as dt
+
+    entity_id = "cover.venetian_kitchen"
+    hass.states.get.return_value = _state_with_position(67)
+
+    with _patch_caps_dual_axis():
+        await svc.apply_position(
+            entity_id, 60, "solar", _ctx_venetian(attached_policy, tilt=80)
+        )
+
+    # Simulate the absence of the rebase: force target back to the original
+    # commanded value so reconciliation sees a drift.
+    svc.set_target(entity_id, 60)
+    assert svc.get_target(entity_id) == 60  # confirm the loop precondition
+
+    # Clear wait_for_target so reconciliation can actually compare target vs actual.
+    svc.set_waiting(entity_id, False)
+
+    svc._enabled = True
+    svc._auto_control_enabled = True
+    svc._in_time_window = True
+
+    with _patch_caps_dual_axis():
+        await svc._reconcile(dt.datetime.now(dt.UTC))
+
+    # Reconciliation detects |67 - 60| = 7 > tolerance(3) and issues a resend.
+    assert hass.services.async_call.call_count == 3

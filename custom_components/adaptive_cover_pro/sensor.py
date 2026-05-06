@@ -27,6 +27,7 @@ from .const import (
     CONF_ENABLE_SUN_TRACKING,
     CONF_FORCE_OVERRIDE_SENSORS,
     CONF_MOTION_SENSORS,
+    CONF_SENSOR_TYPE,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_IS_RAINING_SENSOR,
     CONF_WEATHER_IS_WINDY_SENSOR,
@@ -36,6 +37,7 @@ from .const import (
     CUSTOM_POSITION_SLOTS,
     DEGREES_IN_CIRCLE,
     DOMAIN,
+    SensorType,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
 from .entity_base import AdaptiveCoverDiagnosticSensorBase, AdaptiveCoverSensorBase
@@ -283,6 +285,11 @@ def _cover_position_attrs(s: _ACPSensor) -> Mapping[str, Any] | None:
             attrs["all_at_target"] = None
 
     return attrs
+
+
+def _cover_tilt_value(s: _ACPSensor) -> int | None:
+    pr = s.coordinator._pipeline_result  # noqa: SLF001
+    return None if pr is None else pr.tilt
 
 
 def _time_value(key: str) -> Callable[[_ACPSensor], Any]:
@@ -783,6 +790,17 @@ _STANDARD_SPECS: tuple[_SensorSpec, ...] = (
         value_fn=_cover_position_value,
         attrs_fn=_cover_position_attrs,
         diagnostic=False,
+    ),
+    _SensorSpec(
+        suffix="Cover_Tilt",
+        display_name="Target Tilt",
+        icon="mdi:angle-acute",
+        state_class=SensorStateClass.MEASUREMENT,
+        unit=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=_cover_tilt_value,
+        diagnostic=False,
+        enabled_when=lambda e: e.data.get(CONF_SENSOR_TYPE) == SensorType.VENETIAN,
     ),
     _SensorSpec(
         suffix="Start Sun",

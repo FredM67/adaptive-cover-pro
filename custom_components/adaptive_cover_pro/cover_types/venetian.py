@@ -181,6 +181,7 @@ class VenetianPolicy(CoverTypePolicy):
             logger=kwargs["logger"],
             grace_mgr=kwargs["grace_mgr"],
             get_current_position=kwargs["get_current_position"],
+            set_commanded_position=kwargs["set_commanded_position"],
             position_tolerance=kwargs["position_tolerance"],
             is_dry_run=kwargs["is_dry_run"],
         )
