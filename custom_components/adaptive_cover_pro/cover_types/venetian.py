@@ -12,18 +12,26 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+import voluptuous as vol
 from homeassistant.const import SERVICE_SET_COVER_POSITION
+from homeassistant.helpers import selector
 
 from ..engine.covers import AdaptiveVerticalCover, VenetianCoverCalculation
 from ..managers.dual_axis_sequencer import DualAxisSequencer
 from ..managers.manual_override import SecondaryAxisCheck
 from ..pipeline.types import DecisionStep
+from ._helpers import window_dimensions_lines
 from .base import CoverTypePolicy
+from .blind import GEOMETRY_VERTICAL_SCHEMA
+from .tilt import GEOMETRY_TILT_SCHEMA, TILT_CAPABLE_ENTITY_FILTER
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
     from ..pipeline.types import PipelineResult
     from ..services.configuration_service import ConfigurationService
+
+
+GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(GEOMETRY_TILT_SCHEMA.schema)
 
 
 class VenetianPolicy(CoverTypePolicy):
@@ -44,6 +52,33 @@ class VenetianPolicy(CoverTypePolicy):
     ) -> list[tuple[set[str], str]]:
         """Accept both vertical and tilt geometry; reject awning-only fields."""
         return [(awning_only, "awning")]
+
+    def geometry_schema(self) -> vol.Schema:
+        """Return the dual-axis geometry schema (vertical + tilt fields)."""
+        return GEOMETRY_VENETIAN_SCHEMA
+
+    def entity_selector_filter(self) -> selector.EntityFilterSelectorConfig:
+        """Require entities that advertise ``set_tilt_position``.
+
+        HA's ``supported_features`` filter is OR-of-listed-features, so we
+        filter on the rarer capability and surface the missing-set_position
+        case via ``cover_capability_warnings``.
+        """
+        return TILT_CAPABLE_ENTITY_FILTER
+
+    def summary_geometry_lines(self, config: dict[str, Any]) -> list[str]:
+        """Render window dimensions plus the slat-config block."""
+        from ..const import CONF_TILT_DEPTH, CONF_TILT_DISTANCE, CONF_TILT_MODE
+
+        tilt_parts: list[str] = []
+        if (v := config.get(CONF_TILT_DEPTH)) is not None:
+            tilt_parts.append(f"slat depth {v}cm")
+        if (v := config.get(CONF_TILT_DISTANCE)) is not None:
+            tilt_parts.append(f"spacing {v}cm")
+        if (v := config.get(CONF_TILT_MODE)) is not None:
+            tilt_parts.append(f"mode: {v}")
+        slat_line = [", ".join(tilt_parts)] if tilt_parts else []
+        return window_dimensions_lines(config) + slat_line
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
@@ -68,19 +103,6 @@ class VenetianPolicy(CoverTypePolicy):
                 "and set_tilt_position."
             )
         return warnings
-
-    def summary_extra_lines(self, config: dict[str, Any]) -> list[str]:
-        """Append the slat-config line to the geometry summary block."""
-        from ..const import CONF_TILT_DEPTH, CONF_TILT_DISTANCE, CONF_TILT_MODE
-
-        tilt_parts: list[str] = []
-        if (v := config.get(CONF_TILT_DEPTH)) is not None:
-            tilt_parts.append(f"slat depth {v}cm")
-        if (v := config.get(CONF_TILT_DISTANCE)) is not None:
-            tilt_parts.append(f"spacing {v}cm")
-        if (v := config.get(CONF_TILT_MODE)) is not None:
-            tilt_parts.append(f"mode: {v}")
-        return [", ".join(tilt_parts)] if tilt_parts else []
 
     def build_calc_engine(
         self,

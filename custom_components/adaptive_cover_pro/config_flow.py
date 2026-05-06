@@ -114,7 +114,6 @@ from .const import (
     CONF_WEATHER_BYPASS_AUTO_CONTROL,
     CONF_WINDOW_DEPTH,
     CONF_WINDOW_WIDTH,
-    DEFAULT_AWNING_LENGTH,
     DEFAULT_CLOUD_COVERAGE_THRESHOLD,
     DEFAULT_MOTION_TIMEOUT,
     DEFAULT_WEATHER_RAIN_THRESHOLD,
@@ -122,9 +121,6 @@ from .const import (
     DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
     DEFAULT_WEATHER_WIND_SPEED_THRESHOLD,
     DEFAULT_WINDOW_AZIMUTH,
-    DEFAULT_WINDOW_HEIGHT,
-    MAX_AWNING_ANGLE,
-    MAX_WINDOW_DEPTH,
     CONF_DEBUG_CATEGORIES,
     CONF_DEBUG_EVENT_BUFFER_SIZE,
     CONF_DEBUG_MODE,
@@ -182,113 +178,12 @@ CONFIG_SCHEMA = vol.Schema(
 # Step-specific schemas (replace old monolithic OPTIONS / VERTICAL_OPTIONS / etc.)
 # ---------------------------------------------------------------------------
 
-GEOMETRY_VERTICAL_SCHEMA = vol.Schema(
-    {
-        vol.Required(
-            CONF_HEIGHT_WIN, default=DEFAULT_WINDOW_HEIGHT
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.1,
-                max=50,
-                step=0.01,
-                mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement="m",
-            )
-        ),
-        vol.Optional(CONF_WINDOW_WIDTH, default=1.0): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.1,
-                max=50,
-                step=0.01,
-                mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement="m",
-            )
-        ),
-        vol.Optional(CONF_WINDOW_DEPTH, default=0.0): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.0,
-                max=MAX_WINDOW_DEPTH,
-                step=0.01,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="m",
-            )
-        ),
-        vol.Optional(CONF_SILL_HEIGHT, default=0.0): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.0,
-                max=50,
-                step=0.01,
-                mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement="m",
-            )
-        ),
-    }
-)
-
-GEOMETRY_HORIZONTAL_SCHEMA = vol.Schema(
-    {
-        vol.Required(
-            CONF_LENGTH_AWNING, default=DEFAULT_AWNING_LENGTH
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.3,
-                max=6,
-                step=0.01,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="m",
-            )
-        ),
-        vol.Required(CONF_AWNING_ANGLE, default=0): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0,
-                max=MAX_AWNING_ANGLE,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="°",
-            )
-        ),
-        vol.Required(
-            CONF_HEIGHT_WIN, default=DEFAULT_WINDOW_HEIGHT
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.1,
-                max=50,
-                step=0.01,
-                mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement="m",
-            )
-        ),
-    }
-)
-
-GEOMETRY_TILT_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_TILT_DEPTH, default=3): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.1,
-                max=15,
-                step=0.1,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="cm",
-            )
-        ),
-        vol.Required(CONF_TILT_DISTANCE, default=2): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.1,
-                max=15,
-                step=0.1,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="cm",
-            )
-        ),
-        vol.Required(CONF_TILT_MODE, default="mode2"): selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=["mode1", "mode2"], translation_key="tilt_mode"
-            )
-        ),
-    }
-)
-
-GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(GEOMETRY_TILT_SCHEMA.schema)
+# Geometry schemas live next to each cover-type policy. Re-exported here so
+# in-tree consumers (tests, sync coverage) keep their existing import paths.
+from .cover_types.awning import GEOMETRY_HORIZONTAL_SCHEMA  # noqa: E402, F401
+from .cover_types.blind import GEOMETRY_VERTICAL_SCHEMA  # noqa: E402, F401
+from .cover_types.tilt import GEOMETRY_TILT_SCHEMA  # noqa: E402, F401
+from .cover_types.venetian import GEOMETRY_VENETIAN_SCHEMA  # noqa: E402, F401
 
 SUN_TRACKING_SCHEMA = vol.Schema(
     {
@@ -1038,10 +933,7 @@ def _check_cover_capabilities(
         if sensor_type is not None:
             from .cover_types import get_policy
 
-            policy = get_policy(
-                sensor_type.value if hasattr(sensor_type, "value") else sensor_type
-            )
-            warnings.extend(policy.cover_capability_warnings(known))
+            warnings.extend(get_policy(sensor_type).cover_capability_warnings(known))
 
         min_pos_val = config.get(CONF_MIN_POSITION)
         max_pos_val = config.get(CONF_MAX_POSITION)
@@ -1271,56 +1163,17 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     else:
         lines.append(type_label)
 
-    # Physical dimensions in plain English
-    if sensor_type in (SensorType.BLIND, SensorType.VENETIAN, None):
-        h = config.get(CONF_HEIGHT_WIN)
-        d = config.get(CONF_DISTANCE)
-        depth = config.get(CONF_WINDOW_DEPTH) or 0
-        sill = config.get(CONF_SILL_HEIGHT) or 0
-        dim_parts = []
-        if h is not None:
-            dim_parts.append(f"{h}m tall window")
-        if d is not None:
-            dim_parts.append(f"blocking sun {d}m from the glass")
-        extras = []
-        if depth > 0:
-            extras.append(f"reveal {depth}m")
-        if sill > 0:
-            extras.append(f"sill {sill}m")
-        dim_str = ", ".join(dim_parts)
-        if extras:
-            dim_str += f" ({', '.join(extras)})"
-        if dim_str:
-            lines.append(dim_str)
-        if sensor_type is not None:
-            from .cover_types import get_policy
+    # Physical dimensions in plain English. The render mode is per-cover-type;
+    # each ``CoverTypePolicy.summary_geometry_lines`` owns its block. Legacy
+    # configs without ``sensor_type`` fall back to the vertical-blind layout.
+    from .cover_types import POLICY_REGISTRY, BlindPolicy, get_policy
 
-            policy = get_policy(
-                sensor_type.value if hasattr(sensor_type, "value") else sensor_type
-            )
-            lines.extend(policy.summary_extra_lines(config))
-    elif sensor_type == SensorType.AWNING:
-        parts = []
-        if (v := config.get(CONF_LENGTH_AWNING)) is not None:
-            parts.append(f"{v}m awning")
-        if (v := config.get(CONF_AWNING_ANGLE)) is not None:
-            parts.append(f"angled at {v}°")
-        if (v := config.get(CONF_HEIGHT_WIN)) is not None:
-            parts.append(f"{v}m window height")
-        if (v := config.get(CONF_DISTANCE)) is not None:
-            parts.append(f"blocking sun {v}m from wall")
-        if parts:
-            lines.append(", ".join(parts))
-    elif sensor_type == SensorType.TILT:
-        parts = []
-        if (v := config.get(CONF_TILT_DEPTH)) is not None:
-            parts.append(f"slat depth {v}cm")
-        if (v := config.get(CONF_TILT_DISTANCE)) is not None:
-            parts.append(f"spacing {v}cm")
-        if (v := config.get(CONF_TILT_MODE)) is not None:
-            parts.append(f"mode: {v}")
-        if parts:
-            lines.append(", ".join(parts))
+    summary_policy = (
+        get_policy(sensor_type)
+        if sensor_type is not None and sensor_type in POLICY_REGISTRY
+        else BlindPolicy()
+    )
+    lines.extend(summary_policy.summary_geometry_lines(config))
 
     # =========================================================================
     # Section 1c: Cover Capability Warnings
@@ -2125,40 +1978,14 @@ def _build_cover_entity_schema(
     When devices is provided and non-empty, a device association selector is
     appended so both fields appear on the same form.
     """
-    if sensor_type == SensorType.TILT:
-        entity_selector = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                multiple=True,
-                filter=selector.EntityFilterSelectorConfig(
-                    domain="cover",
-                    supported_features=["cover.CoverEntityFeature.SET_TILT_POSITION"],
-                ),
-            )
+    from .cover_types import get_policy
+
+    entity_selector = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            multiple=True,
+            filter=get_policy(sensor_type).entity_selector_filter(),
         )
-    elif sensor_type == SensorType.VENETIAN:
-        # Dual-axis venetian needs BOTH set_position and set_tilt_position.
-        # The HA EntitySelector supported_features filter is OR-of-listed-features,
-        # not AND, so we filter on set_tilt_position (the rarer capability) and
-        # let the capability check at config_flow.py:1036 surface a warning when
-        # the bound entity is missing set_position.
-        entity_selector = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                multiple=True,
-                filter=selector.EntityFilterSelectorConfig(
-                    domain="cover",
-                    supported_features=["cover.CoverEntityFeature.SET_TILT_POSITION"],
-                ),
-            )
-        )
-    else:
-        entity_selector = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                multiple=True,
-                filter=selector.EntityFilterSelectorConfig(
-                    domain="cover",
-                ),
-            )
-        )
+    )
     schema_dict: dict = {vol.Optional(CONF_ENTITIES, default=[]): entity_selector}
     if devices:
         options_list = [
@@ -2177,17 +2004,18 @@ def _build_cover_entity_schema(
     return vol.Schema(schema_dict)
 
 
-def _get_geometry_schema(sensor_type: str) -> vol.Schema:
-    """Return the geometry schema for the given sensor type."""
-    if sensor_type == SensorType.BLIND:
+def _get_geometry_schema(sensor_type: str | None) -> vol.Schema:
+    """Return the geometry schema for the given sensor type.
+
+    Falls back to the vertical-blind schema for unknown / missing types so
+    legacy configs still render *something* in the options flow.
+    """
+    from .cover_types import POLICY_REGISTRY, get_policy
+
+    cls = POLICY_REGISTRY.get(sensor_type) if sensor_type is not None else None
+    if cls is None:
         return GEOMETRY_VERTICAL_SCHEMA
-    if sensor_type == SensorType.AWNING:
-        return GEOMETRY_HORIZONTAL_SCHEMA
-    if sensor_type == SensorType.TILT:
-        return GEOMETRY_TILT_SCHEMA
-    if sensor_type == SensorType.VENETIAN:
-        return GEOMETRY_VENETIAN_SCHEMA
-    return GEOMETRY_VERTICAL_SCHEMA
+    return get_policy(sensor_type).geometry_schema()
 
 
 def _get_sun_tracking_schema(sensor_type: str | None) -> vol.Schema:
@@ -2945,25 +2773,14 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
         source_azimuth = source_entry.options.get(CONF_AZIMUTH, 180)
         sensor_type = source_entry.data.get(CONF_SENSOR_TYPE)
-        if sensor_type in (SensorType.TILT, SensorType.VENETIAN):
-            cover_entity_selector = selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    multiple=True,
-                    filter=selector.EntityFilterSelectorConfig(
-                        domain="cover",
-                        supported_features=[
-                            "cover.CoverEntityFeature.SET_TILT_POSITION"
-                        ],
-                    ),
-                )
+        from .cover_types import get_policy
+
+        cover_entity_selector = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                multiple=True,
+                filter=get_policy(sensor_type).entity_selector_filter(),
             )
-        else:
-            cover_entity_selector = selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    multiple=True,
-                    filter=selector.EntityFilterSelectorConfig(domain="cover"),
-                )
-            )
+        )
 
         schema = vol.Schema(
             {

@@ -2,14 +2,62 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import voluptuous as vol
+from homeassistant.helpers import selector
+
+from ..const import (
+    CONF_AWNING_ANGLE,
+    CONF_DISTANCE,
+    CONF_HEIGHT_WIN,
+    CONF_LENGTH_AWNING,
+    DEFAULT_AWNING_LENGTH,
+    DEFAULT_WINDOW_HEIGHT,
+    MAX_AWNING_ANGLE,
+)
 from ..engine.covers import AdaptiveHorizontalCover
 from .base import CoverTypePolicy
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
     from ..services.configuration_service import ConfigurationService
+
+
+GEOMETRY_HORIZONTAL_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            CONF_LENGTH_AWNING, default=DEFAULT_AWNING_LENGTH
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.3,
+                max=6,
+                step=0.01,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="m",
+            )
+        ),
+        vol.Required(CONF_AWNING_ANGLE, default=0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=MAX_AWNING_ANGLE,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="°",
+            )
+        ),
+        vol.Required(
+            CONF_HEIGHT_WIN, default=DEFAULT_WINDOW_HEIGHT
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.1,
+                max=50,
+                step=0.01,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="m",
+            )
+        ),
+    }
+)
 
 
 class AwningPolicy(CoverTypePolicy):
@@ -26,6 +74,27 @@ class AwningPolicy(CoverTypePolicy):
     ) -> list[tuple[set[str], str]]:
         """Reject vertical-blind and tilt geometry fields on an awning cover."""
         return [(vertical_only, "vertical blind"), (tilt_only, "tilt")]
+
+    def geometry_schema(self) -> vol.Schema:
+        """Return the horizontal-awning geometry schema."""
+        return GEOMETRY_HORIZONTAL_SCHEMA
+
+    def entity_selector_filter(self) -> selector.EntityFilterSelectorConfig:
+        """Plain ``cover`` domain — no extra capability requirement."""
+        return selector.EntityFilterSelectorConfig(domain="cover")
+
+    def summary_geometry_lines(self, config: dict[str, Any]) -> list[str]:
+        """Render the awning-length / angle / window block."""
+        parts: list[str] = []
+        if (v := config.get(CONF_LENGTH_AWNING)) is not None:
+            parts.append(f"{v}m awning")
+        if (v := config.get(CONF_AWNING_ANGLE)) is not None:
+            parts.append(f"angled at {v}°")
+        if (v := config.get(CONF_HEIGHT_WIN)) is not None:
+            parts.append(f"{v}m window height")
+        if (v := config.get(CONF_DISTANCE)) is not None:
+            parts.append(f"blocking sun {v}m from wall")
+        return [", ".join(parts)] if parts else []
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""
