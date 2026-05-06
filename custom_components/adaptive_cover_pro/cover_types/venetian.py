@@ -1,0 +1,222 @@
+"""Dual-axis venetian-blind cover policy.
+
+Venetian covers drive both ``set_cover_position`` and ``set_cover_tilt_position``
+on a single HA entity. Position is resolved by the same pipeline handlers as
+``cover_blind`` (using a vertical calculation engine); tilt is filled
+post-pipeline by ``VenetianCoverCalculation`` and threaded through the
+position-context so ``CoverCommandService`` can run the dual-axis sequence.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
+
+from homeassistant.const import SERVICE_SET_COVER_POSITION
+
+from ..engine.covers import AdaptiveVerticalCover, VenetianCoverCalculation
+from ..managers.dual_axis_sequencer import DualAxisSequencer
+from ..managers.manual_override import SecondaryAxisCheck
+from ..pipeline.types import DecisionStep
+from .base import CoverTypePolicy
+
+if TYPE_CHECKING:
+    from ..engine.covers import AdaptiveGeneralCover
+    from ..pipeline.types import PipelineResult
+    from ..services.configuration_service import ConfigurationService
+
+
+class VenetianPolicy(CoverTypePolicy):
+    """Dual-axis cover (single HA entity, position + tilt)."""
+
+    cover_type = "cover_venetian"
+
+    def __init__(self) -> None:
+        """Initialise without a sequencer; ``attach()`` wires one up later."""
+        self._sequencer: DualAxisSequencer | None = None
+
+    def disallowed_geometry_fields(
+        self,
+        *,
+        vertical_only: set[str],
+        awning_only: set[str],
+        tilt_only: set[str],
+    ) -> list[tuple[set[str], str]]:
+        """Accept both vertical and tilt geometry; reject awning-only fields."""
+        return [(awning_only, "awning")]
+
+    def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
+        """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
+        warnings: list[str] = []
+        missing_pos = [
+            eid for eid, caps in known.items() if not caps.get("has_set_position")
+        ]
+        missing_tilt = [
+            eid for eid, caps in known.items() if not caps.get("has_set_tilt_position")
+        ]
+        if missing_pos:
+            warnings.append(
+                "⚠️ Configured as venetian but "
+                f"{', '.join(missing_pos)} does not support set_position — "
+                "venetian requires both set_position and set_tilt_position."
+            )
+        if missing_tilt:
+            warnings.append(
+                "⚠️ Configured as venetian but "
+                f"{', '.join(missing_tilt)} does not support "
+                "set_tilt_position — venetian requires both set_position "
+                "and set_tilt_position."
+            )
+        return warnings
+
+    def summary_extra_lines(self, config: dict[str, Any]) -> list[str]:
+        """Append the slat-config line to the geometry summary block."""
+        from ..const import CONF_TILT_DEPTH, CONF_TILT_DISTANCE, CONF_TILT_MODE
+
+        tilt_parts: list[str] = []
+        if (v := config.get(CONF_TILT_DEPTH)) is not None:
+            tilt_parts.append(f"slat depth {v}cm")
+        if (v := config.get(CONF_TILT_DISTANCE)) is not None:
+            tilt_parts.append(f"spacing {v}cm")
+        if (v := config.get(CONF_TILT_MODE)) is not None:
+            tilt_parts.append(f"mode: {v}")
+        return [", ".join(tilt_parts)] if tilt_parts else []
+
+    def build_calc_engine(
+        self,
+        *,
+        logger,
+        sol_azi: float,
+        sol_elev: float,
+        sun_data,
+        config,
+        config_service: ConfigurationService,
+        options: dict,
+    ) -> AdaptiveGeneralCover:
+        """Build a vertical calc engine; tilt is filled in ``post_pipeline_resolve``."""
+        return AdaptiveVerticalCover(
+            logger=logger,
+            sol_azi=sol_azi,
+            sol_elev=sol_elev,
+            sun_data=sun_data,
+            config=config,
+            vert_config=config_service.get_vertical_data(options),
+        )
+
+    def post_pipeline_resolve(
+        self,
+        result: PipelineResult,
+        *,
+        logger,
+        sol_azi: float,
+        sol_elev: float,
+        sun_data,
+        config,
+        config_service: ConfigurationService,
+        options: dict,
+    ) -> PipelineResult:
+        """Fill the tilt that pairs with the pipeline-resolved position.
+
+        The pipeline picks position using the same vertical math as
+        ``cover_blind``; this hook composes the matching slat angle from
+        ``VenetianCoverCalculation`` and appends a synthetic terminal
+        ``"venetian_engine"`` decision step so diagnostics show exactly how
+        tilt was derived.
+        """
+        if result is None:
+            return result
+        venetian_calc = VenetianCoverCalculation(
+            config=config,
+            vert_config=config_service.get_vertical_data(options),
+            tilt_config=config_service.get_tilt_data(options),
+            sun_data=sun_data,
+            sol_azi=sol_azi,
+            sol_elev=sol_elev,
+            logger=logger,
+        )
+        tilt = venetian_calc.tilt_for_position(result.position)
+        trace = list(result.decision_trace) + [
+            DecisionStep(
+                handler="venetian_engine",
+                matched=True,
+                reason=(f"slat angle for position {result.position}% — tilt {tilt}%"),
+                position=result.position,
+                tilt=tilt,
+            )
+        ]
+        return replace(result, tilt=tilt, decision_trace=trace)
+
+    def position_context_overrides(self, result: PipelineResult) -> dict[str, Any]:
+        """Thread the resolved tilt into ``PositionContext.tilt``."""
+        if result is None or result.tilt is None:
+            return {}
+        return {"tilt": result.tilt}
+
+    def attach(self, **kwargs: Any) -> None:  # noqa: D401
+        """Construct the dual-axis sequencer once cmd_svc is available."""
+        self._sequencer = DualAxisSequencer(
+            hass=kwargs["hass"],
+            logger=kwargs["logger"],
+            grace_mgr=kwargs["grace_mgr"],
+            get_current_position=kwargs["get_current_position"],
+            position_tolerance=kwargs["position_tolerance"],
+            is_dry_run=kwargs["is_dry_run"],
+        )
+
+    @property
+    def sequencer(self) -> DualAxisSequencer | None:
+        """Expose the sequencer for diagnostics / tests."""
+        return self._sequencer
+
+    def is_in_tilt_suppression(self, entity_id: str) -> bool:
+        """Return whether the venetian back-rotate suppression window is open."""
+        if self._sequencer is None:
+            return False
+        return self._sequencer.is_in_suppression(entity_id)
+
+    def secondary_axis_check(
+        self, result: PipelineResult, cmd_svc
+    ) -> SecondaryAxisCheck | None:
+        """Build the per-cycle tilt-axis manual-override check.
+
+        Returns ``None`` when no tilt has been resolved (e.g. on a refresh
+        where the engine couldn't compute one); otherwise carries the
+        expected tilt and the suppression callback into manual_override.
+        """
+        if result is None or result.tilt is None:
+            return None
+        return SecondaryAxisCheck(
+            expected=result.tilt,
+            attribute="current_tilt_position",
+            label="tilt",
+            suppression=self.is_in_tilt_suppression,
+        )
+
+    async def after_position_command(
+        self,
+        cmd_svc,
+        entity_id: str,
+        *,
+        service: str,
+        position: int,
+        context,
+        reason: str,
+    ) -> None:
+        """Run the dual-axis sequence after a successful ``set_cover_position``."""
+        # Only chain a tilt after the position axis fired — direct tilt
+        # commands and open/close-only paths skip the sequence entirely.
+        if service != SERVICE_SET_COVER_POSITION:
+            return
+        seq = self._sequencer
+        if seq is None:
+            return
+        seq.stamp_position_command(entity_id)
+        tilt = getattr(context, "tilt", None)
+        if tilt is None:
+            return
+        await seq.run_sequence(
+            entity_id,
+            position_target=position,
+            tilt_target=tilt,
+            reason=reason,
+        )
