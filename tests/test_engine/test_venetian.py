@@ -251,3 +251,15 @@ class TestVenetianCoverCalculation:
         # Result must always be a valid integer — never NaN
         assert isinstance(result.tilt, int)
         assert not math.isnan(result.tilt)
+
+    @patch("custom_components.adaptive_cover_pro.engine.sun_geometry.datetime")
+    def test_tilt_for_position_matches_calculate_dual(self, mock_datetime):
+        """tilt_for_position returns the same tilt calculate_dual would emit."""
+        mock_datetime.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+        calc = _make_venetian(sol_azi=180.0, sol_elev=45.0)
+
+        dual = calc.calculate_dual()
+        # Position is decided upstream; tilt comes from sun geometry alone, so
+        # passing any valid position must yield the same tilt as calculate_dual.
+        for resolved_position in (0, 25, 50, dual.position, 100):
+            assert calc.tilt_for_position(resolved_position) == dual.tilt

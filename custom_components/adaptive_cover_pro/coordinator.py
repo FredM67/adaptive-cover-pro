@@ -31,6 +31,7 @@ from .engine.covers import (
     AdaptiveHorizontalCover,
     AdaptiveTiltCover,
     AdaptiveVerticalCover,
+    VenetianCoverCalculation,
 )
 from .config_context_adapter import ConfigContextAdapter
 from .services.configuration_service import ConfigurationService
@@ -151,7 +152,12 @@ from .pipeline.handlers import (
     WeatherOverrideHandler,
 )
 from .pipeline.registry import PipelineRegistry
-from .pipeline.types import ClimateOptions, CustomPositionSensorState, PipelineSnapshot
+from .pipeline.types import (
+    ClimateOptions,
+    CustomPositionSensorState,
+    DecisionStep,
+    PipelineSnapshot,
+)
 from .enums import ControlMethod
 from .state.climate_provider import ClimateProvider, ClimateReadings
 from .state.cover_provider import CoverProvider
@@ -386,6 +392,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def is_awning_cover(self) -> bool:
         """Check if this is a horizontal awning."""
         return self._cover_type == "cover_awning"
+
+    @property
+    def is_venetian_cover(self) -> bool:
+        """Check if this is a dual-axis venetian (single entity, position + tilt)."""
+        return self._cover_type == "cover_venetian"
 
     @property
     def is_force_override_active(self) -> bool:
@@ -1143,6 +1154,30 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             configured_cloudy_pos=options.get(CONF_CLOUDY_POSITION),
         )
 
+        # Venetian dual-axis: fill the tilt that pairs with the resolved
+        # position, and append a synthetic terminal "venetian_engine" step
+        # to the decision trace so diagnostics show how tilt was derived.
+        if self.is_venetian_cover:
+            venetian_calc = self._build_venetian_calc(options)
+            tilt = venetian_calc.tilt_for_position(self._pipeline_result.position)
+            trace = list(self._pipeline_result.decision_trace) + [
+                DecisionStep(
+                    handler="venetian_engine",
+                    matched=True,
+                    reason=(
+                        f"slat angle for position {self._pipeline_result.position}% — "
+                        f"tilt {tilt}%"
+                    ),
+                    position=self._pipeline_result.position,
+                    tilt=tilt,
+                )
+            ]
+            self._pipeline_result = replace(
+                self._pipeline_result,
+                tilt=tilt,
+                decision_trace=trace,
+            )
+
         self.logger.debug(
             "Pipeline result: %s → %s",
             self._pipeline_result.control_method,
@@ -1397,6 +1432,12 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 if self._pipeline_result
                 else False
             ),
+            is_venetian=self.is_venetian_cover,
+            tilt=(
+                self._pipeline_result.tilt
+                if self._pipeline_result is not None and self.is_venetian_cover
+                else None
+            ),
         )
 
     async def _dispatch_to_cover(
@@ -1635,6 +1676,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             expected_position = state if recorded_target is None else recorded_target
 
             was_manual = self.manager.is_cover_manual(entity_id)
+            expected_tilt: int | None = None
+            tilt_suppression_check = None
+            if self.is_venetian_cover and self._pipeline_result is not None:
+                expected_tilt = self._pipeline_result.tilt
+                tilt_suppression_check = self._cmd_svc.is_in_venetian_tilt_suppression
             self.manager.handle_state_change(
                 event_data,
                 expected_position,
@@ -1642,6 +1688,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self.manual_reset,
                 self._cmd_svc.is_waiting_for_target,
                 self.manual_threshold,
+                our_tilt=expected_tilt,
+                is_in_tilt_suppression=tilt_suppression_check,
             )
             # When a cover transitions into manual override, discard any
             # pre-existing integration target (including safety-tagged
@@ -1867,10 +1915,43 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 config=config,
                 tilt_config=self._config_service.get_tilt_data(options),
             )
+        elif self.is_venetian_cover:
+            # Venetian: the pipeline picks position using the vertical cover
+            # (same handlers, same math as cover_blind). The tilt is filled
+            # post-pipeline via VenetianCoverCalculation.tilt_for_position().
+            cover_data = AdaptiveVerticalCover(
+                logger=self.logger,
+                sol_azi=sol_azi,
+                sol_elev=sol_elev,
+                sun_data=sun_data,
+                config=config,
+                vert_config=self._config_service.get_vertical_data(options),
+            )
         else:
             msg = f"Unsupported cover type: {self._cover_type!r}"
             raise ValueError(msg)
         return cover_data
+
+    def _build_venetian_calc(self, options) -> VenetianCoverCalculation:
+        """Build a venetian dual-axis calculator for the current cover.
+
+        Used by ``_calculate_cover_state`` to derive the tilt that pairs with
+        the position resolved by the pipeline. Cheap — no I/O.
+        """
+        sun_data = self._sun_provider.create_sun_data(self.hass.config.time_zone)
+        config = self._config_service.get_common_data(options)
+        _raw_azi, _raw_elev = self.pos_sun
+        sol_azi = _raw_azi if _raw_azi is not None else 0.0
+        sol_elev = _raw_elev if _raw_elev is not None else 0.0
+        return VenetianCoverCalculation(
+            config=config,
+            vert_config=self._config_service.get_vertical_data(options),
+            tilt_config=self._config_service.get_tilt_data(options),
+            sun_data=sun_data,
+            sol_azi=sol_azi,
+            sol_elev=sol_elev,
+            logger=self.logger,
+        )
 
     @property
     def check_adaptive_time(self):

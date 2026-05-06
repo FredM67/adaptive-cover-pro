@@ -177,6 +177,7 @@ class DecisionStep:
     matched: bool
     reason: str
     position: int | None
+    tilt: int | None = None
 
 
 @dataclass(frozen=True)
