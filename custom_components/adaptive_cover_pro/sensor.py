@@ -694,6 +694,7 @@ def _decision_trace_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
                 "matched": step.matched,
                 "reason": step.reason,
                 "position": step.position,
+                **({"tilt": step.tilt} if step.tilt is not None else {}),
             }
             for step in result.decision_trace
         ]
@@ -703,6 +704,8 @@ def _decision_trace_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
         attrs["is_sunset_active"] = result.is_sunset_active
         attrs["configured_default"] = result.configured_default
         attrs["configured_sunset_pos"] = result.configured_sunset_pos
+        if result.tilt is not None:
+            attrs["tilt"] = result.tilt
 
     attrs["in_time_window"] = s.coordinator.check_adaptive_time
     attrs["enabled_handlers"] = _configured_handlers(s.config_entry.options)

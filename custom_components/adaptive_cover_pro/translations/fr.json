@@ -1056,7 +1056,8 @@
       "options": {
         "cover_blind": "Store vertical",
         "cover_awning": "Store banne horizontal",
-        "cover_tilt": "Store à inclinaison"
+        "cover_tilt": "Store à inclinaison",
+        "cover_venetian": "Store vénitien (double axe)"
       }
     },
     "tilt_mode": {
