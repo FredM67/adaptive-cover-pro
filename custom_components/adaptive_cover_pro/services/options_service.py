@@ -107,7 +107,6 @@ from ..const import (
     CONF_WINTER_CLOSE_INSULATION,
     CUSTOM_POSITION_SLOTS,
     DOMAIN,
-    SensorType,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -575,8 +574,13 @@ def validate_options_patch(
             "Use the integration's Options flow to change them."
         )
 
-    # Geometry keys must match the cover's sensor_type
+    # Geometry keys must match the cover's sensor_type. The per-type
+    # rejection rules live on each ``CoverTypePolicy`` so adding a new
+    # cover type only requires implementing ``disallowed_geometry_fields``
+    # — this caller stays type-agnostic.
     if sensor_type is not None:
+        from ..cover_types import get_policy
+
         vertical_only = (
             _SECTION_GEOMETRY_VERTICAL
             - _SECTION_GEOMETRY_AWNING
@@ -592,29 +596,19 @@ def validate_options_patch(
             - _SECTION_GEOMETRY_VERTICAL
             - _SECTION_GEOMETRY_AWNING
         )
-        # Venetian accepts both vertical and tilt geometry; reject awning-only.
-        if sensor_type == SensorType.VENETIAN:
-            stray = set(patch) & awning_only
+        policy = get_policy(
+            sensor_type.value if hasattr(sensor_type, "value") else sensor_type
+        )
+        for stray_set, type_label in policy.disallowed_geometry_fields(
+            vertical_only=vertical_only,
+            awning_only=awning_only,
+            tilt_only=tilt_only,
+        ):
+            stray = set(patch) & stray_set
             if stray:
                 raise ServiceValidationError(
                     f"Geometry fields {sorted(stray)} are only valid for "
-                    f"awning covers (this cover is '{sensor_type}')."
-                )
-        else:
-            if sensor_type != SensorType.BLIND and set(patch) & vertical_only:
-                raise ServiceValidationError(
-                    f"Geometry fields {sorted(set(patch) & vertical_only)} are only valid for "
-                    f"vertical blind covers (this cover is '{sensor_type}')."
-                )
-            if sensor_type != SensorType.AWNING and set(patch) & awning_only:
-                raise ServiceValidationError(
-                    f"Geometry fields {sorted(set(patch) & awning_only)} are only valid for "
-                    f"awning covers (this cover is '{sensor_type}')."
-                )
-            if sensor_type != SensorType.TILT and set(patch) & tilt_only:
-                raise ServiceValidationError(
-                    f"Geometry fields {sorted(set(patch) & tilt_only)} are only valid for "
-                    f"tilt covers (this cover is '{sensor_type}')."
+                    f"{type_label} covers (this cover is '{sensor_type}')."
                 )
 
     _validate_fields(patch)

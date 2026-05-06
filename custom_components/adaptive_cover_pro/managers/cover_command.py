@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import datetime as dt
 from collections import deque
@@ -30,10 +29,6 @@ from ..const import (
     MAX_POSITION_RETRIES,
     POSITION_CHECK_INTERVAL_MINUTES,
     POSITION_TOLERANCE_PERCENT,
-    VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES,
-    VENETIAN_POSITION_SETTLE_POLL_SECONDS,
-    VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS,
-    VENETIAN_TILT_SUPPRESSION_SECONDS,
 )
 from ..diagnostics.event_buffer import EventBuffer
 from ..helpers import (
@@ -62,17 +57,6 @@ class PerEntityState:
     waiting: bool = False
     last_progress_at: dt.datetime | None = None
     retry_count: int = 0
-    # Dual-axis venetian: target tilt for entities that received both
-    # set_cover_position and set_cover_tilt_position. Reconciliation in v1
-    # only re-fires position; the next regular update cycle's
-    # position-then-tilt sequence corrects any tilt drift naturally.
-    tilt_target: int | None = None
-    tilt_sent_at: dt.datetime | None = None
-    # Timestamp of the last set_cover_position command (any cover type).
-    # Drives the venetian tilt-axis suppression window so the back-rotate
-    # that real motors perform during vertical motion is not misread as
-    # a manual tilt change.
-    position_command_at: dt.datetime | None = None
     gave_up: bool = False
     is_safety: bool = False
     last_reconcile_at: dt.datetime | None = None
@@ -106,13 +90,16 @@ class PositionContext:
     use_my_position: bool = (
         False  # Route through send_my_position() on non-position-capable covers
     )
-    # Dual-axis venetian: when is_venetian=True and tilt is set, apply_position
-    # emits set_cover_position first, polls current_position until stable, then
-    # emits set_cover_tilt_position.  Real-motor venetians (KNX, Somfy IO,
-    # Shelly 2PM) back-rotate the slats while moving vertically, so firing both
-    # services simultaneously leaves tilt drifting until the next update cycle.
-    is_venetian: bool = False
+    # Secondary-axis target (e.g. tilt for venetian blinds). The owning
+    # cover-type policy reads it inside ``after_position_command`` to decide
+    # whether and how to chase the position command with a second service
+    # call. ``None`` means "no secondary axis on this update cycle".
     tilt: int | None = None
+    # The cover-type policy in effect. ``apply_position`` calls
+    # ``policy.after_position_command`` once the position service has fired so
+    # dual-axis covers can run their settle+tilt sequence without leaking the
+    # logic into this shared service.
+    policy: Any = None
 
 
 class CoverCommandService:
@@ -352,21 +339,6 @@ class CoverCommandService:
         """Return True if the cover is currently expected to be moving toward target."""
         s = self._state.get(entity_id)
         return bool(s and s.waiting)
-
-    def is_in_venetian_tilt_suppression(self, entity_id: str) -> bool:
-        """Return True if a recent position command means tilt drift is expected.
-
-        On real-motor venetians (KNX, Somfy IO, Shelly 2PM) the slat angle
-        changes as a side-effect of vertical motion — the motor back-rotates
-        the slats once it stops.  manual_override detection consults this
-        method so that drift inside ``VENETIAN_TILT_SUPPRESSION_SECONDS``
-        of a position command is not misread as a user touch.
-        """
-        s = self._state.get(entity_id)
-        if s is None or s.position_command_at is None:
-            return False
-        elapsed = dt.datetime.now(dt.UTC) - s.position_command_at
-        return elapsed.total_seconds() < VENETIAN_TILT_SUPPRESSION_SECONDS
 
     def set_waiting(self, entity_id: str, value: bool) -> None:
         """Mark an entity as waiting (or no-longer-waiting) for its target."""
@@ -1103,137 +1075,20 @@ class CoverCommandService:
             entity_id, service, position, supports_position, context.inverse_state
         )
 
-        # Stamp the venetian tilt-axis suppression window. Any real-motor
-        # tilt drift during the next VENETIAN_TILT_SUPPRESSION_SECONDS is
-        # treated as motor back-rotate, not a user touch.
-        if service == SERVICE_SET_COVER_POSITION:
-            self.state(entity_id).position_command_at = dt.datetime.now(dt.UTC)
-
-        # Dual-axis venetian: chase the position command with a tilt command
-        # once the cover settles.  Real motors back-rotate the slats while
-        # moving vertically, so firing both services simultaneously leaves
-        # tilt drifting until the next update cycle.  The tilt-axis grace
-        # period started here also drives manual_override's tilt-suppression
-        # window via VENETIAN_TILT_SUPPRESSION_SECONDS.
-        if (
-            context.is_venetian
-            and context.tilt is not None
-            and supports_position
-            and service == SERVICE_SET_COVER_POSITION
-        ):
-            await self._send_venetian_tilt(
+        # Cover-type policy hook: dual-axis covers (venetian) run their
+        # settle+tilt sequence here. Default policies are no-ops, so vertical /
+        # awning / tilt covers carry zero overhead.
+        if context.policy is not None:
+            await context.policy.after_position_command(
+                self,
                 entity_id,
-                position_target=position,
-                tilt_target=context.tilt,
+                service=service,
+                position=position,
+                context=context,
                 reason=reason,
             )
 
         return "sent", service
-
-    async def _wait_for_position_settle(
-        self, entity_id: str, target: int
-    ) -> tuple[bool, int | None]:
-        """Poll current_position until the cover settles or the timeout fires.
-
-        Returns ``(reached, last_position)`` — ``reached`` is True when the
-        observed position matched ``target`` within ``POSITION_TOLERANCE_PERCENT``,
-        False on timeout or "no progress for N samples" detection.
-
-        Used only on the dual-axis venetian path: the tilt command must wait
-        for the vertical motion to finish so the motor back-rotate completes
-        before we override its slat angle.
-        """
-        deadline = dt.datetime.now(dt.UTC) + dt.timedelta(
-            seconds=VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS
-        )
-        last_position: int | None = None
-        unchanged_samples = 0
-
-        while dt.datetime.now(dt.UTC) < deadline:
-            current = self._get_current_position(entity_id)
-            if current is None:
-                # Entity dropped its position attribute — bail to avoid blocking
-                # the update cycle behind a non-reporting cover.
-                return False, last_position
-
-            if abs(current - target) <= self._position_tolerance:
-                return True, current
-
-            if last_position is not None and current == last_position:
-                unchanged_samples += 1
-                if unchanged_samples >= VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES:
-                    self._logger.debug(
-                        "Venetian settle: %s stalled at %s%% (target %s%%) "
-                        "after %d unchanged samples",
-                        entity_id,
-                        current,
-                        target,
-                        unchanged_samples,
-                    )
-                    return False, current
-            else:
-                unchanged_samples = 0
-
-            last_position = current
-            await asyncio.sleep(VENETIAN_POSITION_SETTLE_POLL_SECONDS)
-
-        self._logger.debug(
-            "Venetian settle: %s timed out at %s%% (target %s%%) after %.0fs",
-            entity_id,
-            last_position,
-            target,
-            VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS,
-        )
-        return False, last_position
-
-    async def _send_venetian_tilt(
-        self,
-        entity_id: str,
-        *,
-        position_target: int,
-        tilt_target: int,
-        reason: str,
-    ) -> None:
-        """Wait for vertical motion to settle, then send the tilt command."""
-        await self._wait_for_position_settle(entity_id, position_target)
-
-        if self._dry_run:
-            self._logger.info(
-                "[dry_run] would send cover.set_cover_tilt_position %s → %s%%",
-                entity_id,
-                tilt_target,
-            )
-            return
-
-        s = self.state(entity_id)
-        s.tilt_target = tilt_target
-        s.tilt_sent_at = dt.datetime.now(dt.UTC)
-        # Restart the grace window so the tilt-axis change isn't read as a
-        # user touch by manual_override detection.
-        self._grace_mgr.start_command_grace_period(entity_id)
-
-        self._logger.info(
-            "[%s] Tilt %s → %s%% (paired with position %s%%)",
-            reason,
-            entity_id,
-            tilt_target,
-            position_target,
-        )
-
-        try:
-            await self._hass.services.async_call(
-                COVER_DOMAIN,
-                SERVICE_SET_COVER_TILT_POSITION,
-                {ATTR_ENTITY_ID: entity_id, ATTR_TILT_POSITION: tilt_target},
-            )
-        except HomeAssistantError as err:
-            self._logger.warning(
-                "Service call %s.%s failed for %s: %s",
-                COVER_DOMAIN,
-                SERVICE_SET_COVER_TILT_POSITION,
-                entity_id,
-                err,
-            )
 
     # ------------------------------------------------------------------ #
     # Target-reached notification (called by coordinator state-change handler)

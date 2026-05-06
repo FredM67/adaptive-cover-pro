@@ -5,6 +5,9 @@ slats while moving vertically. AdaptiveCoverManager must therefore ignore
 tilt-axis drift inside the venetian tilt-suppression window, but still flag
 genuine "user grabbed the wand" tilt deltas outside that window. Position-
 axis drift continues to behave exactly as it does for any other cover type.
+
+Wired through ``SecondaryAxisCheck`` — a per-cover-type plug supplied by
+``CoverTypePolicy.secondary_axis_check`` (``VenetianPolicy`` for these tests).
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from unittest.mock import MagicMock
 
 from custom_components.adaptive_cover_pro.managers.manual_override import (
     AdaptiveCoverManager,
+    SecondaryAxisCheck,
 )
 
 
@@ -43,13 +47,21 @@ def _make_manager(entity_id: str) -> AdaptiveCoverManager:
     return mgr
 
 
+def _tilt_check(*, expected: int = 70, suppressed: bool) -> SecondaryAxisCheck:
+    return SecondaryAxisCheck(
+        expected=expected,
+        attribute="current_tilt_position",
+        label="tilt",
+        suppression=lambda _eid: suppressed,
+    )
+
+
 def test_tilt_drift_inside_suppression_window_is_ignored() -> None:
     """Tilt drift right after a position command is the motor back-rotate.
 
-    The user's complaint in #33 is that this drift was being read as
-    manual_override on the paired tilt instance.  With dual-axis venetian,
-    `is_in_tilt_suppression` returns True during the window and the manager
-    must NOT mark the cover as manual.
+    `suppression(entity_id) -> True` makes the tilt-axis evaluation log the
+    rejection and fall through to the position-axis check, leaving the cover
+    not-manual when the position axis is on target.
     """
     entity_id = "cover.venetian_kitchen"
     mgr = _make_manager(entity_id)
@@ -61,8 +73,7 @@ def test_tilt_drift_inside_suppression_window_is_ignored() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        our_tilt=70,
-        is_in_tilt_suppression=lambda _eid: True,
+        secondary_axis_check=_tilt_check(suppressed=True),
     )
 
     assert not mgr.is_cover_manual(entity_id)
@@ -80,8 +91,7 @@ def test_tilt_drift_outside_suppression_trips_override() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        our_tilt=70,
-        is_in_tilt_suppression=lambda _eid: False,
+        secondary_axis_check=_tilt_check(suppressed=False),
     )
 
     assert mgr.is_cover_manual(entity_id)
@@ -99,8 +109,7 @@ def test_tilt_drift_within_threshold_is_ignored_even_outside_window() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        our_tilt=70,
-        is_in_tilt_suppression=lambda _eid: False,
+        secondary_axis_check=_tilt_check(suppressed=False),
     )
 
     assert not mgr.is_cover_manual(entity_id)
@@ -114,7 +123,6 @@ def test_position_drift_ignores_tilt_suppression() -> None:
     """
     entity_id = "cover.venetian_master"
     mgr = _make_manager(entity_id)
-    # check_cover_features falls back to defaults when caps are missing
     mgr.hass.states.get = MagicMock(return_value=None)
 
     mgr.handle_state_change(
@@ -124,15 +132,14 @@ def test_position_drift_ignores_tilt_suppression() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        our_tilt=70,
-        is_in_tilt_suppression=lambda _eid: True,
+        secondary_axis_check=_tilt_check(suppressed=True),
     )
 
     assert mgr.is_cover_manual(entity_id)
 
 
-def test_non_venetian_cover_ignores_tilt_axis_inputs() -> None:
-    """A blind cover passing our_tilt by mistake must not change behavior."""
+def test_non_venetian_cover_with_no_check_runs_position_axis_only() -> None:
+    """Without a SecondaryAxisCheck the manager runs the legacy position path."""
     entity_id = "cover.blind"
     mgr = _make_manager(entity_id)
     mgr.hass.states.get = MagicMock(return_value=None)
@@ -144,8 +151,7 @@ def test_non_venetian_cover_ignores_tilt_axis_inputs() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        our_tilt=70,  # ignored — blind type
-        is_in_tilt_suppression=lambda _eid: False,
+        secondary_axis_check=None,
     )
 
     assert not mgr.is_cover_manual(entity_id)
