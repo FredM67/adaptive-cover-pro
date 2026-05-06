@@ -2,13 +2,102 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
+from collections.abc import Callable
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
 from ..const import DEFAULT_DEBUG_EVENT_BUFFER_SIZE, POSITION_TOLERANCE_PERCENT
 from ..diagnostics.event_buffer import EventBuffer
 from ..helpers import check_cover_features, get_open_close_state, should_use_tilt
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SecondaryAxisResult:
+    """Outcome of evaluating a non-primary axis for manual-override drift.
+
+    ``consumed`` short-circuits the position-axis check (caller returns
+    immediately). ``is_manual`` triggers ``mark_manual_control`` +
+    ``set_last_updated``. ``event_name`` (with ``event_kwargs``) appends a
+    record to the diagnostics ring buffer.
+    """
+
+    consumed: bool = False
+    is_manual: bool = False
+    event_name: str | None = None
+    event_kwargs: dict[str, Any] | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SecondaryAxisCheck:
+    """Per-cover-type plug for manual-override evaluation on a secondary axis.
+
+    Built once per cover-state-change cycle by ``CoverTypePolicy.secondary_axis_check``.
+    Encapsulates the expected value (e.g. tilt resolved by the engine), the
+    HA state attribute to read, an optional suppression callback (e.g.
+    venetian's motor back-rotate window), and a label that flavours the
+    diagnostic event names. ``handle_state_change`` calls ``evaluate`` once
+    and dispatches on the returned ``SecondaryAxisResult`` — the manager
+    itself stays ignorant of which axis is being checked.
+    """
+
+    expected: int
+    attribute: str  # e.g. "current_tilt_position"
+    label: str  # e.g. "tilt" — flavours the rejection-reason text
+    suppression: Callable[[str], bool] | None = None
+
+    def evaluate(
+        self,
+        entity_id: str,
+        new_state,
+        manual_threshold: int | None,
+    ) -> SecondaryAxisResult:
+        """Decide what (if anything) the secondary axis tells the manager to do."""
+        new_value = new_state.attributes.get(self.attribute)
+        if new_value is None or new_value == self.expected:
+            return SecondaryAxisResult()
+
+        effective_threshold = max(
+            manual_threshold if manual_threshold is not None else 0,
+            POSITION_TOLERANCE_PERCENT,
+        )
+        delta = abs(self.expected - new_value)
+
+        if self.suppression is not None and self.suppression(entity_id):
+            return SecondaryAxisResult(
+                event_name="manual_override_rejected_tilt_suppression",
+                event_kwargs={
+                    "our_state": self.expected,
+                    "new_position": new_value,
+                    "effective_threshold": effective_threshold,
+                    "reason": (
+                        f"{self.label} delta {delta:.1f}% within "
+                        "venetian tilt-suppression window"
+                    ),
+                },
+            )
+
+        if delta >= effective_threshold:
+            return SecondaryAxisResult(
+                consumed=True,
+                is_manual=True,
+                event_name="manual_override_set",
+                event_kwargs={
+                    "our_state": self.expected,
+                    "new_position": new_value,
+                    "effective_threshold": effective_threshold,
+                    "reason": (
+                        f"{self.label} delta {delta:.1f}% >= threshold "
+                        f"{effective_threshold}% (no recent position cmd)"
+                    ),
+                },
+            )
+
+        # Below threshold and not suppressed — preserve the legacy "silent
+        # fall-through" behavior so the position-axis check still runs.
+        return SecondaryAxisResult()
 
 
 class AdaptiveCoverManager:
@@ -104,8 +193,7 @@ class AdaptiveCoverManager:
         is_waiting,
         manual_threshold,
         *,
-        our_tilt: int | None = None,
-        is_in_tilt_suppression=None,
+        secondary_axis_check: SecondaryAxisCheck | None = None,
     ):
         """Process state change for manual override.
 
@@ -123,14 +211,10 @@ class AdaptiveCoverManager:
             is_waiting: Callable(entity_id) -> bool indicating whether the cover
                 is currently expected to be moving toward a commanded target.
             manual_threshold: Minimum position delta to trigger manual detection
-            our_tilt: Expected tilt for venetian (Issue #33). When provided
-                with blind_type=="cover_venetian", a tilt-axis delta from this
-                value also marks the cover as manual — but only outside the
-                tilt-suppression window (see ``is_in_tilt_suppression``).
-            is_in_tilt_suppression: Callable(entity_id) -> bool. When True,
-                tilt-axis drift is treated as motor back-rotate (real venetian
-                motors rotate the slats while moving vertically) and ignored.
-                Position-axis drift is always evaluated regardless.
+            secondary_axis_check: Optional ``SecondaryAxisCheck`` supplied by
+                the cover-type policy (see ``CoverTypePolicy.secondary_axis_check``).
+                When provided, the secondary axis is evaluated up front and a
+                manual-override match short-circuits the position-axis check.
 
         """
         event = states_data
@@ -151,54 +235,24 @@ class AdaptiveCoverManager:
 
         new_state = event.new_state
 
-        # Venetian: evaluate the tilt axis up-front. The position axis falls
-        # through to the existing logic below. tilt_in_suppression() is True
-        # for the suppression window after a position command — drift inside
-        # that window is the motor's back-rotate, not a user touch.
-        if blind_type == "cover_venetian" and our_tilt is not None:
-            new_tilt = new_state.attributes.get("current_tilt_position")
-            if new_tilt is not None and new_tilt != our_tilt:
-                tilt_suppressed = bool(
-                    is_in_tilt_suppression and is_in_tilt_suppression(entity_id)
+        if secondary_axis_check is not None:
+            res = secondary_axis_check.evaluate(entity_id, new_state, manual_threshold)
+            if res.event_name is not None:
+                self._record_event(
+                    entity_id, res.event_name, **(res.event_kwargs or {})
                 )
-                effective_threshold = max(
-                    manual_threshold if manual_threshold is not None else 0,
-                    POSITION_TOLERANCE_PERCENT,
+            if res.is_manual:
+                self.logger.debug(
+                    "Manual %s change for %s: ours=%s, new=%s",
+                    secondary_axis_check.label,
+                    entity_id,
+                    secondary_axis_check.expected,
+                    new_state.attributes.get(secondary_axis_check.attribute),
                 )
-                tilt_delta = abs(our_tilt - new_tilt)
-                if tilt_suppressed:
-                    self._record_event(
-                        entity_id,
-                        "manual_override_rejected_tilt_suppression",
-                        our_state=our_tilt,
-                        new_position=new_tilt,
-                        effective_threshold=effective_threshold,
-                        reason=(
-                            f"tilt delta {tilt_delta:.1f}% within "
-                            "venetian tilt-suppression window"
-                        ),
-                    )
-                elif tilt_delta >= effective_threshold:
-                    self.logger.debug(
-                        "Manual tilt change for %s: ours=%s, new=%s",
-                        entity_id,
-                        our_tilt,
-                        new_tilt,
-                    )
-                    self._record_event(
-                        entity_id,
-                        "manual_override_set",
-                        our_state=our_tilt,
-                        new_position=new_tilt,
-                        effective_threshold=effective_threshold,
-                        reason=(
-                            f"tilt delta {tilt_delta:.1f}% >= threshold "
-                            f"{effective_threshold}% (no recent position cmd)"
-                        ),
-                    )
-                    self.mark_manual_control(entity_id)
-                    self.set_last_updated(entity_id, new_state, allow_reset)
-                    return
+                self.mark_manual_control(entity_id)
+                self.set_last_updated(entity_id, new_state, allow_reset)
+            if res.consumed:
+                return
 
         caps = check_cover_features(self.hass, entity_id)
         if should_use_tilt(
