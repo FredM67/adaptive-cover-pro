@@ -73,6 +73,7 @@ class BlindPolicy(CoverTypePolicy):
     """Cover that moves vertically (raise/lower)."""
 
     cover_type = "cover_blind"
+    supports_glare_zones = True
 
     def disallowed_geometry_fields(
         self,
