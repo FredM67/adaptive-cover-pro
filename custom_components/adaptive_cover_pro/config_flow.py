@@ -180,6 +180,7 @@ CONFIG_SCHEMA = vol.Schema(
 
 # Geometry schemas live next to each cover-type policy. Re-exported here so
 # in-tree consumers (tests, sync coverage) keep their existing import paths.
+from .cover_types import POLICY_REGISTRY, BlindPolicy, get_policy  # noqa: E402
 from .cover_types.awning import GEOMETRY_HORIZONTAL_SCHEMA  # noqa: E402, F401
 from .cover_types.blind import GEOMETRY_VERTICAL_SCHEMA  # noqa: E402, F401
 from .cover_types.tilt import GEOMETRY_TILT_SCHEMA  # noqa: E402, F401
@@ -931,8 +932,6 @@ def _check_cover_capabilities(
             )
 
         if sensor_type is not None:
-            from .cover_types import get_policy
-
             warnings.extend(get_policy(sensor_type).cover_capability_warnings(known))
 
         min_pos_val = config.get(CONF_MIN_POSITION)
@@ -1116,8 +1115,13 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     has_cloud = bool(config.get(CONF_CLOUD_SUPPRESSION))
     has_climate = bool(config.get(CONF_CLIMATE_MODE))
     sun_tracking_enabled = config.get(CONF_ENABLE_SUN_TRACKING, True)
-    has_glare = (
-        bool(config.get(CONF_ENABLE_GLARE_ZONES)) and sensor_type == SensorType.BLIND
+    summary_policy = (
+        get_policy(sensor_type)
+        if sensor_type is not None and sensor_type in POLICY_REGISTRY
+        else BlindPolicy()
+    )
+    has_glare = summary_policy.supports_glare_zones and bool(
+        config.get(CONF_ENABLE_GLARE_ZONES)
     )
 
     def _pos_label(raw_pct: int, use_my: bool) -> str:
@@ -1165,14 +1169,8 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
 
     # Physical dimensions in plain English. The render mode is per-cover-type;
     # each ``CoverTypePolicy.summary_geometry_lines`` owns its block. Legacy
-    # configs without ``sensor_type`` fall back to the vertical-blind layout.
-    from .cover_types import POLICY_REGISTRY, BlindPolicy, get_policy
-
-    summary_policy = (
-        get_policy(sensor_type)
-        if sensor_type is not None and sensor_type in POLICY_REGISTRY
-        else BlindPolicy()
-    )
+    # configs without ``sensor_type`` fall back to the vertical-blind layout
+    # via ``summary_policy`` chosen at the top of this function.
     lines.extend(summary_policy.summary_geometry_lines(config))
 
     # =========================================================================
@@ -1597,7 +1595,7 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
         (40, "Solar", sun_tracking_enabled),
         (0, "Default", True),
     ]
-    if sensor_type == SensorType.BLIND or sensor_type is None:
+    if summary_policy.supports_glare_zones:
         _chain_entries.append((45, "Glare", has_glare))
     # Insert one entry per custom slot at its configured priority
     for _slot, _eid, _pos, _pri, _use_my in _custom_slots:
@@ -1978,8 +1976,6 @@ def _build_cover_entity_schema(
     When devices is provided and non-empty, a device association selector is
     appended so both fields appear on the same form.
     """
-    from .cover_types import get_policy
-
     entity_selector = selector.EntitySelector(
         selector.EntitySelectorConfig(
             multiple=True,
@@ -2010,8 +2006,6 @@ def _get_geometry_schema(sensor_type: str | None) -> vol.Schema:
     Falls back to the vertical-blind schema for unknown / missing types so
     legacy configs still render *something* in the options flow.
     """
-    from .cover_types import POLICY_REGISTRY, get_policy
-
     cls = POLICY_REGISTRY.get(sensor_type) if sensor_type is not None else None
     if cls is None:
         return GEOMETRY_VERTICAL_SCHEMA
@@ -2019,8 +2013,8 @@ def _get_geometry_schema(sensor_type: str | None) -> vol.Schema:
 
 
 def _get_sun_tracking_schema(sensor_type: str | None) -> vol.Schema:
-    """Return sun tracking schema, adding glare zones toggle for vertical covers."""
-    if sensor_type == SensorType.BLIND:
+    """Return sun tracking schema, adding glare-zones toggle for cover types that support it."""
+    if sensor_type in POLICY_REGISTRY and get_policy(sensor_type).supports_glare_zones:
         return SUN_TRACKING_SCHEMA.extend(
             {
                 vol.Optional(
@@ -2273,7 +2267,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_summary()
             if self.config.get(CONF_ENABLE_BLIND_SPOT):
                 return await self.async_step_blind_spot()
-            if self.type_blind == SensorType.BLIND and self.config.get(
+            if get_policy(self.type_blind).supports_glare_zones and self.config.get(
                 CONF_ENABLE_GLARE_ZONES
             ):
                 return await self.async_step_glare_zones()
@@ -2333,7 +2327,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                     },
                 )
             self.config.update(user_input)
-            if self.type_blind == SensorType.BLIND and self.config.get(
+            if get_policy(self.type_blind).supports_glare_zones and self.config.get(
                 CONF_ENABLE_GLARE_ZONES
             ):
                 return await self.async_step_glare_zones()
@@ -2773,8 +2767,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
         source_azimuth = source_entry.options.get(CONF_AZIMUTH, 180)
         sensor_type = source_entry.data.get(CONF_SENSOR_TYPE)
-        from .cover_types import get_policy
-
         cover_entity_selector = selector.EntitySelector(
             selector.EntitySelectorConfig(
                 multiple=True,
@@ -2858,7 +2850,7 @@ class OptionsFlowHandler(OptionsFlow):
             keys.append("interp")
         if self.options.get(CONF_ENABLE_BLIND_SPOT):
             keys.append("blind_spot")
-        if self.sensor_type == SensorType.BLIND and self.options.get(
+        if get_policy(self.sensor_type).supports_glare_zones and self.options.get(
             CONF_ENABLE_GLARE_ZONES
         ):
             keys.append("glare_zones")
