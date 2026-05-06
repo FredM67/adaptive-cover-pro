@@ -27,6 +27,12 @@ class CoverTypePolicy(ABC):
 
     cover_type: ClassVar[str]
 
+    # Whether this cover type can shield specific floor zones from direct sun
+    # (the "glare zones" feature). Only meaningful for vertical blinds today,
+    # but a future cover type that gains the same capability flips this on
+    # without touching every gate site.
+    supports_glare_zones: ClassVar[bool] = False
+
     @abstractmethod
     def build_calc_engine(
         self,

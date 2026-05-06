@@ -132,3 +132,21 @@ class TestGetPolicyAcceptsBothForms:
         from custom_components.adaptive_cover_pro.enums import CoverType
 
         assert isinstance(get_policy(CoverType.VENETIAN), VenetianPolicy)
+
+
+@pytest.mark.unit
+class TestSupportsGlareZones:
+    """``supports_glare_zones`` is the single seam for the blind-only feature."""
+
+    def test_blind_supports(self):
+        assert BlindPolicy.supports_glare_zones is True
+
+    def test_awning_does_not_support(self):
+        assert AwningPolicy.supports_glare_zones is False
+
+    def test_tilt_does_not_support(self):
+        assert TiltPolicy.supports_glare_zones is False
+
+    def test_venetian_does_not_support(self):
+        # Venetian could grow this later — the flag is the single switch.
+        assert VenetianPolicy.supports_glare_zones is False
