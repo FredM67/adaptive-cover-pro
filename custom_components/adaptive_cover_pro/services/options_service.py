@@ -596,9 +596,7 @@ def validate_options_patch(
             - _SECTION_GEOMETRY_VERTICAL
             - _SECTION_GEOMETRY_AWNING
         )
-        policy = get_policy(
-            sensor_type.value if hasattr(sensor_type, "value") else sensor_type
-        )
+        policy = get_policy(sensor_type)
         for stray_set, type_label in policy.disallowed_geometry_fields(
             vertical_only=vertical_only,
             awning_only=awning_only,

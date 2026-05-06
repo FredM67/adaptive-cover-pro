@@ -22,13 +22,22 @@ POLICY_REGISTRY: dict[str, type[CoverTypePolicy]] = {
 }
 
 
-def get_policy(cover_type: str | None) -> CoverTypePolicy:
-    """Return a policy instance for the given cover-type string.
+def get_policy(cover_type) -> CoverTypePolicy:
+    """Return a policy instance for the given cover-type identifier.
 
-    Raises ``ValueError`` for unknown cover types — preserves the failure
-    mode of the previous if/elif chain in ``coordinator.get_blind_data``.
+    Accepts a plain string, a ``CoverType`` ``StrEnum`` member, or any value
+    with a ``.value`` attribute. Raises ``ValueError`` for unknown types —
+    preserves the failure mode of the previous if/elif chain in
+    ``coordinator.get_blind_data``.
     """
-    cls = POLICY_REGISTRY.get(cover_type) if cover_type is not None else None
+    key: str | None
+    if cover_type is None:
+        key = None
+    elif hasattr(cover_type, "value"):
+        key = cover_type.value
+    else:
+        key = cover_type
+    cls = POLICY_REGISTRY.get(key) if key is not None else None
     if cls is None:
         msg = f"Unsupported cover type: {cover_type!r}"
         raise ValueError(msg)
