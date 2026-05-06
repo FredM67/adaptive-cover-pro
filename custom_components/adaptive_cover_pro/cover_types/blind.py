@@ -3,14 +3,70 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import voluptuous as vol
+from homeassistant.helpers import selector
+
+from ..const import (
+    CONF_HEIGHT_WIN,
+    CONF_SILL_HEIGHT,
+    CONF_WINDOW_DEPTH,
+    CONF_WINDOW_WIDTH,
+    DEFAULT_WINDOW_HEIGHT,
+    MAX_WINDOW_DEPTH,
+)
 from ..engine.covers import AdaptiveVerticalCover
+from ._helpers import window_dimensions_lines
 from .base import CoverTypePolicy
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
     from ..services.configuration_service import ConfigurationService
+
+
+GEOMETRY_VERTICAL_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            CONF_HEIGHT_WIN, default=DEFAULT_WINDOW_HEIGHT
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.1,
+                max=50,
+                step=0.01,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="m",
+            )
+        ),
+        vol.Optional(CONF_WINDOW_WIDTH, default=1.0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.1,
+                max=50,
+                step=0.01,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="m",
+            )
+        ),
+        vol.Optional(CONF_WINDOW_DEPTH, default=0.0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.0,
+                max=MAX_WINDOW_DEPTH,
+                step=0.01,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="m",
+            )
+        ),
+        vol.Optional(CONF_SILL_HEIGHT, default=0.0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.0,
+                max=50,
+                step=0.01,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="m",
+            )
+        ),
+    }
+)
 
 
 class BlindPolicy(CoverTypePolicy):
@@ -31,6 +87,18 @@ class BlindPolicy(CoverTypePolicy):
     def glare_zones_config(self, config_service, options: dict):
         """Return the glare-zones config for this cover (vertical-only feature)."""
         return config_service.get_glare_zones_config(options)
+
+    def geometry_schema(self) -> vol.Schema:
+        """Return the vertical-blind geometry schema."""
+        return GEOMETRY_VERTICAL_SCHEMA
+
+    def entity_selector_filter(self) -> selector.EntityFilterSelectorConfig:
+        """Plain ``cover`` domain — no extra capability requirement."""
+        return selector.EntityFilterSelectorConfig(domain="cover")
+
+    def summary_geometry_lines(self, config: dict[str, Any]) -> list[str]:
+        """Render the window-dimensions block."""
+        return window_dimensions_lines(config)
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""
