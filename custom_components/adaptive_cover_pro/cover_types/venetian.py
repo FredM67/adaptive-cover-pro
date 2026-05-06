@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(GEOMETRY_TILT_SCHEMA.schema)
 
 
+
 class VenetianPolicy(CoverTypePolicy):
     """Dual-axis cover (single HA entity, position + tilt)."""
 
@@ -79,6 +80,7 @@ class VenetianPolicy(CoverTypePolicy):
             tilt_parts.append(f"mode: {v}")
         slat_line = [", ".join(tilt_parts)] if tilt_parts else []
         return window_dimensions_lines(config) + slat_line
+
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
