@@ -190,6 +190,13 @@ VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES = 3
 # venetian position command. Real motors back-rotate the slats while moving
 # vertically, and that drift would otherwise read as a user touch.
 VENETIAN_TILT_SUPPRESSION_SECONDS = 90.0
+# Skip the tilt command when the commanded position exceeds this threshold —
+# at high positions the slats are retracted into the housing and tilting is
+# physically meaningless. The value is configurable per-instance.
+CONF_VENETIAN_TILT_SKIP_ABOVE = "venetian_tilt_skip_above"
+DEFAULT_VENETIAN_TILT_SKIP_ABOVE = 95  # percent
+MIN_VENETIAN_TILT_SKIP_ABOVE = 50
+MAX_VENETIAN_TILT_SKIP_ABOVE = 100
 
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command
