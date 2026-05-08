@@ -29,6 +29,16 @@ from custom_components.adaptive_cover_pro.managers.cover_command import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _zero_post_tilt_delay(monkeypatch):
+    """Skip the 1.5s real-motor settle delay in unit tests."""
+    monkeypatch.setattr(
+        "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer."
+        "VENETIAN_POST_TILT_REBASE_DELAY_SECONDS",
+        0,
+    )
+
+
 @pytest.fixture
 def hass():
     h = MagicMock()
@@ -311,3 +321,71 @@ async def test_reconciliation_would_loop_without_rebase(svc, hass, attached_poli
 
     # Reconciliation detects |67 - 60| = 7 > tolerance(3) and issues a resend.
     assert hass.services.async_call.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_tilt_on_target_plus_position_back_drive_does_not_trip_manual_override(
+    svc, hass, attached_policy
+):
+    """End-to-end regression for issue #33: back-drive inside suppression window.
+
+    Sequence:
+      1. apply_position(34, tilt=70) — position + tilt commands fire, suppression stamped.
+      2. Motor back-drives position to 37% (drift=3, = manual threshold floor).
+      3. HA fires state-change: tilt=70 (on-target), position=37 (drifted).
+
+    Bug A (fixed): SecondaryAxisCheck.evaluate returned consumed=False when
+    new_value==expected, bypassing suppression. The position-axis check then
+    evaluated |34-37|=3, which is NOT strictly less than effective_threshold=3,
+    and set manual override. With the fix, suppression is consulted first and
+    consumed=True blocks the position-axis check entirely.
+    """
+    import datetime as dt
+
+    from custom_components.adaptive_cover_pro.managers.manual_override import (
+        AdaptiveCoverManager,
+        SecondaryAxisCheck,
+    )
+
+    entity_id = "cover.venetian_morning"
+    # Motor back-drove to 37% after the tilt command.
+    hass.states.get.return_value = _state_with_position(37)
+
+    with _patch_caps_dual_axis():
+        await svc.apply_position(
+            entity_id, 34, "solar", _ctx_venetian(attached_policy, tilt=70)
+        )
+
+    # Suppression window must be open immediately after apply_position.
+    assert attached_policy.is_in_tilt_suppression(entity_id)
+
+    mgr = AdaptiveCoverManager(
+        hass=MagicMock(),
+        reset_duration={"hours": 2},
+        logger=MagicMock(),
+    )
+    mgr.add_covers([entity_id])
+
+    event = MagicMock()
+    event.entity_id = entity_id
+    event.new_state = MagicMock()
+    event.new_state.state = "stopped"
+    event.new_state.attributes = {"current_position": 37, "current_tilt_position": 70}
+    event.new_state.last_updated = dt.datetime.now(dt.UTC)
+
+    mgr.handle_state_change(
+        states_data=event,
+        our_state=34,
+        blind_type="cover_venetian",
+        allow_reset=True,
+        is_waiting=lambda _eid: False,
+        manual_threshold=3,
+        secondary_axis_check=SecondaryAxisCheck(
+            expected=70,
+            attribute="current_tilt_position",
+            label="tilt",
+            suppression=attached_policy.is_in_tilt_suppression,
+        ),
+    )
+
+    assert not mgr.is_cover_manual(entity_id)
