@@ -316,13 +316,11 @@ def test_position_exceeding_user_threshold_and_tolerance_triggers_override():
 
 
 def test_position_exactly_at_tolerance_boundary_not_flagged():
-    """Position exactly equal to POSITION_TOLERANCE_PERCENT (3%) must NOT trigger override.
+    """Position drift exactly equal to POSITION_TOLERANCE_PERCENT must NOT trigger override.
 
-    The condition is strict: difference must be >= effective_threshold to trigger.
-    Since effective_threshold = 3 and difference = 3 → 3 < 3 is False → triggers.
-    Wait — the check is `abs(diff) < effective_threshold`, so 3 < 3 is False
-    → override DOES trigger at exactly the boundary.  This test documents that
-    boundary behavior: at exactly 3% the override is triggered.
+    The tolerance is inclusive: drift <= effective_threshold is absorbed as motor
+    imprecision. A 3% drift at a 3% floor is within tolerance and must not mark
+    the cover as manually controlled.
     """
     from custom_components.adaptive_cover_pro.const import POSITION_TOLERANCE_PERCENT
 
@@ -342,11 +340,9 @@ def test_position_exactly_at_tolerance_boundary_not_flagged():
         manual_threshold=None,
     )
 
-    # At exactly the boundary (difference == tolerance), the check is < not <=,
-    # so the override IS triggered.  This documents the boundary behavior.
-    assert manager.is_cover_manual(entity_id), (
+    assert not manager.is_cover_manual(entity_id), (
         f"At exactly POSITION_TOLERANCE_PERCENT={POSITION_TOLERANCE_PERCENT}% difference "
-        "the override should trigger (boundary not included in the safe zone)"
+        "the override must NOT trigger (boundary is included in the safe zone)"
     )
 
 
