@@ -114,11 +114,16 @@ class TestSummaryGeometryLines:
         assert lines == [
             "2.1m tall window, blocking sun 0.5m from the glass",
             "slat depth 3cm, spacing 2cm, mode: mode2",
+            "skip tilt when position > 95%",
         ]
 
     def test_empty_config_renders_nothing(self):
-        for cls in (BlindPolicy, AwningPolicy, TiltPolicy, VenetianPolicy):
+        for cls in (BlindPolicy, AwningPolicy, TiltPolicy):
             assert cls().summary_geometry_lines({}) == []
+
+    def test_venetian_empty_config_renders_threshold_default(self):
+        lines = VenetianPolicy().summary_geometry_lines({})
+        assert lines == ["skip tilt when position > 95%"]
 
 
 @pytest.mark.unit

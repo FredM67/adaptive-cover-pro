@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.adaptive_cover_pro.const import DEFAULT_VENETIAN_TILT_SKIP_ABOVE
 from custom_components.adaptive_cover_pro.cover_types import VenetianPolicy
 from custom_components.adaptive_cover_pro.managers.cover_command import (
     CoverCommandService,
@@ -93,6 +94,27 @@ def _patch_caps_dual_axis():
     )
 
 
+def test_attach_applies_default_threshold(svc, hass, attached_policy):
+    """attach() without tilt_skip_above uses the module default."""
+    assert attached_policy._tilt_skip_above == DEFAULT_VENETIAN_TILT_SKIP_ABOVE
+
+
+def test_attach_applies_custom_threshold(svc, hass):
+    """attach() with tilt_skip_above kwarg overrides the default."""
+    policy = VenetianPolicy()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=MagicMock(),
+        set_commanded_position=MagicMock(),
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+        tilt_skip_above=80,
+    )
+    assert policy._tilt_skip_above == 80
+
+
 def _state_with_position(pos: int):
     state = MagicMock()
     state.state = "open"
@@ -131,6 +153,42 @@ async def test_apply_position_stamps_suppression_window(svc, hass, attached_poli
         )
 
     assert attached_policy.is_in_tilt_suppression(entity_id) is True
+
+
+@pytest.mark.asyncio
+async def test_apply_position_skips_tilt_when_position_above_threshold(
+    svc, hass, attached_policy
+):
+    """Tilt is suppressed when the commanded position exceeds the retract threshold."""
+    entity_id = "cover.venetian_retracted"
+    hass.states.get.return_value = _state_with_position(90)
+
+    with _patch_caps_dual_axis():
+        outcome, _ = await svc.apply_position(
+            entity_id, 96, "solar", _ctx_venetian(attached_policy, tilt=80)
+        )
+
+    assert outcome == "sent"
+    assert hass.services.async_call.call_count == 1
+    assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("position", [95, 60])
+async def test_apply_position_fires_tilt_at_or_below_threshold(
+    svc, hass, attached_policy, position
+):
+    """Tilt fires normally when position is at or below the retract threshold."""
+    entity_id = "cover.venetian_partial"
+    hass.states.get.return_value = _state_with_position(max(position - 5, 0))
+
+    with _patch_caps_dual_axis():
+        outcome, _ = await svc.apply_position(
+            entity_id, position, "solar", _ctx_venetian(attached_policy, tilt=80)
+        )
+
+    assert outcome == "sent"
+    assert hass.services.async_call.call_count == 2
 
 
 @pytest.mark.asyncio

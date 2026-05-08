@@ -67,14 +67,15 @@ class SecondaryAxisCheck:
 
         if self.suppression is not None and self.suppression(entity_id):
             return SecondaryAxisResult(
+                consumed=True,
                 event_name="manual_override_rejected_tilt_suppression",
                 event_kwargs={
                     "our_state": self.expected,
                     "new_position": new_value,
                     "effective_threshold": effective_threshold,
                     "reason": (
-                        f"{self.label} delta {delta:.1f}% within "
-                        "venetian tilt-suppression window"
+                        f"{self.label} delta {delta:.1f}% within venetian "
+                        "back-rotate window; suppressing both tilt and position checks"
                     ),
                 },
             )

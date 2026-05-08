@@ -39,7 +39,8 @@
           "length_awning": "Markisenlänge",
           "angle": "Markisenwinkel",
           "slat_depth": "Lamellentiefe",
-          "slat_distance": "Lamellenabstand"
+          "slat_distance": "Lamellenabstand",
+          "venetian_tilt_skip_above": "Neigung über Position überspringen (%)"
         },
         "data_description": {
           "window_height": "Höhe Ihres Fensters in Metern (von unten bis oben des Glasbereichs). Beispiele: Standard-Tür = 2,0m, Kleines Fenster = 1,5m, Vom Boden bis zur Decke = 2,5m. Messen Sie von dort, wo die Beschattung beginnt, bis zu der Stelle, wo sie endet, wenn vollständig ausgefahren. Wird verwendet, um optimale Beschattungsposition zum Blockieren direkter Sonneneinstrahlung zu berechnen. Hinweis: 1 Meter ≈ 3,3 Fuß.",
@@ -50,7 +51,8 @@
           "length_awning": "Maximale Ausfahrlänge Ihrer Markise in Metern (vollständig ausgefahren). Messen Sie von der Befestigungsstelle bis zum Ende des Stoffes, wenn vollständig ausgefahren. Beispiele: Standard-Terrassenmarkise = 2,0–3,0m, Kleine Fenstermarkise = 1,0–1,5m, Große kommerzielle = 4,0m+. Wird verwendet, um zu berechnen, wie weit die Markise ausfahren muss, um die Sonne zu blockieren.",
           "angle": "Winkel der Markise, wenn ausgefahren (0–45°). 0° = Waagerecht/flach (maximale Abdeckung), 15° = Leichte Neigung (typisch für Drainage), 30° = Steile Neigung (starker Sonnenwinkel), 45° = Sehr steil (selten verwendet). Überprüfen Sie die Herstellerspezifikationen Ihrer Markise. Die meisten Markisen sind 0–15°. Beeinflusst Schattenberechnung zur korrekten Sonnenblockerung.",
           "slat_depth": "Breite jeder Lamelle (von vorne nach hinten einer Lamelle messen). Häufige Größen: Mini-Jalousien (1 Zoll) = 2,5cm, Standard-Jalousien (2 Zoll) = 5cm, Breite Lamellen (2,5–3 Zoll) = 6,5–7,5cm. Messen Sie eine einzelne Lamelle mit einem Lineal zur genauen Sonnenblockierungs-Berechnung.",
-          "slat_distance": "Vertikaler Abstand zwischen Lamellenmittellinien. Messen Sie von der Mitte einer Lamelle zur Mitte der nächsten Lamelle (vertikal). Normalerweise etwas mehr als Lamellentiefe, um Überlappung beim Schließen zu ermöglichen. Häufig: 3–8cm je nach Jalousietyp. Wird zur Berechnung des optimalen Neigungswinkels verwendet."
+          "slat_distance": "Vertikaler Abstand zwischen Lamellenmittellinien. Messen Sie von der Mitte einer Lamelle zur Mitte der nächsten Lamelle (vertikal). Normalerweise etwas mehr als Lamellentiefe, um Überlappung beim Schließen zu ermöglichen. Häufig: 3–8cm je nach Jalousietyp. Wird zur Berechnung des optimalen Neigungswinkels verwendet.",
+          "venetian_tilt_skip_above": "Wenn die Beschattung über diese Position (0–100%) angefordert wird, wird der Neigungsbefehl übersprungen. Bei hohen Positionen fahren die Lamellen in das Gehäuse zurück und eine Neigung ist physikalisch bedeutungslos. Standard 95%. Erhöhen Sie den Wert, wenn Ihre Jalousie oben korrekt gekippt wird; verringern Sie ihn, wenn versucht wird, vollständig geöffnete Jalousien zu kippen."
         }
       },
       "sun_tracking": {
@@ -549,7 +551,8 @@
           "length_awning": "Markisenlänge",
           "angle": "Markisenwinkel",
           "slat_depth": "Lamellentiefe",
-          "slat_distance": "Lamellenabstand"
+          "slat_distance": "Lamellenabstand",
+          "venetian_tilt_skip_above": "Neigung über Position überspringen (%)"
         },
         "data_description": {
           "window_height": "Höhe Ihres Fensters in Metern (von unten bis oben des Glasbereichs). Beispiele: Standard-Tür = 2,0m, Kleines Fenster = 1,5m, Vom Boden bis Decke = 2,5m. Messen Sie von wo die Abdeckung beginnt bis wo sie endet, wenn vollständig ausgefahren. Wird verwendet, um die optimale Abdeckungsposition zu berechnen, um direkte Sonneneinstrahlung zu blockieren. Hinweis: 1 Meter ≈ 3,3 Fuß.",
@@ -560,7 +563,8 @@
           "length_awning": "Maximale Ausfahrlänge Ihrer Markise in Metern (vollständig ausgefahren). Messen Sie vom Montagepunkt bis zum Ende des Stoffes, wenn vollständig offen. Beispiele: Standard-Terrasse-Markise = 2,0-3,0m, Kleine Fenster-Markise = 1,0-1,5m, Große Gewerbe = 4,0m+. Wird verwendet, um zu berechnen, wie weit die Markise ausfahren muss, um die Sonne zu blockieren.",
           "angle": "Neigungswinkel der Markise bei Ausfuhr (0-45°). 0° = Horizontal/flach (maximale Abdeckung), 15° = Leichte Neigung (typisch für Drainage), 30° = Steile Neigung (starker Sonnenwinkel), 45° = Sehr steil (selten verwendet). Überprüfen Sie die Spezifikationen des Markisenherstellers. Die meisten Markisen sind 0-15°. Beeinflusst die Schattenberechnung für ordnungsgemäße Sonnensperrung.",
           "slat_depth": "Breite jeder Lamelle (Messung eine Lamelle von vorne nach hinten). Übliche Größen: Mini-Jalousien (1 Zoll) = 2,5cm, Standard-Jalousien (2 Zoll) = 5cm, Breite Lamellen (2,5-3 Zoll) = 6,5-7,5cm. Messen Sie eine einzelne Lamelle mit einem Lineal für genaue Sonnenblockerberechnung.",
-          "slat_distance": "Vertikaler Abstand zwischen Lamellenmitten. Messen Sie von der Mitte einer Lamelle zur Mitte der nächsten Lamelle (vertikal). Normalerweise etwas mehr als Lamellenbreite, um Überlappung zu ermöglichen, wenn geschlossen. Üblich: 3-8cm je nach Jalousientyp. Wird verwendet, um den optimalen Neigungswinkel zu berechnen."
+          "slat_distance": "Vertikaler Abstand zwischen Lamellenmitten. Messen Sie von der Mitte einer Lamelle zur Mitte der nächsten Lamelle (vertikal). Normalerweise etwas mehr als Lamellenbreite, um Überlappung zu ermöglichen, wenn geschlossen. Üblich: 3-8cm je nach Jalousientyp. Wird verwendet, um den optimalen Neigungswinkel zu berechnen.",
+          "venetian_tilt_skip_above": "Wenn die Beschattung über diese Position (0–100%) angefordert wird, wird der Neigungsbefehl übersprungen. Bei hohen Positionen fahren die Lamellen in das Gehäuse zurück und eine Neigung ist physikalisch bedeutungslos. Standard 95%. Erhöhen Sie den Wert, wenn Ihre Jalousie oben korrekt gekippt wird; verringern Sie ihn, wenn versucht wird, vollständig geöffnete Jalousien zu kippen."
         }
       },
       "sun_tracking": {
@@ -1320,6 +1324,10 @@
         "window_width": {
           "description": "Fensterbreite in Metern (0,1–50 m). Nur Vertikaljalousie.",
           "name": "Fensterbreite"
+        },
+        "venetian_tilt_skip_above": {
+          "name": "Neigung über Position überspringen (%)",
+          "description": "Neigungsbefehl überspringen, wenn die angeforderte Position diesen Wert überschreitet. Nur Jalousien. Standard 95."
         }
       },
       "name": "Geometrie einstellen"
