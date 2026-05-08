@@ -203,6 +203,11 @@ DEFAULT_VENETIAN_TILT_SKIP_ABOVE = 95  # percent
 MIN_VENETIAN_TILT_SKIP_ABOVE = 50
 MAX_VENETIAN_TILT_SKIP_ABOVE = 100
 
+CONF_VENETIAN_TILT_SKIP_BELOW = "venetian_tilt_skip_below"
+DEFAULT_VENETIAN_TILT_SKIP_BELOW = 5  # percent
+MIN_VENETIAN_TILT_SKIP_BELOW = 0
+MAX_VENETIAN_TILT_SKIP_BELOW = 50
+
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command
 STARTUP_GRACE_PERIOD_SECONDS = (
