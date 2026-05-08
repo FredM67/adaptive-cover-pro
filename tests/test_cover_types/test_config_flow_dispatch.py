@@ -114,7 +114,7 @@ class TestSummaryGeometryLines:
         assert lines == [
             "2.1m tall window, blocking sun 0.5m from the glass",
             "slat depth 3cm, spacing 2cm, mode: mode2",
-            "skip tilt when position > 95%",
+            "skip tilt when position > 95% or position <= 5%",
         ]
 
     def test_empty_config_renders_nothing(self):
@@ -123,7 +123,7 @@ class TestSummaryGeometryLines:
 
     def test_venetian_empty_config_renders_threshold_default(self):
         lines = VenetianPolicy().summary_geometry_lines({})
-        assert lines == ["skip tilt when position > 95%"]
+        assert lines == ["skip tilt when position > 95% or position <= 5%"]
 
 
 @pytest.mark.unit
