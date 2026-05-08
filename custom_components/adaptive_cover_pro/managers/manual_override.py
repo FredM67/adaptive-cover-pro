@@ -56,7 +56,7 @@ class SecondaryAxisCheck:
     ) -> SecondaryAxisResult:
         """Decide what (if anything) the secondary axis tells the manager to do."""
         new_value = new_state.attributes.get(self.attribute)
-        if new_value is None or new_value == self.expected:
+        if new_value is None:
             return SecondaryAxisResult()
 
         effective_threshold = max(
@@ -65,6 +65,11 @@ class SecondaryAxisCheck:
         )
         delta = abs(self.expected - new_value)
 
+        # Check suppression BEFORE the on-target short-circuit. When the motor
+        # back-drives the position axis during tilt settling, tilt may arrive
+        # exactly on target while the position axis still shows back-drive drift.
+        # Returning consumed=False here would let the position-axis check run and
+        # falsely trip manual override on that drift.
         if self.suppression is not None and self.suppression(entity_id):
             return SecondaryAxisResult(
                 consumed=True,
@@ -79,6 +84,9 @@ class SecondaryAxisCheck:
                     ),
                 },
             )
+
+        if new_value == self.expected:
+            return SecondaryAxisResult()
 
         if delta >= effective_threshold:
             return SecondaryAxisResult(

@@ -26,6 +26,16 @@ from custom_components.adaptive_cover_pro.managers.dual_axis_sequencer import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _zero_post_tilt_delay(monkeypatch):
+    """Skip the 1.5s real-motor settle delay in unit tests."""
+    monkeypatch.setattr(
+        "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer."
+        "VENETIAN_POST_TILT_REBASE_DELAY_SECONDS",
+        0,
+    )
+
+
 def _build_sequencer(
     *, current_positions=None, dry_run=False, set_commanded_position=None
 ):
@@ -156,6 +166,40 @@ class TestPostTiltRebase:
             "cover.x", position_target=50, tilt_target=80, reason="solar"
         )
         set_cmd_pos.assert_not_called()
+
+    async def test_rebase_reads_position_after_post_tilt_delay(self, monkeypatch):
+        """A delay must occur between the tilt service call and the position rebase.
+
+        Without this delay the rebase reads current_position immediately after
+        set_cover_tilt_position returns. For async motors (Shelly/KNX/Somfy) the
+        mechanical back-drive happens AFTER the service call returns, so the
+        immediate read sees the pre-back-drive value and the rebase is skipped.
+        The fix is asyncio.sleep(VENETIAN_POST_TILT_REBASE_DELAY_SECONDS) between
+        the tilt call and the rebase so the motor has time to settle first.
+        """
+        sleep_calls: list[float] = []
+
+        async def _capture_sleep(delay):
+            sleep_calls.append(delay)
+
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer.asyncio.sleep",
+            _capture_sleep,
+        )
+
+        set_cmd_pos = MagicMock()
+        _, seq = _build_sequencer(set_commanded_position=set_cmd_pos)
+        seq._get_current_position = lambda _eid: 56
+        seq._wait_for_position_settle = AsyncMock(return_value=(True, 50))
+
+        await seq.run_sequence(
+            "cover.x", position_target=50, tilt_target=80, reason="solar"
+        )
+
+        assert sleep_calls, (
+            "asyncio.sleep was not called after the tilt service call — "
+            "post-tilt rebase delay is missing"
+        )
 
     async def test_does_not_rebase_when_tilt_service_fails(self):
         """If the tilt service call raises, rebase must not run."""
