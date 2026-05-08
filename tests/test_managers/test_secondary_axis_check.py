@@ -63,11 +63,13 @@ class TestNoOpPaths:
 class TestSuppressed:
     """Suppressed drift records a rejection event and falls through."""
 
-    def test_suppressed_records_rejection_and_falls_through(self):
+    def test_suppressed_consumes_both_axes(self):
+        # Suppression window is open: both tilt AND position axes are blocked so
+        # the motor's back-drive cannot trigger a false manual override.
         res = _check(expected=70, suppressed=True).evaluate(
             "cover.x", _state({"current_tilt_position": 20}), manual_threshold=5
         )
-        assert res.consumed is False  # falls through to position-axis check
+        assert res.consumed is True  # blocks position-axis fall-through
         assert res.is_manual is False
         assert res.event_name == "manual_override_rejected_tilt_suppression"
         assert res.event_kwargs["our_state"] == 70

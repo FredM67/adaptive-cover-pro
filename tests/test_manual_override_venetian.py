@@ -115,13 +115,32 @@ def test_tilt_drift_within_threshold_is_ignored_even_outside_window() -> None:
     assert not mgr.is_cover_manual(entity_id)
 
 
-def test_position_drift_ignores_tilt_suppression() -> None:
-    """Position-axis drift always evaluates regardless of tilt-suppression state.
+def test_position_drift_inside_tilt_suppression_window_is_ignored() -> None:
+    """Position drift caused by the motor's back-drive must not trip override.
 
-    Suppression covers ONLY the tilt-axis side-effect. A user who moves the
-    cover vertically still triggers position-axis manual override.
+    During the venetian back-rotate window the motor physically moves the cover
+    position axis as a side-effect of the tilt command. That drift is not a user
+    touch — both axes must be suppressed while the window is open.
     """
     entity_id = "cover.venetian_master"
+    mgr = _make_manager(entity_id)
+
+    mgr.handle_state_change(
+        states_data=_make_event(entity_id, position=58, tilt=20),
+        our_state=50,
+        blind_type="cover_venetian",
+        allow_reset=True,
+        is_waiting=lambda _eid: False,
+        manual_threshold=5,
+        secondary_axis_check=_tilt_check(suppressed=True),
+    )
+
+    assert not mgr.is_cover_manual(entity_id)
+
+
+def test_position_drift_outside_tilt_suppression_trips_override() -> None:
+    """Once the suppression window has closed, position drift is a user touch."""
+    entity_id = "cover.venetian_master2"
     mgr = _make_manager(entity_id)
     mgr.hass.states.get = MagicMock(return_value=None)
 
@@ -132,7 +151,7 @@ def test_position_drift_ignores_tilt_suppression() -> None:
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
-        secondary_axis_check=_tilt_check(suppressed=True),
+        secondary_axis_check=_tilt_check(suppressed=False),
     )
 
     assert mgr.is_cover_manual(entity_id)
