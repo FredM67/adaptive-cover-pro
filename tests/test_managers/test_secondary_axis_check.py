@@ -77,6 +77,33 @@ class TestSuppressed:
 
 
 @pytest.mark.unit
+class TestOnTargetWithSuppression:
+    """On-target tilt inside the suppression window must still consume the check.
+
+    Regression for issue #33: motor back-drives the position axis while tilt is
+    settling. If evaluate() short-circuits on `new_value == expected` without
+    consulting suppression, the position-axis fall-through trips a false manual
+    override on motor back-drift (e.g. commanded 34%, motor settles at 37%).
+    """
+
+    def test_on_target_inside_suppression_consumes_position_check(self):
+        res = _check(expected=70, suppressed=True).evaluate(
+            "cover.x", _state({"current_tilt_position": 70}), manual_threshold=5
+        )
+        assert res.consumed is True
+        assert res.is_manual is False
+        assert res.event_name == "manual_override_rejected_tilt_suppression"
+
+    def test_on_target_outside_suppression_is_noop(self):
+        res = _check(expected=70, suppressed=False).evaluate(
+            "cover.x", _state({"current_tilt_position": 70}), manual_threshold=5
+        )
+        assert res.consumed is False
+        assert res.is_manual is False
+        assert res.event_name is None
+
+
+@pytest.mark.unit
 class TestManual:
     """Above-threshold drift outside the suppression window flips manual."""
 

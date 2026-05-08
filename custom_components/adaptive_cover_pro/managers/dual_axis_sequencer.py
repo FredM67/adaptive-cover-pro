@@ -31,6 +31,7 @@ from ..const import (
     VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES,
     VENETIAN_POSITION_SETTLE_POLL_SECONDS,
     VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS,
+    VENETIAN_POST_TILT_REBASE_DELAY_SECONDS,
     VENETIAN_TILT_SUPPRESSION_SECONDS,
 )
 
@@ -135,6 +136,12 @@ class DualAxisSequencer:
                 err,
             )
             return
+
+        # Wait for the motor's mechanical back-drive on the vertical axis to
+        # settle before reading current_position for the rebase. Without this
+        # delay the read races the asynchronous back-drive and captures the
+        # pre-settle value, causing the rebase to see zero drift and skip.
+        await asyncio.sleep(VENETIAN_POST_TILT_REBASE_DELAY_SECONDS)
 
         self._rebase_commanded_position(entity_id, position_target)
 

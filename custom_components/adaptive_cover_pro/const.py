@@ -190,6 +190,11 @@ VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES = 3
 # venetian position command. Real motors back-rotate the slats while moving
 # vertically, and that drift would otherwise read as a user touch.
 VENETIAN_TILT_SUPPRESSION_SECONDS = 90.0
+# After set_cover_tilt_position returns, real motors keep back-driving the
+# vertical axis briefly. Wait this many seconds before reading current_position
+# for the post-tilt rebase so the rebase captures the actual settled position
+# rather than the pre-back-drive snapshot.
+VENETIAN_POST_TILT_REBASE_DELAY_SECONDS = 1.5
 # Skip the tilt command when the commanded position exceeds this threshold —
 # at high positions the slats are retracted into the housing and tilting is
 # physically meaningless. The value is configurable per-instance.
