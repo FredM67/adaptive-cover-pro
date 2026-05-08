@@ -163,6 +163,32 @@ def test_position_drift_inside_window_with_tilt_on_target_is_ignored() -> None:
     assert not mgr.is_cover_manual(entity_id)
 
 
+def test_position_drift_outside_window_with_tilt_on_target_is_ignored() -> None:
+    """Tilt on-target + position drifted after suppression window expires must not trip override.
+
+    Field bug from issue #33 beta.4: motor back-drive on the position axis can
+    outlast the 90s suppression window. When the next state event arrives with
+    tilt exactly at the expected value, the old code returned consumed=False,
+    letting the position-axis check see |34-37|=3 >= POSITION_TOLERANCE_PERCENT
+    and trip manual override on residual motor drift.
+    """
+    entity_id = "cover.venetian_bedroom"
+    mgr = _make_manager(entity_id)
+    mgr.hass.states.get = MagicMock(return_value=None)
+
+    mgr.handle_state_change(
+        states_data=_make_event(entity_id, position=37, tilt=70),
+        our_state=34,
+        blind_type="cover_venetian",
+        allow_reset=True,
+        is_waiting=lambda _eid: False,
+        manual_threshold=3,
+        secondary_axis_check=_tilt_check(expected=70, suppressed=False),
+    )
+
+    assert not mgr.is_cover_manual(entity_id)
+
+
 def test_position_drift_outside_tilt_suppression_trips_override() -> None:
     """Once the suppression window has closed, position drift is a user touch."""
     entity_id = "cover.venetian_master2"

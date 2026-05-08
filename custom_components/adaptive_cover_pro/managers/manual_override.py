@@ -301,7 +301,7 @@ class AdaptiveCoverManager:
                 manual_threshold if manual_threshold is not None else 0,
                 POSITION_TOLERANCE_PERCENT,
             )
-            if abs(our_state - new_position) < effective_threshold:
+            if abs(our_state - new_position) <= effective_threshold:
                 self.logger.debug(
                     "Position change %s%% is less than effective threshold %s%% for %s (user threshold=%s, tolerance floor=%s)",
                     abs(our_state - new_position),
