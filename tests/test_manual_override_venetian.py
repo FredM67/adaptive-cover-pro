@@ -138,6 +138,31 @@ def test_position_drift_inside_tilt_suppression_window_is_ignored() -> None:
     assert not mgr.is_cover_manual(entity_id)
 
 
+def test_position_drift_inside_window_with_tilt_on_target_is_ignored() -> None:
+    """Tilt on-target + position drifted by motor back-drive must not trip override.
+
+    Regression for issue #33: when tilt arrives exactly at the expected value,
+    the old code short-circuited to consumed=False without consulting the
+    suppression callback. The position-axis check then saw |34-37|=3 (= threshold
+    floor of 3), which is not strictly less than 3, and set manual override.
+    """
+    entity_id = "cover.venetian_kitchen"
+    mgr = _make_manager(entity_id)
+    mgr.hass.states.get = MagicMock(return_value=None)
+
+    mgr.handle_state_change(
+        states_data=_make_event(entity_id, position=37, tilt=70),
+        our_state=34,
+        blind_type="cover_venetian",
+        allow_reset=True,
+        is_waiting=lambda _eid: False,
+        manual_threshold=3,
+        secondary_axis_check=_tilt_check(expected=70, suppressed=True),
+    )
+
+    assert not mgr.is_cover_manual(entity_id)
+
+
 def test_position_drift_outside_tilt_suppression_trips_override() -> None:
     """Once the suppression window has closed, position drift is a user touch."""
     entity_id = "cover.venetian_master2"
