@@ -69,6 +69,8 @@ from custom_components.adaptive_cover_pro.const import (
     CONF_TILT_DEPTH,
     CONF_TILT_DISTANCE,
     CONF_TILT_MODE,
+    CONF_VENETIAN_TILT_SKIP_ABOVE,
+    DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_IS_RAINING_SENSOR,
     CONF_WEATHER_IS_WINDY_SENSOR,
@@ -269,6 +271,19 @@ def test_geometry_tilt_shows_tilt_fields():
     assert "slat depth 3.0cm" in summary
     assert "spacing 4.0cm" in summary
     assert "mode1" in summary
+
+
+def test_geometry_venetian_shows_retract_threshold_default():
+    """Venetian summary includes the retract-threshold line at the default value."""
+    summary = _build_config_summary({}, SensorType.VENETIAN)
+    assert f"skip tilt when position > {DEFAULT_VENETIAN_TILT_SKIP_ABOVE}%" in summary
+
+
+def test_geometry_venetian_shows_retract_threshold_custom():
+    """Venetian summary reflects a custom retract threshold."""
+    cfg = {CONF_VENETIAN_TILT_SKIP_ABOVE: 80}
+    summary = _build_config_summary(cfg, SensorType.VENETIAN)
+    assert "skip tilt when position > 80%" in summary
 
 
 # ---------------------------------------------------------------------------

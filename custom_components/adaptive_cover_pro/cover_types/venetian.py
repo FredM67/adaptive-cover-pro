@@ -16,6 +16,12 @@ import voluptuous as vol
 from homeassistant.const import SERVICE_SET_COVER_POSITION
 from homeassistant.helpers import selector
 
+from ..const import (
+    CONF_VENETIAN_TILT_SKIP_ABOVE,
+    DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
+    MAX_VENETIAN_TILT_SKIP_ABOVE,
+    MIN_VENETIAN_TILT_SKIP_ABOVE,
+)
 from ..engine.covers import AdaptiveVerticalCover, VenetianCoverCalculation
 from ..managers.dual_axis_sequencer import DualAxisSequencer
 from ..managers.manual_override import SecondaryAxisCheck
@@ -31,7 +37,19 @@ if TYPE_CHECKING:
     from ..services.configuration_service import ConfigurationService
 
 
-GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(GEOMETRY_TILT_SCHEMA.schema)
+GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(
+    {
+        **GEOMETRY_TILT_SCHEMA.schema,
+        vol.Optional(
+            CONF_VENETIAN_TILT_SKIP_ABOVE, default=DEFAULT_VENETIAN_TILT_SKIP_ABOVE
+        ): vol.All(
+            vol.Coerce(int),
+            vol.Range(
+                min=MIN_VENETIAN_TILT_SKIP_ABOVE, max=MAX_VENETIAN_TILT_SKIP_ABOVE
+            ),
+        ),
+    }
+)
 
 
 class VenetianPolicy(CoverTypePolicy):
@@ -42,6 +60,7 @@ class VenetianPolicy(CoverTypePolicy):
     def __init__(self) -> None:
         """Initialise without a sequencer; ``attach()`` wires one up later."""
         self._sequencer: DualAxisSequencer | None = None
+        self._tilt_skip_above: int = DEFAULT_VENETIAN_TILT_SKIP_ABOVE
 
     def disallowed_geometry_fields(
         self,
@@ -78,7 +97,11 @@ class VenetianPolicy(CoverTypePolicy):
         if (v := config.get(CONF_TILT_MODE)) is not None:
             tilt_parts.append(f"mode: {v}")
         slat_line = [", ".join(tilt_parts)] if tilt_parts else []
-        return window_dimensions_lines(config) + slat_line
+        skip_above = config.get(
+            CONF_VENETIAN_TILT_SKIP_ABOVE, DEFAULT_VENETIAN_TILT_SKIP_ABOVE
+        )
+        retract_line = [f"skip tilt when position > {skip_above}%"]
+        return window_dimensions_lines(config) + slat_line + retract_line
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
@@ -185,6 +208,8 @@ class VenetianPolicy(CoverTypePolicy):
             position_tolerance=kwargs["position_tolerance"],
             is_dry_run=kwargs["is_dry_run"],
         )
+        if "tilt_skip_above" in kwargs:
+            self._tilt_skip_above = int(kwargs["tilt_skip_above"])
 
     @property
     def sequencer(self) -> DualAxisSequencer | None:
@@ -232,6 +257,11 @@ class VenetianPolicy(CoverTypePolicy):
             return
         seq = self._sequencer
         if seq is None:
+            return
+        # Skip the tilt sequence when the cover is retracted into its housing.
+        # At high positions the slats are physically hidden — tilting is meaningless
+        # and causes an unnecessary motor back-drive.
+        if position > self._tilt_skip_above:
             return
         seq.stamp_position_command(entity_id)
         tilt = getattr(context, "tilt", None)

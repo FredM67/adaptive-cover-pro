@@ -120,6 +120,8 @@ from .const import (
     DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
     DEFAULT_WEATHER_RAIN_THRESHOLD,
     DEFAULT_WEATHER_TIMEOUT,
+    CONF_VENETIAN_TILT_SKIP_ABOVE,
+    DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
 )
 from .diagnostics.builder import DiagnosticContext, DiagnosticsBuilder
 from .diagnostics.event_buffer import EventBuffer
@@ -356,6 +358,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             set_commanded_position=self._cmd_svc.set_target,
             position_tolerance=POSITION_TOLERANCE_PERCENT,
             is_dry_run=lambda: self._cmd_svc.dry_run,
+            tilt_skip_above=self.config_entry.options.get(
+                CONF_VENETIAN_TILT_SKIP_ABOVE, DEFAULT_VENETIAN_TILT_SKIP_ABOVE
+            ),
         )
 
         # Time window manager (start/end time checks)
