@@ -1,0 +1,76 @@
+name: "Compress Large Diagnostics in Comments"
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  compress:
+    name: "Replace inline JSON blobs with gist links"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GIST_CREATION }}
+          script: |
+            const body = context.payload.comment.body;
+            const commentId = context.payload.comment.id;
+            const issueNumber = context.payload.issue.number;
+
+            const MIN_COMMENT = 10_000;
+            const MIN_BLOCK   =  5_000;
+
+            if (body.length < MIN_COMMENT) {
+              console.log(`Comment is ${body.length} chars — below threshold, skipping.`);
+              return;
+            }
+
+            // Match ```json or ````json blocks (closing fence optional — HA diagnostics omit it)
+            const FENCE_RE = /(`{3,4})json\r?\n\r?\n?([\s\S]*?)(?:\r?\n\1(?:\r?\n|$)|$)/g;
+
+            const replacements = [];
+            let m;
+            while ((m = FENCE_RE.exec(body)) !== null) {
+              const jsonContent = m[2].trimEnd();
+              if (jsonContent.length < MIN_BLOCK) continue;
+              try {
+                JSON.parse(jsonContent);
+              } catch {
+                console.log(`Block at offset ${m.index}: not valid JSON, skipping.`);
+                continue;
+              }
+              replacements.push({ original: m[0], jsonContent });
+            }
+
+            if (replacements.length === 0) {
+              console.log('No large JSON blocks found.');
+              return;
+            }
+
+            let newBody = body;
+            for (const { original, jsonContent } of replacements) {
+              const filename = `diagnostics_issue${issueNumber}_comment${commentId}.json`;
+
+              const gist = await github.rest.gists.create({
+                description: `Adaptive Cover Pro diagnostics — issue #${issueNumber}`,
+                public: false,
+                files: { [filename]: { content: jsonContent } },
+              });
+
+              const url = gist.data.html_url;
+              console.log(`Created gist: ${url}`);
+              newBody = newBody.replace(original, `[${filename}](${url})`);
+            }
+
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: commentId,
+              body: newBody,
+            });
+
+            console.log(`Updated comment ${commentId} — replaced ${replacements.length} JSON block(s).`);
