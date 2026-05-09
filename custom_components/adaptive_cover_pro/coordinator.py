@@ -120,10 +120,10 @@ from .const import (
     DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
     DEFAULT_WEATHER_RAIN_THRESHOLD,
     DEFAULT_WEATHER_TIMEOUT,
+    CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
-    CONF_VENETIAN_TILT_SKIP_BELOW,
+    DEFAULT_VENETIAN_MODE,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
-    DEFAULT_VENETIAN_TILT_SKIP_BELOW,
 )
 from .diagnostics.builder import DiagnosticContext, DiagnosticsBuilder
 from .diagnostics.event_buffer import EventBuffer
@@ -363,8 +363,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             tilt_skip_above=self.config_entry.options.get(
                 CONF_VENETIAN_TILT_SKIP_ABOVE, DEFAULT_VENETIAN_TILT_SKIP_ABOVE
             ),
-            tilt_skip_below=self.config_entry.options.get(
-                CONF_VENETIAN_TILT_SKIP_BELOW, DEFAULT_VENETIAN_TILT_SKIP_BELOW
+            venetian_mode=self.config_entry.options.get(
+                CONF_VENETIAN_MODE, DEFAULT_VENETIAN_MODE
             ),
         )
 

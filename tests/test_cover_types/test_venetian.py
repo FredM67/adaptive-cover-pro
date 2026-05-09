@@ -1,7 +1,6 @@
 """Unit tests for VenetianPolicy — cover-type policy behaviour.
 
-Covers the retract-threshold guard in ``after_position_command`` (issue #33
-Defect B: tilt command fired for fully-retracted covers).
+Covers the retract-threshold guard in ``after_position_command`` (issue #33).
 """
 
 from __future__ import annotations
@@ -13,9 +12,7 @@ from homeassistant.const import SERVICE_SET_COVER_POSITION
 
 from custom_components.adaptive_cover_pro.const import (
     CONF_VENETIAN_TILT_SKIP_ABOVE,
-    CONF_VENETIAN_TILT_SKIP_BELOW,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
-    DEFAULT_VENETIAN_TILT_SKIP_BELOW,
 )
 from custom_components.adaptive_cover_pro.cover_types.venetian import VenetianPolicy
 from custom_components.adaptive_cover_pro.managers.cover_command import PositionContext
@@ -27,13 +24,44 @@ def test_retract_threshold_constants_exist() -> None:
     assert DEFAULT_VENETIAN_TILT_SKIP_ABOVE == 95
 
 
-def test_retract_threshold_below_constants_exist() -> None:
-    """CONF and DEFAULT constants for the lower-bound threshold must be exported."""
-    assert CONF_VENETIAN_TILT_SKIP_BELOW == "venetian_tilt_skip_below"
-    assert DEFAULT_VENETIAN_TILT_SKIP_BELOW == 5
+def test_geometry_schema_accepts_venetian_mode() -> None:
+    """GEOMETRY_VENETIAN_SCHEMA validates both allowed mode values."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_VENETIAN_MODE,
+        DEFAULT_VENETIAN_MODE,
+        VENETIAN_MODE_TILT_ONLY,
+    )
+    from custom_components.adaptive_cover_pro.cover_types.venetian import (
+        GEOMETRY_VENETIAN_SCHEMA,
+    )
+
+    result_default = GEOMETRY_VENETIAN_SCHEMA({})
+    assert result_default[CONF_VENETIAN_MODE] == DEFAULT_VENETIAN_MODE
+
+    result_tilt_only = GEOMETRY_VENETIAN_SCHEMA(
+        {CONF_VENETIAN_MODE: VENETIAN_MODE_TILT_ONLY}
+    )
+    assert result_tilt_only[CONF_VENETIAN_MODE] == VENETIAN_MODE_TILT_ONLY
 
 
-def _make_policy(*, tilt_skip_above: int = 95, tilt_skip_below: int = 5) -> VenetianPolicy:
+def test_venetian_mode_constants_exist() -> None:
+    """Mode constants must exist in const.py with the documented values."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_VENETIAN_MODE,
+        DEFAULT_VENETIAN_MODE,
+        VENETIAN_MODE_POSITION_AND_TILT,
+        VENETIAN_MODE_TILT_ONLY,
+        VENETIAN_MODES,
+    )
+
+    assert CONF_VENETIAN_MODE == "venetian_mode"
+    assert VENETIAN_MODE_POSITION_AND_TILT == "position_and_tilt"
+    assert VENETIAN_MODE_TILT_ONLY == "tilt_only"
+    assert DEFAULT_VENETIAN_MODE == VENETIAN_MODE_POSITION_AND_TILT
+    assert VENETIAN_MODES == (VENETIAN_MODE_POSITION_AND_TILT, VENETIAN_MODE_TILT_ONLY)
+
+
+def _make_policy(*, tilt_skip_above: int = 95) -> VenetianPolicy:
     """Return a VenetianPolicy with a fully mocked sequencer."""
     policy = VenetianPolicy()
     mock_seq = MagicMock()
@@ -41,7 +69,6 @@ def _make_policy(*, tilt_skip_above: int = 95, tilt_skip_below: int = 5) -> Vene
     mock_seq.stamp_position_command = MagicMock()
     policy._sequencer = mock_seq
     policy._tilt_skip_above = tilt_skip_above
-    policy._tilt_skip_below = tilt_skip_below
     return policy
 
 
@@ -119,52 +146,64 @@ async def test_after_position_command_runs_sequence_at_or_below_threshold(
 
 
 @pytest.mark.asyncio
-async def test_after_position_command_respects_custom_threshold() -> None:
-    """Threshold is read from the policy instance, not a module-level constant."""
-    policy = _make_policy(tilt_skip_above=80)
+class TestVenetianMaybeUpdateTiltOnly:
+    """maybe_update_tilt_only drives continuous tilt when position hasn't changed."""
 
-    await policy.after_position_command(
-        cmd_svc=MagicMock(),
-        entity_id="cover.venetian_x",
-        service=SERVICE_SET_COVER_POSITION,
-        position=81,
-        context=_ctx(policy),
-        reason="solar",
-    )
+    def _policy_with_last_tilt(
+        self,
+        *,
+        tilt_value: int | None,
+        suppression: bool = False,
+    ) -> VenetianPolicy:
+        from custom_components.adaptive_cover_pro.const import VENETIAN_MODE_TILT_ONLY
 
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
+        policy = _make_policy()
+        policy._venetian_mode = VENETIAN_MODE_TILT_ONLY
+        policy._last_tilt = tilt_value
+        mock_seq = MagicMock()
+        mock_seq.update_tilt_only = AsyncMock()
+        mock_seq.is_in_suppression = MagicMock(return_value=suppression)
+        policy._sequencer = mock_seq
+        return policy
+
+    async def test_emits_when_last_tilt_set_and_no_suppression(self):
+        policy = self._policy_with_last_tilt(tilt_value=70)
+        await policy.maybe_update_tilt_only(
+            "cover.x", current_position=0, context=MagicMock(), reason="solar"
+        )
+        policy._sequencer.update_tilt_only.assert_awaited_once()
+
+    async def test_skips_when_no_last_tilt(self):
+        policy = self._policy_with_last_tilt(tilt_value=None)
+        await policy.maybe_update_tilt_only(
+            "cover.x", current_position=0, context=MagicMock(), reason="solar"
+        )
+        policy._sequencer.update_tilt_only.assert_not_awaited()
+
+    async def test_skips_when_suppression_window_open(self):
+        policy = self._policy_with_last_tilt(tilt_value=70, suppression=True)
+        await policy.maybe_update_tilt_only(
+            "cover.x", current_position=0, context=MagicMock(), reason="solar"
+        )
+        policy._sequencer.update_tilt_only.assert_not_awaited()
+
+    async def test_skips_when_no_sequencer(self):
+        policy = _make_policy()
+        policy._last_tilt = 70
+        policy._sequencer = None
+        await policy.maybe_update_tilt_only(
+            "cover.x", current_position=0, context=MagicMock(), reason="solar"
+        )
 
 
 @pytest.mark.asyncio
-async def test_after_position_command_skips_run_sequence_when_position_below_threshold() -> (
-    None
-):
-    """When position <= tilt_skip_below, neither stamp nor run_sequence fires.
+async def test_after_position_command_fires_tilt_at_position_zero() -> None:
+    """At position=0 the sequence MUST fire — issue #33 regression.
 
-    Near fully-closed, slats are pinched against the bottom rail — tilting
-    produces no articulation but does back-drive the position axis, causing
-    repeated position corrections that loop.
+    The removed tilt_skip_below option silently blocked tilt at fully-closed
+    positions. Default behavior must now allow tilt at position=0.
     """
-    policy = _make_policy(tilt_skip_below=5)
-
-    await policy.after_position_command(
-        cmd_svc=MagicMock(),
-        entity_id="cover.venetian_x",
-        service=SERVICE_SET_COVER_POSITION,
-        position=3,
-        context=_ctx(policy),
-        reason="solar",
-    )
-
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_after_position_command_skips_at_0_percent() -> None:
-    """Fully closed (position=0) must also skip the tilt command."""
-    policy = _make_policy(tilt_skip_below=5)
+    policy = _make_policy()
 
     await policy.after_position_command(
         cmd_svc=MagicMock(),
@@ -175,20 +214,20 @@ async def test_after_position_command_skips_at_0_percent() -> None:
         reason="solar",
     )
 
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
+    policy._sequencer.stamp_position_command.assert_called_once_with("cover.venetian_x")
+    policy._sequencer.run_sequence.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_after_position_command_respects_custom_lower_threshold() -> None:
-    """Lower threshold is read from the policy instance."""
-    policy = _make_policy(tilt_skip_below=10)
+async def test_after_position_command_respects_custom_threshold() -> None:
+    """Threshold is read from the policy instance, not a module-level constant."""
+    policy = _make_policy(tilt_skip_above=80)
 
     await policy.after_position_command(
         cmd_svc=MagicMock(),
         entity_id="cover.venetian_x",
         service=SERVICE_SET_COVER_POSITION,
-        position=8,
+        position=81,
         context=_ctx(policy),
         reason="solar",
     )

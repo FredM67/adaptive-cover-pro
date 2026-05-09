@@ -949,6 +949,13 @@ class CoverCommandService:
             and _current is not None
             and _current == position
         ):
+            if context.policy is not None and context.tilt is not None:
+                await context.policy.maybe_update_tilt_only(
+                    entity_id,
+                    current_position=_current,
+                    context=context,
+                    reason=_trigger,
+                )
             return self._skip(
                 entity_id,
                 "same_position",

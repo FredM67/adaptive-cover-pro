@@ -389,3 +389,87 @@ async def test_tilt_on_target_plus_position_back_drive_does_not_trip_manual_over
     )
 
     assert not mgr.is_cover_manual(entity_id)
+
+
+def test_attach_defaults_venetian_mode_to_position_and_tilt(attached_policy):
+    """attach() without venetian_mode defaults to position_and_tilt."""
+    from custom_components.adaptive_cover_pro.const import (
+        VENETIAN_MODE_POSITION_AND_TILT,
+    )
+
+    assert attached_policy._venetian_mode == VENETIAN_MODE_POSITION_AND_TILT
+
+
+def test_attach_applies_custom_venetian_mode(hass):
+    """attach() with venetian_mode kwarg stores the given mode."""
+    from custom_components.adaptive_cover_pro.const import VENETIAN_MODE_TILT_ONLY
+
+    policy = VenetianPolicy()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=MagicMock(),
+        set_commanded_position=MagicMock(),
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+        venetian_mode=VENETIAN_MODE_TILT_ONLY,
+    )
+    assert policy._venetian_mode == VENETIAN_MODE_TILT_ONLY
+
+
+@pytest.mark.asyncio
+async def test_same_position_skip_calls_maybe_update_tilt_only(svc, hass):
+    """When apply_position short-circuits on same-position, maybe_update_tilt_only fires."""
+    entity_id = "cover.venetian_x"
+    hass.states.get.return_value = _state_with_position(0)
+
+    policy = MagicMock()
+    policy.after_position_command = AsyncMock()
+    policy.maybe_update_tilt_only = AsyncMock()
+
+    ctx = PositionContext(
+        auto_control=True,
+        manual_override=False,
+        sun_just_appeared=False,
+        min_change=1,
+        time_threshold=0,
+        special_positions=[0, 100],
+        force=True,
+        tilt=70,
+        policy=policy,
+    )
+
+    with _patch_caps_dual_axis():
+        outcome, reason = await svc.apply_position(entity_id, 0, "solar", ctx)
+
+    assert reason == "same_position"
+    policy.maybe_update_tilt_only.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_same_position_skip_does_not_call_hook_when_no_tilt(svc, hass):
+    """No tilt in context — maybe_update_tilt_only must not be called."""
+    entity_id = "cover.venetian_x"
+    hass.states.get.return_value = _state_with_position(0)
+
+    policy = MagicMock()
+    policy.maybe_update_tilt_only = AsyncMock()
+
+    ctx = PositionContext(
+        auto_control=True,
+        manual_override=False,
+        sun_just_appeared=False,
+        min_change=1,
+        time_threshold=0,
+        special_positions=[0, 100],
+        force=True,
+        tilt=None,
+        policy=policy,
+    )
+
+    with _patch_caps_dual_axis():
+        outcome, reason = await svc.apply_position(entity_id, 0, "solar", ctx)
+
+    assert reason == "same_position"
+    policy.maybe_update_tilt_only.assert_not_awaited()

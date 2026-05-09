@@ -203,10 +203,13 @@ DEFAULT_VENETIAN_TILT_SKIP_ABOVE = 95  # percent
 MIN_VENETIAN_TILT_SKIP_ABOVE = 50
 MAX_VENETIAN_TILT_SKIP_ABOVE = 100
 
-CONF_VENETIAN_TILT_SKIP_BELOW = "venetian_tilt_skip_below"
-DEFAULT_VENETIAN_TILT_SKIP_BELOW = 5  # percent
-MIN_VENETIAN_TILT_SKIP_BELOW = 0
-MAX_VENETIAN_TILT_SKIP_BELOW = 50
+# Venetian cover operating mode.  position_and_tilt tracks both axes with solar
+# geometry; tilt_only closes the cover to 0% and tracks only the slat angle.
+CONF_VENETIAN_MODE = "venetian_mode"
+VENETIAN_MODE_POSITION_AND_TILT = "position_and_tilt"
+VENETIAN_MODE_TILT_ONLY = "tilt_only"
+DEFAULT_VENETIAN_MODE = VENETIAN_MODE_POSITION_AND_TILT
+VENETIAN_MODES = (VENETIAN_MODE_POSITION_AND_TILT, VENETIAN_MODE_TILT_ONLY)
 
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command

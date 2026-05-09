@@ -69,7 +69,6 @@ GEOMETRY_VERTICAL_SCHEMA = vol.Schema(
 )
 
 
-
 class BlindPolicy(CoverTypePolicy):
     """Cover that moves vertically (raise/lower)."""
 
@@ -101,7 +100,6 @@ class BlindPolicy(CoverTypePolicy):
     def summary_geometry_lines(self, config: dict[str, Any]) -> list[str]:
         """Render the window-dimensions block."""
         return window_dimensions_lines(config)
-
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""

@@ -33,7 +33,6 @@ class CoverTypePolicy(ABC):
     # without touching every gate site.
     supports_glare_zones: ClassVar[bool] = False
 
-
     @abstractmethod
     def build_calc_engine(
         self,
@@ -86,6 +85,21 @@ class CoverTypePolicy(ABC):
         Default ``False`` for cover types without a back-rotating tilt axis.
         """
         return False
+
+    async def maybe_update_tilt_only(
+        self,
+        entity_id: str,  # noqa: ARG002
+        *,
+        current_position: int | None,  # noqa: ARG002
+        context: Any,  # noqa: ARG002
+        reason: str,  # noqa: ARG002
+    ) -> None:
+        """Send a tilt-only update when no position command will fire.
+
+        Default: no-op for cover types without a tilt axis. VenetianPolicy
+        overrides this to drive continuous tilt updates.
+        """
+        return
 
     async def after_position_command(
         self,

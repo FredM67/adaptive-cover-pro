@@ -17,14 +17,16 @@ from homeassistant.const import SERVICE_SET_COVER_POSITION
 from homeassistant.helpers import selector
 
 from ..const import (
+    CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
-    CONF_VENETIAN_TILT_SKIP_BELOW,
+    DEFAULT_VENETIAN_MODE,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
-    DEFAULT_VENETIAN_TILT_SKIP_BELOW,
     MAX_VENETIAN_TILT_SKIP_ABOVE,
-    MAX_VENETIAN_TILT_SKIP_BELOW,
     MIN_VENETIAN_TILT_SKIP_ABOVE,
-    MIN_VENETIAN_TILT_SKIP_BELOW,
+    POSITION_CLOSED,
+    VENETIAN_MODE_POSITION_AND_TILT,
+    VENETIAN_MODE_TILT_ONLY,
+    VENETIAN_MODES,
 )
 from ..engine.covers import AdaptiveVerticalCover, VenetianCoverCalculation
 from ..managers.dual_axis_sequencer import DualAxisSequencer
@@ -52,17 +54,11 @@ GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(
                 min=MIN_VENETIAN_TILT_SKIP_ABOVE, max=MAX_VENETIAN_TILT_SKIP_ABOVE
             ),
         ),
-        vol.Optional(
-            CONF_VENETIAN_TILT_SKIP_BELOW, default=DEFAULT_VENETIAN_TILT_SKIP_BELOW
-        ): vol.All(
-            vol.Coerce(int),
-            vol.Range(
-                min=MIN_VENETIAN_TILT_SKIP_BELOW, max=MAX_VENETIAN_TILT_SKIP_BELOW
-            ),
+        vol.Optional(CONF_VENETIAN_MODE, default=DEFAULT_VENETIAN_MODE): vol.In(
+            VENETIAN_MODES
         ),
     }
 )
-
 
 
 class VenetianPolicy(CoverTypePolicy):
@@ -74,7 +70,8 @@ class VenetianPolicy(CoverTypePolicy):
         """Initialise without a sequencer; ``attach()`` wires one up later."""
         self._sequencer: DualAxisSequencer | None = None
         self._tilt_skip_above: int = DEFAULT_VENETIAN_TILT_SKIP_ABOVE
-        self._tilt_skip_below: int = DEFAULT_VENETIAN_TILT_SKIP_BELOW
+        self._venetian_mode: str = DEFAULT_VENETIAN_MODE
+        self._last_tilt: int | None = None
 
     def disallowed_geometry_fields(
         self,
@@ -114,14 +111,14 @@ class VenetianPolicy(CoverTypePolicy):
         skip_above = config.get(
             CONF_VENETIAN_TILT_SKIP_ABOVE, DEFAULT_VENETIAN_TILT_SKIP_ABOVE
         )
-        skip_below = config.get(
-            CONF_VENETIAN_TILT_SKIP_BELOW, DEFAULT_VENETIAN_TILT_SKIP_BELOW
-        )
-        retract_line = [
-            f"skip tilt when position > {skip_above}% or position <= {skip_below}%"
-        ]
-        return window_dimensions_lines(config) + slat_line + retract_line
-
+        retract_line = [f"skip tilt when position > {skip_above}%"]
+        venetian_mode = config.get(CONF_VENETIAN_MODE, DEFAULT_VENETIAN_MODE)
+        _mode_label = {
+            VENETIAN_MODE_POSITION_AND_TILT: "position and tilt",
+            VENETIAN_MODE_TILT_ONLY: "tilt only",
+        }.get(venetian_mode, venetian_mode)
+        mode_line = [f"mode: {_mode_label}"]
+        return window_dimensions_lines(config) + slat_line + retract_line + mode_line
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
@@ -190,6 +187,10 @@ class VenetianPolicy(CoverTypePolicy):
         """
         if result is None:
             return result
+        from ..enums import ControlMethod
+
+        if result.control_method != ControlMethod.SOLAR:
+            return replace(result, tilt=None)
         venetian_calc = VenetianCoverCalculation(
             config=config,
             vert_config=config_service.get_vertical_data(options),
@@ -200,16 +201,35 @@ class VenetianPolicy(CoverTypePolicy):
             logger=logger,
         )
         tilt = venetian_calc.tilt_for_position(result.position)
-        trace = list(result.decision_trace) + [
+        position = result.position
+        trace = list(result.decision_trace)
+
+        if self._venetian_mode == VENETIAN_MODE_TILT_ONLY:
+            trace.append(
+                DecisionStep(
+                    handler="venetian_mode",
+                    matched=True,
+                    reason=(
+                        f"tilt-only mode: position {position}% → {POSITION_CLOSED}% "
+                        "(closed); tilt drives the slats"
+                    ),
+                    position=POSITION_CLOSED,
+                    tilt=tilt,
+                )
+            )
+            position = POSITION_CLOSED
+
+        trace.append(
             DecisionStep(
                 handler="venetian_engine",
                 matched=True,
-                reason=(f"slat angle for position {result.position}% — tilt {tilt}%"),
-                position=result.position,
+                reason=(f"slat angle for position {position}% — tilt {tilt}%"),
+                position=position,
                 tilt=tilt,
             )
-        ]
-        return replace(result, tilt=tilt, decision_trace=trace)
+        )
+        self._last_tilt = tilt
+        return replace(result, position=position, tilt=tilt, decision_trace=trace)
 
     def position_context_overrides(self, result: PipelineResult) -> dict[str, Any]:
         """Thread the resolved tilt into ``PositionContext.tilt``."""
@@ -230,8 +250,8 @@ class VenetianPolicy(CoverTypePolicy):
         )
         if "tilt_skip_above" in kwargs:
             self._tilt_skip_above = int(kwargs["tilt_skip_above"])
-        if "tilt_skip_below" in kwargs:
-            self._tilt_skip_below = int(kwargs["tilt_skip_below"])
+        if "venetian_mode" in kwargs:
+            self._venetian_mode = str(kwargs["venetian_mode"])
 
     @property
     def sequencer(self) -> DualAxisSequencer | None:
@@ -243,6 +263,28 @@ class VenetianPolicy(CoverTypePolicy):
         if self._sequencer is None:
             return False
         return self._sequencer.is_in_suppression(entity_id)
+
+    async def maybe_update_tilt_only(
+        self,
+        entity_id: str,
+        *,
+        current_position: int | None,
+        context: Any,  # noqa: ARG002
+        reason: str,
+    ) -> None:
+        """Send a tilt-only update when the position axis won't fire this cycle."""
+        if self._sequencer is None:
+            return
+        if self._last_tilt is None:
+            return
+        if self._sequencer.is_in_suppression(entity_id):
+            return
+        await self._sequencer.update_tilt_only(
+            entity_id,
+            tilt_target=self._last_tilt,
+            current_position=current_position,
+            reason=reason,
+        )
 
     def secondary_axis_check(
         self, result: PipelineResult, cmd_svc
@@ -280,9 +322,8 @@ class VenetianPolicy(CoverTypePolicy):
         seq = self._sequencer
         if seq is None:
             return
-        # Skip when retracted (slats hidden) or near fully-closed (slats pinched
-        # against the bottom rail — tilting causes back-drive that loops).
-        if position > self._tilt_skip_above or position <= self._tilt_skip_below:
+        # Skip when retracted — slats are hidden in the housing above this point.
+        if position > self._tilt_skip_above:
             return
         seq.stamp_position_command(entity_id)
         tilt = getattr(context, "tilt", None)

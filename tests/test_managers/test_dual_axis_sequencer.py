@@ -215,3 +215,80 @@ class TestPostTiltRebase:
             "cover.x", position_target=50, tilt_target=80, reason="solar"
         )
         set_cmd_pos.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestSendTiltCommand:
+    """``_send_tilt_command`` is the shared tilt-emission body used by both
+    ``run_sequence`` and ``update_tilt_only``.
+    """
+
+    async def test_emits_tilt_service_call(self):
+        hass, seq = _build_sequencer()
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+        call = hass.services.async_call.call_args.args
+        assert call[1] == "set_cover_tilt_position"
+        assert call[2]["tilt_position"] == 80
+
+    async def test_records_last_tilt_target(self):
+        _, seq = _build_sequencer()
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_dry_run_skips_service_call(self):
+        hass, seq = _build_sequencer(dry_run=True)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 0
+
+
+@pytest.mark.asyncio
+class TestUpdateTiltOnly:
+    """``update_tilt_only`` emits tilt without a settle wait and without
+    opening a suppression window.
+    """
+
+    async def test_emits_tilt_without_settle_wait(self):
+        hass, seq = _build_sequencer()
+        seq._wait_for_position_settle = AsyncMock()
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=40, reason="solar"
+        )
+        seq._wait_for_position_settle.assert_not_awaited()
+        assert hass.services.async_call.call_count == 1
+        assert hass.services.async_call.call_args.args[1] == "set_cover_tilt_position"
+
+    async def test_does_not_stamp_suppression(self):
+        _, seq = _build_sequencer()
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=40, reason="solar"
+        )
+        assert seq.is_in_suppression("cover.x") is False
+
+    async def test_short_circuits_when_target_unchanged(self):
+        hass, seq = _build_sequencer()
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=40, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+        # Same target — must not fire again.
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=42, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+
+    async def test_emits_when_target_changes(self):
+        hass, seq = _build_sequencer()
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=40, reason="solar"
+        )
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=85, current_position=40, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 2
