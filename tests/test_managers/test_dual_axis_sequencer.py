@@ -21,6 +21,7 @@ import pytest
 from custom_components.adaptive_cover_pro.const import (
     VENETIAN_TILT_SUPPRESSION_SECONDS,
 )
+from custom_components.adaptive_cover_pro.diagnostics.event_buffer import EventBuffer
 from custom_components.adaptive_cover_pro.managers.dual_axis_sequencer import (
     DualAxisSequencer,
 )
@@ -37,7 +38,13 @@ def _zero_post_tilt_delay(monkeypatch):
 
 
 def _build_sequencer(
-    *, current_positions=None, dry_run=False, set_commanded_position=None
+    *,
+    current_positions=None,
+    dry_run=False,
+    set_commanded_position=None,
+    get_state=None,
+    get_current_tilt_position=None,
+    event_buffer=None,
 ):
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -56,6 +63,9 @@ def _build_sequencer(
             set_commanded_position=set_commanded_position,
             position_tolerance=5,
             is_dry_run=lambda: dry_run,
+            get_state=get_state,
+            get_current_tilt_position=get_current_tilt_position,
+            event_buffer=event_buffer,
         ),
     )
 
@@ -292,3 +302,303 @@ class TestUpdateTiltOnly:
             "cover.x", tilt_target=85, current_position=40, reason="solar"
         )
         assert hass.services.async_call.call_count == 2
+
+
+@pytest.mark.asyncio
+class TestSettleStateAware:
+    """_wait_for_position_settle must not declare stall while cover.state is moving."""
+
+    async def test_settle_does_not_fire_while_state_is_closing(self, monkeypatch):
+        """Stall counter must stay at zero while state=closing, regardless of position."""
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer"
+            ".VENETIAN_POSITION_SETTLE_POLL_SECONDS",
+            0,
+        )
+        # State: closing for 5 polls, then open for 3 → stall fires on poll 8.
+        state_seq = iter(
+            [
+                "closing",
+                "closing",
+                "closing",
+                "closing",
+                "closing",
+                "open",
+                "open",
+                "open",
+            ]
+        )
+        calls = [0]
+
+        def get_pos(_eid):
+            calls[0] += 1
+            return 40
+
+        _, seq = _build_sequencer(get_state=lambda _eid: next(state_seq, "open"))
+        seq._get_current_position = get_pos
+
+        reached, last = await seq._wait_for_position_settle("cover.x", target=10)
+
+        assert reached is False
+        assert last == 40
+        # Pre-fix bug returns after 4 polls; fix must poll at least 6.
+        assert calls[0] >= 6
+
+    async def test_settle_does_not_fire_while_state_is_opening(self, monkeypatch):
+        """Same as closing test — opening state must also suppress the stall counter."""
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer"
+            ".VENETIAN_POSITION_SETTLE_POLL_SECONDS",
+            0,
+        )
+        state_seq = iter(
+            [
+                "opening",
+                "opening",
+                "opening",
+                "opening",
+                "opening",
+                "open",
+                "open",
+                "open",
+            ]
+        )
+        calls = [0]
+
+        def get_pos(_eid):
+            calls[0] += 1
+            return 40
+
+        _, seq = _build_sequencer(get_state=lambda _eid: next(state_seq, "open"))
+        seq._get_current_position = get_pos
+
+        reached, last = await seq._wait_for_position_settle("cover.x", target=10)
+
+        assert reached is False
+        assert calls[0] >= 6
+
+    async def test_settle_resets_unchanged_counter_when_motion_resumes(
+        self, monkeypatch
+    ):
+        """Stall counter must reset if state becomes moving mid-sequence."""
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer"
+            ".VENETIAN_POSITION_SETTLE_POLL_SECONDS",
+            0,
+        )
+        # open→open→closing→closing→open→open→open: counter resets on polls 3-4.
+        state_seq = iter(["open", "open", "closing", "closing", "open", "open", "open"])
+        calls = [0]
+
+        def get_pos(_eid):
+            calls[0] += 1
+            return 40
+
+        _, seq = _build_sequencer(get_state=lambda _eid: next(state_seq, "open"))
+        seq._get_current_position = get_pos
+
+        reached, last = await seq._wait_for_position_settle("cover.x", target=10)
+
+        assert reached is False
+        # Without fix: returns after poll 4 (3 unchanged). With fix: 7 polls.
+        assert calls[0] >= 6
+
+    async def test_settle_unchanged_samples_only_count_when_stationary(
+        self, monkeypatch
+    ):
+        """When state is always open, the existing 3-sample stall still fires."""
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer"
+            ".VENETIAN_POSITION_SETTLE_POLL_SECONDS",
+            0,
+        )
+        state_seq = iter(["open", "open", "open", "open", "open"])
+        calls = [0]
+
+        def get_pos(_eid):
+            calls[0] += 1
+            return 40
+
+        _, seq = _build_sequencer(get_state=lambda _eid: next(state_seq, "open"))
+        seq._get_current_position = get_pos
+
+        reached, last = await seq._wait_for_position_settle("cover.x", target=10)
+
+        assert reached is False
+        # poll 1: last=None → reset; poll 2-4: unchanged 1-3 → stall at poll 4.
+        assert calls[0] == 4
+
+    async def test_settle_falls_back_when_no_get_state(self, monkeypatch):
+        """No get_state injected → behaves identically to pre-fix code (stall at 3)."""
+        monkeypatch.setattr(
+            "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer"
+            ".VENETIAN_POSITION_SETTLE_POLL_SECONDS",
+            0,
+        )
+        calls = [0]
+
+        def get_pos(_eid):
+            calls[0] += 1
+            return 40
+
+        _, seq = _build_sequencer()  # no get_state
+        seq._get_current_position = get_pos
+
+        reached, last = await seq._wait_for_position_settle("cover.x", target=10)
+
+        assert reached is False
+        assert calls[0] == 4
+
+
+@pytest.mark.asyncio
+class TestTiltVerification:
+    """After _send_tilt_command, the recorded target is cleared if tilt didn't land."""
+
+    async def test_clears_tilt_target_when_actual_drifts_beyond_tolerance(self):
+        """Tilt sent to 80 but cover reads back 0: target must be cleared."""
+        _, seq = _build_sequencer(get_current_tilt_position=lambda _eid: 0)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        # |0 - 80| = 80 > VENETIAN_TILT_VERIFY_TOLERANCE → cleared
+        assert seq.last_tilt_target("cover.x") is None
+
+    async def test_keeps_tilt_target_when_actual_within_tolerance(self):
+        """Tilt sent to 80, reads back 78: within 5% tolerance → keep target."""
+        _, seq = _build_sequencer(get_current_tilt_position=lambda _eid: 78)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        # |78 - 80| = 2 <= 5 → keep
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_keeps_tilt_target_when_tilt_position_unknown(self):
+        """Cannot read actual tilt (None) → fail-open: keep target to avoid retry storms."""
+        _, seq = _build_sequencer(get_current_tilt_position=lambda _eid: None)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_update_tilt_only_retries_after_drift_clears_target(self):
+        """update_tilt_only must resend when the recorded target was cleared by drift."""
+        hass, seq = _build_sequencer(get_current_tilt_position=lambda _eid: 0)
+        # First send: drift clears the target.
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") is None
+        assert hass.services.async_call.call_count == 1
+        # Same target via update_tilt_only: short-circuit compares against None → resends.
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=80, current_position=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 2
+
+
+@pytest.mark.asyncio
+class TestTiltDiagnosticEvents:
+    """DualAxisSequencer emits EventBuffer entries for every tilt command outcome."""
+
+    async def test_tilt_command_sent_event_recorded(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(event_buffer=buf)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        sent = [e for e in buf.snapshot() if e["event"] == "tilt_command_sent"]
+        assert len(sent) == 1
+        ev = sent[0]
+        assert ev["entity_id"] == "cover.x"
+        assert ev["tilt_position"] == 80
+        assert ev["position_target"] == 60
+        assert ev["trigger"] == "solar"
+        assert "ts" in ev
+
+    async def test_tilt_command_skipped_on_dry_run(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(dry_run=True, event_buffer=buf)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        skipped = [e for e in buf.snapshot() if e["event"] == "tilt_command_skipped"]
+        assert len(skipped) == 1
+        assert skipped[0]["reason"] == "dry_run"
+        assert skipped[0]["entity_id"] == "cover.x"
+        assert skipped[0]["tilt_position"] == 80
+        assert "ts" in skipped[0]
+
+    async def test_tilt_command_skipped_on_short_circuit(self):
+        buf = EventBuffer(maxlen=16)
+        hass, seq = _build_sequencer(event_buffer=buf)
+        # First call actually sends.
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=40, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+        # Replace buffer to isolate the second call's events.
+        buf2 = EventBuffer(maxlen=16)
+        seq._event_buffer = buf2
+        # Second call with same target → short-circuit.
+        await seq.update_tilt_only(
+            "cover.x", tilt_target=70, current_position=42, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+        skipped = [e for e in buf2.snapshot() if e["event"] == "tilt_command_skipped"]
+        assert len(skipped) == 1
+        assert skipped[0]["reason"] == "target_unchanged"
+        assert skipped[0]["tilt_position"] == 70
+        assert skipped[0]["current_position"] == 42
+        assert "ts" in skipped[0]
+
+    async def test_tilt_command_verified_event(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: 78,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        verified = [e for e in buf.snapshot() if e["event"] == "tilt_command_verified"]
+        assert len(verified) == 1
+        ev = verified[0]
+        assert ev["entity_id"] == "cover.x"
+        assert ev["tilt_target"] == 80
+        assert ev["actual_tilt_position"] == 78
+        assert ev["delta"] == 2
+        assert "ts" in ev
+
+    async def test_tilt_command_drift_event(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: 0,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        drift = [e for e in buf.snapshot() if e["event"] == "tilt_command_drift"]
+        assert len(drift) == 1
+        ev = drift[0]
+        assert ev["entity_id"] == "cover.x"
+        assert ev["tilt_target"] == 80
+        assert ev["actual_tilt_position"] == 0
+        assert ev["delta"] == 80
+        assert "ts" in ev
+
+    async def test_no_verify_event_when_tilt_position_unknown(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: None,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        verify_events = [
+            e
+            for e in buf.snapshot()
+            if e["event"] in ("tilt_command_verified", "tilt_command_drift")
+        ]
+        assert len(verify_events) == 0
