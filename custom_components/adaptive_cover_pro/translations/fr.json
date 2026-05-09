@@ -41,7 +41,7 @@
           "slat_depth": "Profondeur de la lamelle",
           "slat_distance": "Espacement des lamelles",
           "venetian_tilt_skip_above": "Ignorer l'inclinaison au-dessus de la position (%)",
-          "venetian_tilt_skip_below": "Ignorer l'inclinaison en dessous de la position (%)"
+          "venetian_mode": "Mode de fonctionnement"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre en mètres (du bas au haut de la zone vitrée). Exemples : porte standard = 2,0 m, petite fenêtre = 1,5 m, du sol au plafond = 2,5 m. Mesurez du point de départ du store à son point d'arrivée lorsqu'il est complètement étendu. Utilisé pour calculer la position optimale du store pour bloquer la lumière directe du soleil. Remarque : 1 mètre ≈ 3,3 pieds.",
@@ -54,7 +54,7 @@
           "slat_depth": "Largeur de chaque lamelle (mesurez une lamelle d'avant en arrière). Tailles courantes : mini stores (1 pouce) = 2,5 cm, stores standard (2 pouces) = 5 cm, larges lamelles (2,5-3 pouces) = 6,5-7,5 cm. Mesurez une seule lamelle avec une règle pour un calcul précis du blocage solaire.",
           "slat_distance": "Espacement vertical entre les centres des lamelles. Mesurez du milieu d'une lamelle au milieu de la lamelle suivante (verticalement). Généralement légèrement plus que la profondeur de la lamelle pour permettre le chevauchement quand fermé. Courant : 3-8 cm selon le type de store. Utilisé pour calculer l'angle d'inclinaison optimal.",
           "venetian_tilt_skip_above": "Quand la protection est commandée au-dessus de cette position (0–100%), la commande d'inclinaison est ignorée. À des positions élevées, les lamelles se rétractent dans le boîtier et l'inclinaison n'a pas de sens physique. Par défaut 95%. Augmentez si votre store s'incline correctement près du sommet ; diminuez s'il tente de s'incliner quand complètement levé.",
-          "venetian_tilt_skip_below": "Lorsque le store est commandé à ou en dessous de cette position (0–100 %), la commande d'inclinaison est ignorée. Près de la position entièrement fermée, les lamelles sont pincées contre le rail inférieur et ne peuvent pas s'articuler — émettre une commande d'inclinaison provoque un retour moteur inutile. 5 % par défaut. Augmentez si votre store vénitien essaie toujours de s'incliner lorsqu'il est presque fermé."
+          "venetian_mode": "Comment le store vénitien utilise les deux axes lorsque le soleil se trouve dans la fenêtre de suivi. **Position et inclinaison** (par défaut) : le store descend à la position calculée et les lamelles s'inclinent à l'angle optimal — idéal pour une protection combinée et l'intimité. **Inclinaison uniquement** : le store reste fermé (position 0%) et seul l'angle des lamelles suit le soleil — idéal lorsque vous souhaitez une couverture complète et un contrôle continu de l'éblouissement par inclinaison."
         }
       },
       "sun_tracking": {
@@ -555,7 +555,7 @@
           "slat_depth": "Profondeur de la lamelle",
           "slat_distance": "Espacement des lamelles",
           "venetian_tilt_skip_above": "Ignorer l'inclinaison au-dessus de la position (%)",
-          "venetian_tilt_skip_below": "Ignorer l'inclinaison en dessous de la position (%)"
+          "venetian_mode": "Mode de fonctionnement"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre en mètres (du bas au haut de la zone vitrée). Exemples : porte standard = 2,0 m, petite fenêtre = 1,5 m, du sol au plafond = 2,5 m. Mesurez du point de départ du store à son point d'arrivée lorsqu'il est complètement étendu. Utilisé pour calculer la position optimale du store pour bloquer la lumière directe du soleil. Remarque : 1 mètre ≈ 3,3 pieds.",
@@ -568,7 +568,7 @@
           "slat_depth": "Largeur de chaque lamelle (mesurez une lamelle d'avant en arrière). Tailles courantes : mini stores (1 pouce) = 2,5 cm, stores standard (2 pouces) = 5 cm, larges lamelles (2,5-3 pouces) = 6,5-7,5 cm. Mesurez une seule lamelle avec une règle pour un calcul précis du blocage solaire.",
           "slat_distance": "Espacement vertical entre les centres des lamelles. Mesurez du milieu d'une lamelle au milieu de la lamelle suivante (verticalement). Généralement légèrement plus que la profondeur de la lamelle pour permettre le chevauchement quand fermé. Courant : 3-8 cm selon le type de store. Utilisé pour calculer l'angle d'inclinaison optimal.",
           "venetian_tilt_skip_above": "Quand la protection est commandée au-dessus de cette position (0–100%), la commande d'inclinaison est ignorée. À des positions élevées, les lamelles se rétractent dans le boîtier et l'inclinaison n'a pas de sens physique. Par défaut 95%. Augmentez si votre store s'incline correctement près du sommet ; diminuez s'il tente de s'incliner quand complètement levé.",
-          "venetian_tilt_skip_below": "Lorsque le store est commandé à ou en dessous de cette position (0–100 %), la commande d'inclinaison est ignorée. Près de la position entièrement fermée, les lamelles sont pincées contre le rail inférieur et ne peuvent pas s'articuler — émettre une commande d'inclinaison provoque un retour moteur inutile. 5 % par défaut. Augmentez si votre store vénitien essaie toujours de s'incliner lorsqu'il est presque fermé."
+          "venetian_mode": "Comment le store vénitien utilise les deux axes lorsque le soleil se trouve dans la fenêtre de suivi. **Position et inclinaison** (par défaut) : le store descend à la position calculée et les lamelles s'inclinent à l'angle optimal — idéal pour une protection combinée et l'intimité. **Inclinaison uniquement** : le store reste fermé (position 0%) et seul l'angle des lamelles suit le soleil — idéal lorsque vous souhaitez une couverture complète et un contrôle continu de l'éblouissement par inclinaison."
         }
       },
       "sun_tracking": {
@@ -1332,10 +1332,6 @@
         "venetian_tilt_skip_above": {
           "name": "Ignorer l'inclinaison au-dessus de la position (%)",
           "description": "Ignore la commande d'inclinaison quand la position commandée dépasse cette valeur. Stores vénitiens uniquement. Par défaut 95."
-        },
-        "venetian_tilt_skip_below": {
-          "name": "Ignorer l'inclinaison en dessous de la position (%)",
-          "description": "Ignorer la commande d'inclinaison lorsque la position commandée est à ou en dessous de cette valeur. Stores vénitiens uniquement. 5 % par défaut."
         }
       },
       "name": "Définir la géométrie"

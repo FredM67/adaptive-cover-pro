@@ -41,7 +41,7 @@
           "slat_depth": "Slat Depth",
           "slat_distance": "Slat Spacing",
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
-          "venetian_tilt_skip_below": "Skip Tilt Below Position (%)"
+          "venetian_mode": "Operating Mode"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -54,7 +54,7 @@
           "slat_depth": "Width of each slat (measure one slat front to back). Common sizes: Mini blinds (1 inch) = 2.5cm, Standard blinds (2 inch) = 5cm, Wide slats (2.5-3 inch) = 6.5-7.5cm. Measure a single slat with a ruler for precise sun blocking calculation.",
           "slat_distance": "Vertical spacing between slat centers. Measure from the middle of one slat to the middle of the next slat (vertically). Usually slightly more than slat depth to allow overlap when closed. Common: 3-8cm depending on blind type. Used to calculate optimal tilt angle.",
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
-          "venetian_tilt_skip_below": "When the cover is commanded at or below this position (0–100%), the tilt command is skipped. Near fully-closed, slats are pinched against the bottom rail and cannot articulate — issuing a tilt command causes unnecessary motor back-drive. Default 5%. Increase if your blind still tries to tilt when almost closed."
+          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt."
         }
       },
       "sun_tracking": {
@@ -555,7 +555,7 @@
           "slat_depth": "Slat Depth",
           "slat_distance": "Slat Spacing",
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
-          "venetian_tilt_skip_below": "Skip Tilt Below Position (%)"
+          "venetian_mode": "Operating Mode"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -568,7 +568,7 @@
           "slat_depth": "Width of each slat (measure one slat front to back). Common sizes: Mini blinds (1 inch) = 2.5cm, Standard blinds (2 inch) = 5cm, Wide slats (2.5-3 inch) = 6.5-7.5cm. Measure a single slat with a ruler for precise sun blocking calculation.",
           "slat_distance": "Vertical spacing between slat centers. Measure from the middle of one slat to the middle of the next slat (vertically). Usually slightly more than slat depth to allow overlap when closed. Common: 3-8cm depending on blind type. Used to calculate optimal tilt angle.",
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
-          "venetian_tilt_skip_below": "When the cover is commanded at or below this position (0–100%), the tilt command is skipped. Near fully-closed, slats are pinched against the bottom rail and cannot articulate — issuing a tilt command causes unnecessary motor back-drive. Default 5%. Increase if your blind still tries to tilt when almost closed."
+          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt."
         }
       },
       "sun_tracking": {
@@ -1599,10 +1599,6 @@
         "venetian_tilt_skip_above": {
           "name": "Skip tilt above position (%)",
           "description": "Skip the tilt command when commanded position exceeds this value. Venetian only. Default 95."
-        },
-        "venetian_tilt_skip_below": {
-          "name": "Skip tilt below position (%)",
-          "description": "Skip the tilt command when commanded position is at or below this value. Venetian only. Default 5."
         }
       }
     },

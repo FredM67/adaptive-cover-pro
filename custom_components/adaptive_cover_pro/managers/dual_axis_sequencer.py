@@ -98,7 +98,26 @@ class DualAxisSequencer:
     ) -> None:
         """Wait for vertical motion to settle, then send the tilt command."""
         await self._wait_for_position_settle(entity_id, position_target)
+        await self._send_tilt_command(
+            entity_id,
+            tilt_target=tilt_target,
+            position_target=position_target,
+            reason=reason,
+        )
 
+    async def _send_tilt_command(
+        self,
+        entity_id: str,
+        *,
+        tilt_target: int,
+        position_target: int,
+        reason: str,
+    ) -> None:
+        """Emit ``set_cover_tilt_position`` and rebase the commanded position.
+
+        Shared by ``run_sequence`` (post-settle chase) and ``update_tilt_only``
+        (tilt-only update when position hasn't changed).
+        """
         if self._is_dry_run():
             self._logger.info(
                 "[dry_run] would send cover.set_cover_tilt_position %s → %s%%",
@@ -144,6 +163,29 @@ class DualAxisSequencer:
         await asyncio.sleep(VENETIAN_POST_TILT_REBASE_DELAY_SECONDS)
 
         self._rebase_commanded_position(entity_id, position_target)
+
+    async def update_tilt_only(
+        self,
+        entity_id: str,
+        *,
+        tilt_target: int,
+        current_position: int | None,
+        reason: str,
+    ) -> None:
+        """Emit a tilt command without a position settle wait or suppression stamp.
+
+        Used by VenetianPolicy when the position axis won't fire this cycle
+        (cover is already at the commanded position) so tilt can still track
+        the sun continuously.
+        """
+        if tilt_target == self._tilt_targets.get(entity_id):
+            return
+        await self._send_tilt_command(
+            entity_id,
+            tilt_target=tilt_target,
+            position_target=current_position if current_position is not None else 0,
+            reason=reason,
+        )
 
     def _rebase_commanded_position(self, entity_id: str, position_target: int) -> None:
         """Reset the cmd_svc target to the actual post-tilt position.

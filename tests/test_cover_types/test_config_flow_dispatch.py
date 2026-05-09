@@ -114,7 +114,8 @@ class TestSummaryGeometryLines:
         assert lines == [
             "2.1m tall window, blocking sun 0.5m from the glass",
             "slat depth 3cm, spacing 2cm, mode: mode2",
-            "skip tilt when position > 95% or position <= 5%",
+            "skip tilt when position > 95%",
+            "mode: position and tilt",
         ]
 
     def test_empty_config_renders_nothing(self):
@@ -123,7 +124,29 @@ class TestSummaryGeometryLines:
 
     def test_venetian_empty_config_renders_threshold_default(self):
         lines = VenetianPolicy().summary_geometry_lines({})
-        assert lines == ["skip tilt when position > 95% or position <= 5%"]
+        assert lines == ["skip tilt when position > 95%", "mode: position and tilt"]
+
+    def test_venetian_summary_shows_tilt_only_mode(self):
+        from custom_components.adaptive_cover_pro.const import (
+            CONF_VENETIAN_MODE,
+            VENETIAN_MODE_TILT_ONLY,
+        )
+
+        lines = VenetianPolicy().summary_geometry_lines(
+            {CONF_VENETIAN_MODE: VENETIAN_MODE_TILT_ONLY}
+        )
+        assert "mode: tilt only" in lines
+
+    def test_venetian_summary_shows_position_and_tilt_mode(self):
+        from custom_components.adaptive_cover_pro.const import (
+            CONF_VENETIAN_MODE,
+            VENETIAN_MODE_POSITION_AND_TILT,
+        )
+
+        lines = VenetianPolicy().summary_geometry_lines(
+            {CONF_VENETIAN_MODE: VENETIAN_MODE_POSITION_AND_TILT}
+        )
+        assert "mode: position and tilt" in lines
 
 
 @pytest.mark.unit
