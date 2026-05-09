@@ -328,6 +328,8 @@ class VenetianPolicy(CoverTypePolicy):
         # Skip when retracted — slats are hidden in the housing above this point.
         if position > self._tilt_skip_above:
             return
+        # Open suppression early — covers position-axis settle events that
+        # fire before _send_tilt_command runs (which itself stamps again).
         seq.stamp_position_command(entity_id)
         tilt = getattr(context, "tilt", None)
         if tilt is None:

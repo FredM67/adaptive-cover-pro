@@ -260,9 +260,7 @@ class TestSendTiltCommand:
 
 @pytest.mark.asyncio
 class TestUpdateTiltOnly:
-    """``update_tilt_only`` emits tilt without a settle wait and without
-    opening a suppression window.
-    """
+    """``update_tilt_only`` emits tilt without a settle wait."""
 
     async def test_emits_tilt_without_settle_wait(self):
         hass, seq = _build_sequencer()
@@ -274,12 +272,12 @@ class TestUpdateTiltOnly:
         assert hass.services.async_call.call_count == 1
         assert hass.services.async_call.call_args.args[1] == "set_cover_tilt_position"
 
-    async def test_does_not_stamp_suppression(self):
+    async def test_stamps_suppression_after_send(self):
         _, seq = _build_sequencer()
         await seq.update_tilt_only(
             "cover.x", tilt_target=70, current_position=40, reason="solar"
         )
-        assert seq.is_in_suppression("cover.x") is False
+        assert seq.is_in_suppression("cover.x") is True
 
     async def test_short_circuits_when_target_unchanged(self):
         hass, seq = _build_sequencer()
