@@ -33,10 +33,21 @@ from ..const import (
     VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS,
     VENETIAN_POST_TILT_REBASE_DELAY_SECONDS,
     VENETIAN_TILT_SUPPRESSION_SECONDS,
+    VENETIAN_TILT_VERIFY_TOLERANCE,
 )
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from ..diagnostics.event_buffer import EventBuffer
+
+# HA cover states that indicate the motor is still mid-travel.
+_COVER_MOVING_STATES = frozenset({"opening", "closing"})
+
+# Reason codes for tilt_command_skipped events.
+_TILT_SKIP_DRY_RUN = "dry_run"
+_TILT_SKIP_TARGET_UNCHANGED = "target_unchanged"
+_TILT_SKIP_SERVICE_FAILED = "service_call_failed"
 
 
 class DualAxisSequencer:
@@ -52,6 +63,9 @@ class DualAxisSequencer:
         set_commanded_position: Callable[[str, int], None],
         position_tolerance: int,
         is_dry_run: Callable[[], bool],
+        get_state: Callable[[str], str | None] | None = None,
+        get_current_tilt_position: Callable[[str], int | None] | None = None,
+        event_buffer: EventBuffer | None = None,
     ) -> None:
         """Bind HA + cmd_svc dependencies; per-entity timestamps start empty."""
         self._hass = hass
@@ -61,6 +75,9 @@ class DualAxisSequencer:
         self._set_commanded_position = set_commanded_position
         self._position_tolerance = position_tolerance
         self._is_dry_run = is_dry_run
+        self._get_state = get_state
+        self._get_current_tilt_position = get_current_tilt_position
+        self._event_buffer = event_buffer
         # Per-entity timestamps. Keep these in the sequencer (rather than on
         # CoverCommandService.PerEntityState) so non-venetian covers carry no
         # dual-axis state at all.
@@ -124,6 +141,14 @@ class DualAxisSequencer:
                 entity_id,
                 tilt_target,
             )
+            self._record_event(
+                "tilt_command_skipped",
+                reason=_TILT_SKIP_DRY_RUN,
+                entity_id=entity_id,
+                tilt_position=tilt_target,
+                position_target=position_target,
+                trigger=reason,
+            )
             return
 
         self._tilt_targets[entity_id] = tilt_target
@@ -154,13 +179,35 @@ class DualAxisSequencer:
                 entity_id,
                 err,
             )
+            self._record_event(
+                "tilt_command_skipped",
+                reason=_TILT_SKIP_SERVICE_FAILED,
+                entity_id=entity_id,
+                tilt_position=tilt_target,
+                position_target=position_target,
+                trigger=reason,
+            )
             return
+
+        self._record_event(
+            "tilt_command_sent",
+            entity_id=entity_id,
+            tilt_position=tilt_target,
+            position_target=position_target,
+            trigger=reason,
+        )
 
         # Wait for the motor's mechanical back-drive on the vertical axis to
         # settle before reading current_position for the rebase. Without this
         # delay the read races the asynchronous back-drive and captures the
         # pre-settle value, causing the rebase to see zero drift and skip.
         await asyncio.sleep(VENETIAN_POST_TILT_REBASE_DELAY_SECONDS)
+
+        # Verify the tilt actually landed. On slow/racing hardware the motor
+        # may back-rotate the slats during position movement, leaving the cover
+        # at tilt=0 even though we sent tilt=N. If we detect drift, clear the
+        # recorded target so the next update_tilt_only cycle retries.
+        self._verify_and_record_tilt(entity_id, tilt_target)
 
         self._rebase_commanded_position(entity_id, position_target)
 
@@ -179,6 +226,14 @@ class DualAxisSequencer:
         the sun continuously.
         """
         if tilt_target == self._tilt_targets.get(entity_id):
+            self._record_event(
+                "tilt_command_skipped",
+                reason=_TILT_SKIP_TARGET_UNCHANGED,
+                entity_id=entity_id,
+                tilt_position=tilt_target,
+                current_position=current_position,
+                trigger=reason,
+            )
             return
         await self._send_tilt_command(
             entity_id,
@@ -214,7 +269,14 @@ class DualAxisSequencer:
     async def _wait_for_position_settle(
         self, entity_id: str, target: int
     ) -> tuple[bool, int | None]:
-        """Poll ``current_position`` until settle, no-progress, or timeout."""
+        """Poll ``current_position`` until settle, no-progress, or timeout.
+
+        When a ``get_state`` callable is provided, the no-progress stall counter
+        is reset while ``cover.state`` reports ``opening`` or ``closing``.  This
+        prevents a Shelly 2PM (or similar hardware) that publishes position at
+        ~1 s intervals from triggering a false stall while the motor is still
+        mid-travel.
+        """
         deadline = dt.datetime.now(dt.UTC) + dt.timedelta(
             seconds=VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS
         )
@@ -229,18 +291,25 @@ class DualAxisSequencer:
             if abs(current - target) <= self._position_tolerance:
                 return True, current
 
+            state = self._get_state(entity_id) if self._get_state else None
+            is_moving = state in _COVER_MOVING_STATES
+
             if last_position is not None and current == last_position:
-                unchanged_samples += 1
-                if unchanged_samples >= VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES:
-                    self._logger.debug(
-                        "Venetian settle: %s stalled at %s%% (target %s%%) "
-                        "after %d unchanged samples",
-                        entity_id,
-                        current,
-                        target,
-                        unchanged_samples,
-                    )
-                    return False, current
+                if is_moving:
+                    # Motor is still traveling — don't count this as a stall sample.
+                    unchanged_samples = 0
+                else:
+                    unchanged_samples += 1
+                    if unchanged_samples >= VENETIAN_POSITION_SETTLE_NO_CHANGE_SAMPLES:
+                        self._logger.debug(
+                            "Venetian settle: %s stalled at %s%% (target %s%%) "
+                            "after %d unchanged samples",
+                            entity_id,
+                            current,
+                            target,
+                            unchanged_samples,
+                        )
+                        return False, current
             else:
                 unchanged_samples = 0
 
@@ -255,3 +324,54 @@ class DualAxisSequencer:
             VENETIAN_POSITION_SETTLE_TIMEOUT_SECONDS,
         )
         return False, last_position
+
+    # -- diagnostics helpers ----------------------------------------------- #
+
+    def _record_event(self, event_name: str, **fields) -> None:
+        """Append a tilt diagnostic event to the shared event buffer."""
+        if self._event_buffer is None:
+            return
+        self._event_buffer.record(
+            {"ts": dt.datetime.now(dt.UTC).isoformat(), "event": event_name, **fields}
+        )
+
+    def _verify_and_record_tilt(self, entity_id: str, tilt_target: int) -> None:
+        """Read actual tilt position and emit a verified/drift diagnostic event.
+
+        If the actual tilt differs from the target beyond ``VENETIAN_TILT_VERIFY_TOLERANCE``,
+        clears the recorded target so the next ``update_tilt_only`` cycle retries.
+        """
+        if self._get_current_tilt_position is None:
+            return
+        actual = self._get_current_tilt_position(entity_id)
+        if actual is None:
+            return
+        delta = abs(actual - tilt_target)
+        if delta <= VENETIAN_TILT_VERIFY_TOLERANCE:
+            self._record_event(
+                "tilt_command_verified",
+                entity_id=entity_id,
+                tilt_target=tilt_target,
+                actual_tilt_position=actual,
+                delta=delta,
+                tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
+            )
+        else:
+            self._logger.warning(
+                "Venetian tilt drift detected for %s: sent %s%% but actual is %s%% "
+                "(delta=%s%% > tolerance=%s%%) — clearing recorded target for retry",
+                entity_id,
+                tilt_target,
+                actual,
+                delta,
+                VENETIAN_TILT_VERIFY_TOLERANCE,
+            )
+            self._record_event(
+                "tilt_command_drift",
+                entity_id=entity_id,
+                tilt_target=tilt_target,
+                actual_tilt_position=actual,
+                delta=delta,
+                tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
+            )
+            self._tilt_targets.pop(entity_id, None)

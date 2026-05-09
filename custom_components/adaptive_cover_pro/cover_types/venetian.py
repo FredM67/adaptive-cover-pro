@@ -247,6 +247,9 @@ class VenetianPolicy(CoverTypePolicy):
             set_commanded_position=kwargs["set_commanded_position"],
             position_tolerance=kwargs["position_tolerance"],
             is_dry_run=kwargs["is_dry_run"],
+            get_state=kwargs.get("get_state"),
+            get_current_tilt_position=kwargs.get("get_current_tilt_position"),
+            event_buffer=kwargs.get("event_buffer"),
         )
         if "tilt_skip_above" in kwargs:
             self._tilt_skip_above = int(kwargs["tilt_skip_above"])
