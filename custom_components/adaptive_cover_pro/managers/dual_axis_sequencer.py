@@ -165,6 +165,13 @@ class DualAxisSequencer:
             position_target,
         )
 
+        # Open the back-rotate suppression window so tilt-axis state events
+        # produced by slat settle aren't read as user-initiated manual override.
+        # Both run_sequence and update_tilt_only paths need this stamp here;
+        # the early stamp in VenetianPolicy.after_position_command only covers
+        # state events that fire during the position-axis settle wait.
+        self.stamp_position_command(entity_id)
+
         try:
             await self._hass.services.async_call(
                 COVER_DOMAIN,

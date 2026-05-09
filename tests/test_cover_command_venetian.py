@@ -391,6 +391,71 @@ async def test_tilt_on_target_plus_position_back_drive_does_not_trip_manual_over
     assert not mgr.is_cover_manual(entity_id)
 
 
+@pytest.mark.asyncio
+async def test_tilt_only_update_then_tilt_settle_event_does_not_trip_manual_override(
+    svc, hass, attached_policy
+):
+    """Regression for issue #33: tilt-only path must stamp suppression so settle events don't trip override.
+
+    Sequence:
+      1. maybe_update_tilt_only fires (no prior apply_position — cover already at target position).
+      2. HA fires state-change: tilt drifts mid-settle (motor back-rotate).
+
+    Bug (fixed): _send_tilt_command on the tilt-only path never stamped _suppression_at,
+    so SecondaryAxisCheck saw the drift as user-initiated and set manual override.
+    """
+    import datetime as dt
+
+    from custom_components.adaptive_cover_pro.managers.manual_override import (
+        AdaptiveCoverManager,
+        SecondaryAxisCheck,
+    )
+
+    entity_id = "cover.venetian_morning"
+    hass.states.get.return_value = _state_with_position(50)
+
+    # Seed _last_tilt so maybe_update_tilt_only doesn't short-circuit on None check.
+    attached_policy._last_tilt = 70
+
+    await attached_policy.maybe_update_tilt_only(
+        entity_id, current_position=50, context=None, reason="solar"
+    )
+
+    # Suppression window must be open after a tilt-only update.
+    assert attached_policy.is_in_tilt_suppression(entity_id)
+
+    mgr = AdaptiveCoverManager(
+        hass=MagicMock(),
+        reset_duration={"hours": 2},
+        logger=MagicMock(),
+    )
+    mgr.add_covers([entity_id])
+
+    event = MagicMock()
+    event.entity_id = entity_id
+    event.new_state = MagicMock()
+    event.new_state.state = "stopped"
+    event.new_state.attributes = {"current_position": 50, "current_tilt_position": 20}
+    event.new_state.last_updated = dt.datetime.now(dt.UTC)
+
+    mgr.handle_state_change(
+        states_data=event,
+        our_state=50,
+        blind_type="cover_venetian",
+        allow_reset=True,
+        is_waiting=lambda _eid: False,
+        manual_threshold=3,
+        secondary_axis_check=SecondaryAxisCheck(
+            expected=70,
+            attribute="current_tilt_position",
+            label="tilt",
+            suppression=attached_policy.is_in_tilt_suppression,
+        ),
+    )
+
+    assert not mgr.is_cover_manual(entity_id)
+
+
 def test_attach_defaults_venetian_mode_to_position_and_tilt(attached_policy):
     """attach() without venetian_mode defaults to position_and_tilt."""
     from custom_components.adaptive_cover_pro.const import (
