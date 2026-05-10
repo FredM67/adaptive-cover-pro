@@ -26,6 +26,7 @@ except ImportError:
     EventStateChangedData = dict  # type: ignore[misc,assignment]
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .config_types import RuntimeConfig
 from .helpers import compute_effective_default, state_attr
 from .config_context_adapter import ConfigContextAdapter
 from .cover_types import CoverTypePolicy, get_policy
@@ -37,10 +38,6 @@ from .const import (
     CONF_BLIND_SPOT_ELEVATION,
     CONF_CLIMATE_MODE,
     CONF_DEFAULT_HEIGHT,
-    CONF_DELTA_POSITION,
-    CONF_DELTA_TIME,
-    CONF_END_ENTITY,
-    CONF_END_TIME,
     CONF_ENTITIES,
     CONF_MY_POSITION_VALUE,
     CONF_SUNSET_USE_MY,
@@ -50,39 +47,21 @@ from .const import (
     CONF_FORCE_OVERRIDE_POSITION,
     CONF_FORCE_OVERRIDE_SENSORS,
     CONF_MOTION_SENSORS,
-    CONF_MOTION_TIMEOUT,
     CONF_MOTION_TIMEOUT_MODE,
     DEFAULT_MOTION_TIMEOUT_MODE,
-    CONF_WEATHER_WIND_SPEED_SENSOR,
-    CONF_WEATHER_WIND_DIRECTION_SENSOR,
-    CONF_WEATHER_WIND_SPEED_THRESHOLD,
-    CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
-    CONF_WEATHER_RAIN_SENSOR,
-    CONF_WEATHER_RAIN_THRESHOLD,
-    CONF_WEATHER_IS_RAINING_SENSOR,
-    CONF_WEATHER_IS_WINDY_SENSOR,
-    CONF_WEATHER_SEVERE_SENSORS,
     CONF_WEATHER_OVERRIDE_MIN_MODE,
     CONF_WEATHER_OVERRIDE_POSITION,
-    CONF_WEATHER_TIMEOUT,
     CONF_WEATHER_BYPASS_AUTO_CONTROL,
     CONF_ENABLE_SUN_TRACKING,
     CONF_FOV_LEFT,
     CONF_FOV_RIGHT,
     CONF_INTERP,
-    CONF_INTERP_END,
-    CONF_INTERP_LIST,
-    CONF_INTERP_LIST_NEW,
-    CONF_INTERP_START,
     CONF_INVERSE_STATE,
     CONF_MANUAL_IGNORE_INTERMEDIATE,
     CONF_MANUAL_OVERRIDE_DURATION,
     CONF_MANUAL_OVERRIDE_RESET,
-    CONF_MANUAL_THRESHOLD,
     CONF_OPEN_CLOSE_THRESHOLD,
     CONF_RETURN_SUNSET,
-    CONF_START_ENTITY,
-    CONF_START_TIME,
     CONF_SUNRISE_OFFSET,
     CONF_SUNSET_OFFSET,
     CONF_SUNSET_POS,
@@ -115,11 +94,6 @@ from .const import (
     DOMAIN,
     LOGGER,
     STARTUP_GRACE_PERIOD_SECONDS,
-    DEFAULT_MOTION_TIMEOUT,
-    DEFAULT_WEATHER_WIND_SPEED_THRESHOLD,
-    DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
-    DEFAULT_WEATHER_RAIN_THRESHOLD,
-    DEFAULT_WEATHER_TIMEOUT,
     CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
     DEFAULT_VENETIAN_MODE,
@@ -1793,63 +1767,55 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def _update_options(self, options):
         """Update coordinator options from config entry.
 
-        Extracts and caches configuration options from the config entry options
-        dictionary. Called on every coordinator update to ensure latest settings
-        are used.
+        Reads every option once into a typed ``RuntimeConfig`` snapshot and
+        propagates each slice to the appropriate manager. Called on every
+        coordinator update so option changes take effect on the next cycle.
 
         Args:
             options: Configuration options dictionary from config_entry.options
 
         """
-        self.entities = options.get(CONF_ENTITIES, [])
-        self.min_change = options.get(CONF_DELTA_POSITION) or 1
-        self.time_threshold = options.get(CONF_DELTA_TIME) or 2
-        self.manual_reset = options.get(CONF_MANUAL_OVERRIDE_RESET, False)
-        self.manual_duration = options.get(CONF_MANUAL_OVERRIDE_DURATION) or {
-            "hours": 2
-        }
-        self.manual_threshold = options.get(CONF_MANUAL_THRESHOLD)
-        self.start_value = options.get(CONF_INTERP_START)
-        self.end_value = options.get(CONF_INTERP_END)
-        self.normal_list = options.get(CONF_INTERP_LIST)
-        self.new_list = options.get(CONF_INTERP_LIST_NEW)
-        self._cmd_svc.update_threshold(options.get(CONF_OPEN_CLOSE_THRESHOLD, 50))
+        rc = RuntimeConfig.from_options(options)
+
+        self.entities = rc.entities
+        self.min_change = rc.tracking.min_change
+        self.time_threshold = rc.tracking.time_threshold
+        self.manual_reset = rc.manual_override.reset
+        self.manual_duration = rc.manual_override.duration
+        self.manual_threshold = rc.tracking.manual_threshold
+        self.start_value = rc.tracking.interp_start
+        self.end_value = rc.tracking.interp_end
+        self.normal_list = rc.tracking.interp_list
+        self.new_list = rc.tracking.interp_list_new
+
+        self._cmd_svc.update_threshold(rc.open_close_threshold)
         self._time_mgr.update_config(
-            start_time=options.get(CONF_START_TIME),
-            start_time_entity=options.get(CONF_START_ENTITY),
-            end_time=options.get(CONF_END_TIME),
-            end_time_entity=options.get(CONF_END_ENTITY),
+            start_time=rc.time_window.start_time,
+            start_time_entity=rc.time_window.start_time_entity,
+            end_time=rc.time_window.end_time,
+            end_time_entity=rc.time_window.end_time_entity,
         )
         self._motion_mgr.update_config(
-            sensors=options.get(CONF_MOTION_SENSORS, []),
-            timeout_seconds=options.get(CONF_MOTION_TIMEOUT, DEFAULT_MOTION_TIMEOUT),
+            sensors=rc.motion.sensors,
+            timeout_seconds=rc.motion.timeout_seconds,
         )
         self._weather_mgr.update_config(
-            wind_speed_sensor=options.get(CONF_WEATHER_WIND_SPEED_SENSOR),
-            wind_direction_sensor=options.get(CONF_WEATHER_WIND_DIRECTION_SENSOR),
-            wind_speed_threshold=options.get(
-                CONF_WEATHER_WIND_SPEED_THRESHOLD, DEFAULT_WEATHER_WIND_SPEED_THRESHOLD
-            ),
-            wind_direction_tolerance=options.get(
-                CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
-                DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
-            ),
-            win_azi=options.get(CONF_AZIMUTH, 180),
-            rain_sensor=options.get(CONF_WEATHER_RAIN_SENSOR),
-            rain_threshold=options.get(
-                CONF_WEATHER_RAIN_THRESHOLD, DEFAULT_WEATHER_RAIN_THRESHOLD
-            ),
-            is_raining_sensor=options.get(CONF_WEATHER_IS_RAINING_SENSOR),
-            is_windy_sensor=options.get(CONF_WEATHER_IS_WINDY_SENSOR),
-            severe_sensors=options.get(CONF_WEATHER_SEVERE_SENSORS, []),
-            timeout_seconds=options.get(CONF_WEATHER_TIMEOUT, DEFAULT_WEATHER_TIMEOUT),
+            wind_speed_sensor=rc.weather.wind_speed_sensor,
+            wind_direction_sensor=rc.weather.wind_direction_sensor,
+            wind_speed_threshold=rc.weather.wind_speed_threshold,
+            wind_direction_tolerance=rc.weather.wind_direction_tolerance,
+            win_azi=rc.weather.win_azi,
+            rain_sensor=rc.weather.rain_sensor,
+            rain_threshold=rc.weather.rain_threshold,
+            is_raining_sensor=rc.weather.is_raining_sensor,
+            is_windy_sensor=rc.weather.is_windy_sensor,
+            severe_sensors=rc.weather.severe_sensors,
+            timeout_seconds=rc.weather.timeout_seconds,
         )
-        new_buf_size = options.get(
-            CONF_DEBUG_EVENT_BUFFER_SIZE, DEFAULT_DEBUG_EVENT_BUFFER_SIZE
-        )
+
         event_buffer = getattr(self, "_event_buffer", None)
-        if event_buffer is not None and new_buf_size != event_buffer.maxlen:
-            event_buffer.resize(new_buf_size)
+        if event_buffer is not None and rc.event_buffer_size != event_buffer.maxlen:
+            event_buffer.resize(rc.event_buffer_size)
 
     def _update_manager_and_covers(self):
         """Update manager with cover entities.
