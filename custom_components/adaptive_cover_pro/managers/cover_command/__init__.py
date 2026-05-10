@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections import deque
 from collections.abc import Iterator
 from typing import Any
 
 from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
@@ -31,6 +30,7 @@ from ...helpers import (
 from . import gates
 from .routing import ServiceCallPlan, build_special_positions, route_service_call
 from .state_store import PerEntityState, PositionContext
+from .stop import StopTracker
 
 __all__ = [
     "CoverCommandService",
@@ -140,10 +140,11 @@ class CoverCommandService:
         # for white-box / test access.
         self._state: dict[str, PerEntityState] = {}
 
-        # Context ids of cover.stop_cover calls that ACP itself originated.
-        # The EVENT_CALL_SERVICE listener in the coordinator uses this to
-        # distinguish our own stop commands from user-initiated stops.
-        self._acp_stop_contexts: deque[str] = deque(maxlen=16)
+        # Stop tracker owns the ACP-originated cover.stop_cover deque plus the
+        # try_stop_one orchestration. The EVENT_CALL_SERVICE listener in the
+        # coordinator uses ``was_acp_stop_context`` to distinguish our own stop
+        # commands from user-initiated stops.
+        self._stop_tracker = StopTracker(hass, logger, dry_run_fn=lambda: self._dry_run)
 
         # Entities currently under manual override — reconciliation skips these
         # so it doesn't fight the user by resending the old integration target.
@@ -527,7 +528,7 @@ class CoverCommandService:
         skip stop_cover events that ACP itself triggered (so they don't get
         misread as user-initiated manual overrides).
         """
-        return context_id in self._acp_stop_contexts
+        return self._stop_tracker.was_acp_stop_context(context_id)
 
     def acp_stop_context_count(self, *, unique: bool = False) -> int:
         """Return the number of recorded ACP-originated stop_cover context ids.
@@ -536,74 +537,11 @@ class CoverCommandService:
         callers verify production code minted a fresh context per stop call
         without inspecting the underlying deque.
         """
-        if unique:
-            return len(set(self._acp_stop_contexts))
-        return len(self._acp_stop_contexts)
+        return self._stop_tracker.acp_stop_context_count(unique=unique)
 
     # ------------------------------------------------------------------ #
     # Stop helpers — bypass _enabled gate (shutdown / emergency paths)
     # ------------------------------------------------------------------ #
-
-    def _is_cover_in_motion(self, entity_id: str) -> bool:
-        """Return True only if HA reports the cover as opening or closing.
-
-        cover.stop_cover is overloaded on some hardware (Somfy "My", Hunter
-        Douglas favorite, etc.) — on stationary covers it triggers a preset
-        position move instead of a no-op.  Callers in shutdown/emergency
-        paths must gate on actual motion to avoid triggering that preset.
-
-        Note: send_my_position() intentionally does NOT call this method —
-        it deliberately sends stop_cover to a stationary cover (that is what
-        triggers the My preset).  This gate applies to shutdown paths only.
-        """
-        state_obj = self._hass.states.get(entity_id)
-        if state_obj is None:
-            return False
-        return state_obj.state in ("opening", "closing")
-
-    async def _call_stop_cover(self, entity_id: str) -> None:
-        """Issue cover.stop_cover and record the call context as ACP-originated.
-
-        All ACP-initiated stop_cover calls must go through this helper so that
-        the EVENT_CALL_SERVICE listener can identify and ignore them, avoiding
-        false manual-override detection.
-
-        Args:
-            entity_id: Cover entity_id to stop.
-
-        """
-        ctx = Context()
-        self._acp_stop_contexts.append(ctx.id)
-        await self._hass.services.async_call(
-            "cover", "stop_cover", {"entity_id": entity_id}, context=ctx
-        )
-
-    async def _try_stop_one(self, entity_id: str, *, label: str) -> bool:
-        """Attempt a stop_cover on a single entity, honouring caps + dry-run.
-
-        Returns ``True`` when a stop was actually sent (or would have been sent
-        under dry-run), ``False`` when caps or motion state caused us to skip.
-        Centralises the "check has_stop → check in motion → dry-run vs send"
-        chain that ``stop_in_flight`` and ``stop_all`` previously each open-coded.
-        """
-        caps = check_cover_features(self._hass, entity_id)
-        if not caps_get(caps, CAP_HAS_STOP):
-            return False
-        if not self._is_cover_in_motion(entity_id):
-            state_val = getattr(self._hass.states.get(entity_id), "state", None)
-            self._logger.debug(
-                "%s: skipping %s — not in motion (state=%s)",
-                label,
-                entity_id,
-                state_val,
-            )
-            return False
-        if self._dry_run:
-            self._logger.info("[dry_run] would stop_cover %s", entity_id)
-        else:
-            await self._call_stop_cover(entity_id)
-        self._logger.debug("%s: stopped %s", label, entity_id)
-        return True
 
     async def stop_in_flight(self, entities: set[str] | None = None) -> list[str]:
         """Send stop_cover to every ACP-in-flight entity that supports STOP.
@@ -627,7 +565,10 @@ class CoverCommandService:
         }
         for eid in candidates:
             s = self.state(eid)
-            sent = await self._try_stop_one(eid, label="stop_in_flight")
+            caps = check_cover_features(self._hass, eid)
+            sent = await self._stop_tracker.try_stop_one(
+                eid, caps, label="stop_in_flight"
+            )
             # Whether we sent the stop or only logged "not in motion", the
             # entity is no longer in flight from ACP's perspective — clear
             # the waiting flag so the next reconciliation cycle does not
@@ -653,7 +594,8 @@ class CoverCommandService:
         """
         stopped: list[str] = []
         for eid in entity_ids:
-            if await self._try_stop_one(eid, label="stop_all"):
+            caps = check_cover_features(self._hass, eid)
+            if await self._stop_tracker.try_stop_one(eid, caps, label="stop_all"):
                 stopped.append(eid)
         return stopped
 
@@ -697,7 +639,7 @@ class CoverCommandService:
                 "[dry_run] would stop_cover %s (My position = %d%%)", entity_id, target
             )
         else:
-            await self._call_stop_cover(entity_id)
+            await self._stop_tracker.call_stop_cover(entity_id)
         now = dt.datetime.now(dt.UTC)
         s = self.state(entity_id)
         s.target = target
