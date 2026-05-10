@@ -333,3 +333,120 @@ CLIMATE_DEFAULT_TILT_ANGLE = 80  # degrees - default tilt angle when not present
 # Cover position constants
 POSITION_CLOSED = 0  # Fully closed position
 POSITION_OPEN = 100  # Fully open position
+
+
+# ---------------------------------------------------------------------------
+# Numeric option ranges — single source of truth shared by config_flow.py
+# (UI selectors) and services/options_service.py (programmatic validators).
+# Each tuple is ``(min, max)`` for the named ``CONF_*`` option.
+# ---------------------------------------------------------------------------
+
+# Geometry — vertical blind
+_RANGE_HEIGHT_WIN = (0.1, 50.0)
+_RANGE_WINDOW_WIDTH = (0.1, 50.0)
+_RANGE_WINDOW_DEPTH = (0.0, 5.0)
+_RANGE_SILL_HEIGHT = (0.0, 50.0)
+# Geometry — awning
+_RANGE_LENGTH_AWNING = (0.3, 6.0)
+_RANGE_AWNING_ANGLE = (0, 45)
+# Geometry — tilt/venetian
+_RANGE_TILT_DEPTH = (0.1, 15.0)
+_RANGE_TILT_DISTANCE = (0.1, 15.0)
+# Sun tracking
+_RANGE_AZIMUTH = (0, 359)
+_RANGE_FOV = (0, 180)
+_RANGE_ELEVATION = (0, 90)
+_RANGE_DISTANCE = (0.1, 50.0)
+# Blind spot
+_RANGE_BLIND_SPOT_LEFT = (0, 359)
+_RANGE_BLIND_SPOT_RIGHT = (0, 360)
+_RANGE_BLIND_SPOT_ELEVATION = (0, 90)
+# Position limits & sunset
+_RANGE_DEFAULT_HEIGHT = (0, 100)
+_RANGE_MAX_POSITION = (1, 100)
+_RANGE_MIN_POSITION = (0, 99)
+_RANGE_SUNSET_POS = (0, 100)
+_RANGE_MY_POSITION = (1, 99)
+_RANGE_OFFSET_MINUTES = (-120, 120)
+_RANGE_OPEN_CLOSE_THRESHOLD = (1, 99)
+# Interpolation
+_RANGE_INTERP_VALUE = (0, 100)
+# Automation timing
+_RANGE_DELTA_POSITION = (1, 90)
+_RANGE_DELTA_TIME = (2, 60)
+# Manual override
+_RANGE_MANUAL_THRESHOLD = (0, 99)
+# Force override / custom positions
+_RANGE_FORCE_POSITION = (0, 100)
+_RANGE_CUSTOM_POSITION = (0, 100)
+_RANGE_CUSTOM_PRIORITY = (1, 99)
+# Motion
+_RANGE_MOTION_TIMEOUT = (30, 3600)
+# Climate
+_RANGE_TEMPERATURE = (0, 90)
+_RANGE_OUTSIDE_THRESHOLD = (0, 100)
+# Weather safety
+_RANGE_WEATHER_WIND_SPEED = (0, 200)
+_RANGE_WEATHER_WIND_DIRECTION_TOLERANCE = (5, 180)
+_RANGE_WEATHER_RAIN = (0, 100)
+_RANGE_WEATHER_OVERRIDE_POSITION = (0, 100)
+_RANGE_WEATHER_TIMEOUT = (0, 3600)
+
+
+def _build_option_ranges() -> dict[str, tuple[float, float]]:
+    """Map every numeric option to its ``(min, max)`` range.
+
+    Built lazily in a function so the module-level dict ordering stays sane
+    (constants above are grouped by domain). Consumers should treat the
+    returned dict as immutable.
+    """
+    ranges: dict[str, tuple[float, float]] = {
+        CONF_HEIGHT_WIN: _RANGE_HEIGHT_WIN,
+        CONF_WINDOW_WIDTH: _RANGE_WINDOW_WIDTH,
+        CONF_WINDOW_DEPTH: _RANGE_WINDOW_DEPTH,
+        CONF_SILL_HEIGHT: _RANGE_SILL_HEIGHT,
+        CONF_LENGTH_AWNING: _RANGE_LENGTH_AWNING,
+        CONF_AWNING_ANGLE: _RANGE_AWNING_ANGLE,
+        CONF_TILT_DEPTH: _RANGE_TILT_DEPTH,
+        CONF_TILT_DISTANCE: _RANGE_TILT_DISTANCE,
+        CONF_AZIMUTH: _RANGE_AZIMUTH,
+        CONF_FOV_LEFT: _RANGE_FOV,
+        CONF_FOV_RIGHT: _RANGE_FOV,
+        CONF_MIN_ELEVATION: _RANGE_ELEVATION,
+        CONF_MAX_ELEVATION: _RANGE_ELEVATION,
+        CONF_DISTANCE: _RANGE_DISTANCE,
+        CONF_BLIND_SPOT_LEFT: _RANGE_BLIND_SPOT_LEFT,
+        CONF_BLIND_SPOT_RIGHT: _RANGE_BLIND_SPOT_RIGHT,
+        CONF_BLIND_SPOT_ELEVATION: _RANGE_BLIND_SPOT_ELEVATION,
+        CONF_DEFAULT_HEIGHT: _RANGE_DEFAULT_HEIGHT,
+        CONF_MAX_POSITION: _RANGE_MAX_POSITION,
+        CONF_MIN_POSITION: _RANGE_MIN_POSITION,
+        CONF_SUNSET_POS: _RANGE_SUNSET_POS,
+        CONF_MY_POSITION_VALUE: _RANGE_MY_POSITION,
+        CONF_SUNSET_OFFSET: _RANGE_OFFSET_MINUTES,
+        CONF_SUNRISE_OFFSET: _RANGE_OFFSET_MINUTES,
+        CONF_OPEN_CLOSE_THRESHOLD: _RANGE_OPEN_CLOSE_THRESHOLD,
+        CONF_INTERP_START: _RANGE_INTERP_VALUE,
+        CONF_INTERP_END: _RANGE_INTERP_VALUE,
+        CONF_DELTA_POSITION: _RANGE_DELTA_POSITION,
+        CONF_DELTA_TIME: _RANGE_DELTA_TIME,
+        CONF_MANUAL_THRESHOLD: _RANGE_MANUAL_THRESHOLD,
+        CONF_FORCE_OVERRIDE_POSITION: _RANGE_FORCE_POSITION,
+        CONF_MOTION_TIMEOUT: _RANGE_MOTION_TIMEOUT,
+        CONF_TEMP_LOW: _RANGE_TEMPERATURE,
+        CONF_TEMP_HIGH: _RANGE_TEMPERATURE,
+        CONF_OUTSIDE_THRESHOLD: _RANGE_OUTSIDE_THRESHOLD,
+        CONF_WEATHER_WIND_SPEED_THRESHOLD: _RANGE_WEATHER_WIND_SPEED,
+        CONF_WEATHER_WIND_DIRECTION_TOLERANCE: _RANGE_WEATHER_WIND_DIRECTION_TOLERANCE,
+        CONF_WEATHER_RAIN_THRESHOLD: _RANGE_WEATHER_RAIN,
+        CONF_WEATHER_OVERRIDE_POSITION: _RANGE_WEATHER_OVERRIDE_POSITION,
+        CONF_WEATHER_TIMEOUT: _RANGE_WEATHER_TIMEOUT,
+    }
+    # Custom-position slots: per-slot position (0–100) and priority (1–99).
+    for slot_keys in CUSTOM_POSITION_SLOTS.values():
+        ranges[slot_keys["position"]] = _RANGE_CUSTOM_POSITION
+        ranges[slot_keys["priority"]] = _RANGE_CUSTOM_PRIORITY
+    return ranges
+
+
+OPTION_RANGES: dict[str, tuple[float, float]] = _build_option_ranges()
