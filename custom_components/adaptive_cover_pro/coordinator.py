@@ -330,7 +330,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             hass=self.hass,
             logger=self.logger,
             grace_mgr=self._grace_mgr,
-            get_current_position=self._cmd_svc._get_current_position,
+            get_current_position=self._cmd_svc.get_current_position,
             set_commanded_position=self._cmd_svc.set_target,
             position_tolerance=POSITION_TOLERANCE_PERCENT,
             is_dry_run=lambda: self._cmd_svc.dry_run,
@@ -496,8 +496,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         """Detect user-initiated cover.stop_cover and start manual override.
 
         Listens to EVENT_CALL_SERVICE for ``cover.stop_cover`` on tracked
-        entities. If the call was NOT originated by ACP (context-id not in
-        ``_cmd_svc._acp_stop_contexts``) and a ``my_position_value`` is
+        entities. If the call was NOT originated by ACP (per
+        ``_cmd_svc.was_acp_stop_context``) and a ``my_position_value`` is
         configured, the cover is flagged as manually overridden.
 
         This path covers non-position-capable covers (e.g. Somfy RTS) where
@@ -523,7 +523,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             return
 
         # Skip if ACP originated this stop_cover call.
-        if event.context and event.context.id in self._cmd_svc._acp_stop_contexts:
+        if event.context and self._cmd_svc.was_acp_stop_context(event.context.id):
             self.logger.debug(
                 "async_check_cover_service_call: ignoring ACP-originated stop_cover "
                 "(context %s)",
@@ -793,15 +793,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                     # prematurely cleared.  Covers that never report intermediate
                     # positions fall back to measuring from _sent_at.
                     now = dt.datetime.now(dt.UTC)
-                    elapsed = (
-                        self._cmd_svc._transit_elapsed_without_progress(  # noqa: SLF001
-                            entity_id, now
-                        )
+                    elapsed = self._cmd_svc.transit_elapsed_without_progress(
+                        entity_id, now
                     )
                     if elapsed is not None:
-                        timeout = (
-                            self._cmd_svc._wait_for_target_timeout_seconds
-                        )  # noqa: SLF001
+                        timeout = self._cmd_svc.transit_timeout_seconds
                         if elapsed > timeout:
                             self._cmd_svc.set_waiting(entity_id, False)
                             self._debug_log(
@@ -1869,7 +1865,16 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def _get_current_position(self, entity) -> int | None:
         """Get current position of cover — delegates to CoverCommandService."""
-        return self._cmd_svc._get_current_position(entity)
+        return self._cmd_svc.get_current_position(entity)
+
+    def get_current_position(self, entity) -> int | None:
+        """Public surface for reading a cover's current position.
+
+        Delegates to :meth:`_get_current_position` so binary_sensor + tests
+        that mock the private name keep working until the cover_command split
+        replaces them in commit 4.
+        """
+        return self._get_current_position(entity)
 
     @property
     def pos_sun(self):

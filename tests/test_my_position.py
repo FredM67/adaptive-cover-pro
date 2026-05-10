@@ -687,7 +687,7 @@ class TestCoverServiceCallHandler:
         coord.entities = ["cover.somfy"]
         coord.manager = mgr
         coord.config_entry.options = {"my_position_value": 50}
-        coord._cmd_svc._acp_stop_contexts = []
+        coord._cmd_svc.was_acp_stop_context = MagicMock(return_value=False)
         coord.logger = MagicMock()
         coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
 
@@ -722,7 +722,9 @@ class TestCoverServiceCallHandler:
         coord.entities = ["cover.somfy"]
         coord.manager = mgr
         coord.config_entry.options = {"my_position_value": 50}
-        coord._cmd_svc._acp_stop_contexts = [acp_ctx_id]
+        coord._cmd_svc.was_acp_stop_context = MagicMock(
+            side_effect=lambda ctx_id: ctx_id == acp_ctx_id
+        )
         coord.logger = MagicMock()
         coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
 
@@ -755,7 +757,7 @@ class TestCoverServiceCallHandler:
         coord.entities = ["cover.somfy"]
         coord.manager = mgr
         coord.config_entry.options = {}  # no my_position_value
-        coord._cmd_svc._acp_stop_contexts = []
+        coord._cmd_svc.was_acp_stop_context = MagicMock(return_value=False)
         coord.logger = MagicMock()
         coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
 
@@ -784,7 +786,7 @@ class TestCoverServiceCallHandler:
         coord.entities = ["cover.somfy"]
         coord.manager = mgr
         coord.config_entry.options = {"my_position_value": 50}
-        coord._cmd_svc._acp_stop_contexts = []
+        coord._cmd_svc.was_acp_stop_context = MagicMock(return_value=False)
         coord.logger = MagicMock()
         coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
 
@@ -820,7 +822,7 @@ class TestCoverServiceCallHandler:
         coord.entities = ["cover.somfy", "cover.other"]
         coord.manager = mgr
         coord.config_entry.options = {"my_position_value": 60}
-        coord._cmd_svc._acp_stop_contexts = []
+        coord._cmd_svc.was_acp_stop_context = MagicMock(return_value=False)
         coord.logger = MagicMock()
         coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
 
