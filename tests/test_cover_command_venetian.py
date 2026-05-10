@@ -279,7 +279,7 @@ async def test_reconciliation_no_op_after_post_tilt_rebase(svc, hass, attached_p
     svc._in_time_window = True
 
     with _patch_caps_dual_axis():
-        await svc._reconcile(dt.datetime.now(dt.UTC))
+        await svc.run_reconciliation_pass(dt.datetime.now(dt.UTC))
 
     # No 3rd service call — reconciliation saw actual==target and skipped resend.
     assert hass.services.async_call.call_count == 2
@@ -317,7 +317,7 @@ async def test_reconciliation_would_loop_without_rebase(svc, hass, attached_poli
     svc._in_time_window = True
 
     with _patch_caps_dual_axis():
-        await svc._reconcile(dt.datetime.now(dt.UTC))
+        await svc.run_reconciliation_pass(dt.datetime.now(dt.UTC))
 
     # Reconciliation detects |67 - 60| = 7 > tolerance(3) and issues a resend.
     assert hass.services.async_call.call_count == 3

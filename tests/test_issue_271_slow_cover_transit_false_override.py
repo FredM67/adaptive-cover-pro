@@ -471,7 +471,7 @@ class TestReconciliationBackstop:
         svc.state(entity_id).sent_at = now - dt.timedelta(seconds=50)
 
         # 50s elapsed < 120s configured timeout → reconcile must NOT clear wait_for_target
-        await svc._reconcile(now)
+        await svc.run_reconciliation_pass(now)
         assert svc.is_waiting_for_target(entity_id) is True, (
             "Reconcile backstop must respect the configured transit timeout of 120s "
             "— 50s elapsed should not clear wait_for_target"
@@ -503,7 +503,7 @@ class TestReconciliationBackstop:
         svc.state(entity_id).sent_at = now - dt.timedelta(seconds=50)
         svc._enabled = True
 
-        await svc._reconcile(now)
+        await svc.run_reconciliation_pass(now)
         assert (
             svc.is_waiting_for_target(entity_id) is False
         ), "Reconcile backstop must clear wait_for_target after 50s > 45s configured timeout"

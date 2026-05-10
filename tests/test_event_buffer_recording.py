@@ -761,7 +761,7 @@ class TestReconcileGaveUpEvent:
                 "has_stop": True,
             },
         ):
-            await svc._reconcile(now)
+            await svc.run_reconciliation_pass(now)
 
         assert "reconcile_gave_up" in _event_types(buf)
 
@@ -783,7 +783,7 @@ class TestReconcileGaveUpEvent:
                 "has_stop": True,
             },
         ):
-            await svc._reconcile(now)
+            await svc.run_reconciliation_pass(now)
 
         ev = next(e for e in _events(buf) if e["event"] == "reconcile_gave_up")
         assert ev["entity_id"] == entity_id
@@ -811,7 +811,7 @@ class TestReconcileGaveUpEvent:
         ):
             # Three ticks — gave_up triggers on first, subsequent ticks are silent
             for _ in range(3):
-                await svc._reconcile(now)
+                await svc.run_reconciliation_pass(now)
 
         gave_up_events = [e for e in _events(buf) if e["event"] == "reconcile_gave_up"]
         assert len(gave_up_events) == 1

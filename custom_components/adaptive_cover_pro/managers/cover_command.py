@@ -386,7 +386,7 @@ class CoverCommandService:
         interval = dt.timedelta(minutes=self._check_interval_minutes)
         self._reconcile_unsub = async_track_time_interval(
             self._hass,
-            self._reconcile,
+            self.run_reconciliation_pass,
             interval,
         )
         self._logger.debug(
@@ -1307,7 +1307,7 @@ class CoverCommandService:
     # Reconciliation timer
     # ------------------------------------------------------------------ #
 
-    async def _reconcile(self, now: dt.datetime) -> None:
+    async def run_reconciliation_pass(self, now: dt.datetime) -> None:
         """Periodic reconciliation: re-send target if cover missed it.
 
         Runs every ``check_interval_minutes``. Calls the optional ``on_tick``
@@ -1703,7 +1703,8 @@ class CoverCommandService:
     async def _execute_command(self, entity_id: str, target: int) -> None:
         """Send command directly, bypassing gate checks (reconciliation use only).
 
-        Does NOT reset the retry count — the caller (_reconcile) owns that.
+        Does NOT reset the retry count — the caller
+        (``run_reconciliation_pass``) owns that.
 
         NB: callers are responsible for entity-loaded-ness. Reconciliation only
         runs for entities that already passed the cover_unavailable gate in
