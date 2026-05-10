@@ -15,9 +15,11 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.adaptive_cover_pro.cover_types import get_policy
 from custom_components.adaptive_cover_pro.managers.cover_command import (
     CoverCommandService,
     build_special_positions,
+    route_service_call,
 )
 from custom_components.adaptive_cover_pro.managers.manual_override import (
     AdaptiveCoverManager,
@@ -223,7 +225,7 @@ class TestPrepareServiceCallMyRouting:
         # target_call should record the My-position value
         assert svc.get_target("cover.somfy") == 35
 
-    def test_my_routing_skipped_when_position_capable(self, svc):
+    def test_my_routing_skipped_when_position_capable(self):
         """use_my_position=True but has_set_position=True → falls through to set_cover_position."""
         caps = {
             "has_set_position": True,
@@ -232,19 +234,20 @@ class TestPrepareServiceCallMyRouting:
             "has_close": True,
             "has_stop": True,
         }
-        with patch(
-            "custom_components.adaptive_cover_pro.managers.cover_command.check_cover_features",
-            return_value=caps,
-        ):
-            service, service_data, supports_position = svc._prepare_service_call(
-                "cover.somfy", 35, use_my_position=True
-            )
-
+        axis = get_policy("cover_blind").select_default_axis(caps)
+        plan = route_service_call(
+            "cover.somfy",
+            35,
+            caps,
+            axis=axis,
+            use_my_position=True,
+            open_close_threshold=50,
+        )
         # Position-capable: My routing skipped; normal set_cover_position used
-        assert service == "set_cover_position"
-        assert supports_position is True
+        assert plan.service == "set_cover_position"
+        assert plan.supports_position is True
 
-    def test_my_routing_skipped_when_has_stop_false(self, svc):
+    def test_my_routing_skipped_when_has_stop_false(self):
         """use_my_position=True but has_stop=False → falls through to open/close logic."""
         caps = {
             "has_set_position": False,
@@ -253,17 +256,18 @@ class TestPrepareServiceCallMyRouting:
             "has_close": True,
             "has_stop": False,
         }
-        with patch(
-            "custom_components.adaptive_cover_pro.managers.cover_command.check_cover_features",
-            return_value=caps,
-        ):
-            service, service_data, supports_position = svc._prepare_service_call(
-                "cover.somfy", 80, use_my_position=True
-            )
-
+        axis = get_policy("cover_blind").select_default_axis(caps)
+        plan = route_service_call(
+            "cover.somfy",
+            80,
+            caps,
+            axis=axis,
+            use_my_position=True,
+            open_close_threshold=50,
+        )
         # Fell through to open/close threshold logic (80 >= 50 → open_cover)
-        assert service == "open_cover"
-        assert supports_position is False
+        assert plan.service == "open_cover"
+        assert plan.supports_position is False
 
 
 # ---------------------------------------------------------------------------
