@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 from unittest.mock import MagicMock
 
+from custom_components.adaptive_cover_pro.cover_types import get_policy
 from custom_components.adaptive_cover_pro.managers.manual_override import (
     AdaptiveCoverManager,
     SecondaryAxisCheck,
@@ -69,7 +70,7 @@ def test_tilt_drift_inside_suppression_window_is_ignored() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=50, tilt=20),
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -87,7 +88,7 @@ def test_tilt_drift_outside_suppression_trips_override() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=50, tilt=20),
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -105,7 +106,7 @@ def test_tilt_drift_within_threshold_is_ignored_even_outside_window() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=50, tilt=72),
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -128,7 +129,7 @@ def test_position_drift_inside_tilt_suppression_window_is_ignored() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=58, tilt=20),
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -153,7 +154,7 @@ def test_position_drift_inside_window_with_tilt_on_target_is_ignored() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=37, tilt=70),
         our_state=34,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=3,
@@ -179,7 +180,7 @@ def test_position_drift_outside_window_with_tilt_on_target_is_ignored() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=37, tilt=70),
         our_state=34,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=3,
@@ -198,7 +199,7 @@ def test_position_drift_outside_tilt_suppression_trips_override() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=80, tilt=70),
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -217,7 +218,7 @@ def test_non_venetian_cover_with_no_check_runs_position_axis_only() -> None:
     mgr.handle_state_change(
         states_data=_make_event(entity_id, position=50, tilt=10),
         our_state=50,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=5,

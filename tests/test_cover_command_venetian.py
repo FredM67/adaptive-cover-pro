@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.adaptive_cover_pro.const import DEFAULT_VENETIAN_TILT_SKIP_ABOVE
-from custom_components.adaptive_cover_pro.cover_types import VenetianPolicy
+from custom_components.adaptive_cover_pro.cover_types import VenetianPolicy, get_policy
 from custom_components.adaptive_cover_pro.managers.cover_command import (
     CoverCommandService,
     PositionContext,
@@ -376,7 +376,7 @@ async def test_tilt_on_target_plus_position_back_drive_does_not_trip_manual_over
     mgr.handle_state_change(
         states_data=event,
         our_state=34,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=3,
@@ -441,7 +441,7 @@ async def test_tilt_only_update_then_tilt_settle_event_does_not_trip_manual_over
     mgr.handle_state_change(
         states_data=event,
         our_state=50,
-        blind_type="cover_venetian",
+        policy=get_policy("cover_venetian"),
         allow_reset=True,
         is_waiting=lambda _eid: False,
         manual_threshold=3,

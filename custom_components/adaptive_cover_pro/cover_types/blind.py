@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import voluptuous as vol
 from homeassistant.helpers import selector
@@ -18,7 +18,7 @@ from ..const import (
 )
 from ..engine.covers import AdaptiveVerticalCover
 from ._helpers import window_dimensions_lines
-from .base import CoverTypePolicy
+from .base import POSITION_AXIS, CoverAxis, CoverTypePolicy
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -73,6 +73,7 @@ class BlindPolicy(CoverTypePolicy):
     """Cover that moves vertically (raise/lower)."""
 
     cover_type = "cover_blind"
+    axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS,)
     supports_glare_zones = True
 
     def disallowed_geometry_fields(

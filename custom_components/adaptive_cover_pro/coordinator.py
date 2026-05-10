@@ -1141,6 +1141,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 CONF_MOTION_TIMEOUT_MODE, DEFAULT_MOTION_TIMEOUT_MODE
             ),
             current_cover_position=self._compute_mean_cover_position(),
+            policy=self._policy,
         )
         self._pipeline_result = self._pipeline.evaluate(snapshot)
 
@@ -1249,7 +1250,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             ),
             climate=None,  # Populated later when climate mode data is read
             cover_positions=self._cover_provider.read_positions(
-                self.entities, self._cover_type
+                self.entities, self._policy
             ),
             cover_capabilities=self._cover_provider.read_all_capabilities(
                 self.entities
@@ -1673,7 +1674,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self.manager.handle_state_change(
                 event_data,
                 expected_position,
-                self._cover_type,
+                self._policy,
                 self.manual_reset,
                 self._cmd_svc.is_waiting_for_target,
                 self.manual_threshold,
@@ -2026,9 +2027,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         # Live cover positions and capabilities
         cover_entities = self.entities or []
-        _positions = self._cover_provider.read_positions(
-            cover_entities, self._cover_type
-        )
+        _positions = self._cover_provider.read_positions(cover_entities, self._policy)
         _caps = self._cover_provider.read_all_capabilities(cover_entities)
         _covers = {
             eid: {

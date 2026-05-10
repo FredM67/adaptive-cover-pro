@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import voluptuous as vol
 from homeassistant.helpers import selector
@@ -17,7 +17,7 @@ from ..const import (
     MAX_AWNING_ANGLE,
 )
 from ..engine.covers import AdaptiveHorizontalCover
-from .base import CoverTypePolicy
+from .base import POSITION_AXIS_OPEN_BLOCKS_SUN, CoverAxis, CoverTypePolicy
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -64,6 +64,10 @@ class AwningPolicy(CoverTypePolicy):
     """Cover that extends horizontally (in/out)."""
 
     cover_type = "cover_awning"
+    # Awning's "open=blocks-sun" semantic is captured on the axis itself so
+    # ``position_for_intent`` falls out of the base implementation without any
+    # subclass override.
+    axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS_OPEN_BLOCKS_SUN,)
 
     def disallowed_geometry_fields(
         self,

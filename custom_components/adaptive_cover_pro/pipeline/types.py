@@ -9,6 +9,7 @@ from ..enums import ClimateStrategy, ControlMethod
 
 if TYPE_CHECKING:
     from ..config_types import CoverConfig, GlareZonesConfig
+    from ..cover_types.base import CoverTypePolicy
     from ..engine.covers.base import AdaptiveGeneralCover
     from ..state.climate_provider import ClimateReadings
 
@@ -162,6 +163,13 @@ class PipelineSnapshot:
     # Mean of current entity positions (int-rounded). None when no entity reports a
     # numeric position. Read by MotionTimeoutHandler in hold_position mode only.
     current_cover_position: int | None = None
+
+    # The CoverTypePolicy chosen at coordinator startup. Handlers should consult
+    # this for cover-type-aware decisions (axis routing, intent → position
+    # mapping, glare-zone gating) instead of branching on ``cover_type``.
+    # Defaults to ``None`` so test fixtures that build snapshots directly keep
+    # working; runtime always populates it via ``coordinator._build_snapshot``.
+    policy: CoverTypePolicy | None = None
 
 
 # ---------------------------------------------------------------------------

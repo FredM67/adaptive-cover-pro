@@ -110,7 +110,7 @@ def test_read_position_with_capabilities_position_cover(cmd_svc, mock_hass):
     mock_hass.states.get.return_value = MagicMock(attributes={"current_position": 42})
 
     with patch(
-        "custom_components.adaptive_cover_pro.managers.cover_command.state_attr",
+        "custom_components.adaptive_cover_pro.cover_types.base.state_attr",
         return_value=42,
     ):
         result = cmd_svc._read_position_with_capabilities("cover.test", caps)
@@ -123,7 +123,7 @@ def test_read_position_with_capabilities_tilt_cover(tilt_cmd_svc, mock_hass):
     caps = {"has_set_position": False, "has_set_tilt_position": True}
 
     with patch(
-        "custom_components.adaptive_cover_pro.managers.cover_command.state_attr",
+        "custom_components.adaptive_cover_pro.cover_types.base.state_attr",
         return_value=35,
     ):
         result = tilt_cmd_svc._read_position_with_capabilities("cover.test", caps)
@@ -146,7 +146,7 @@ def test_read_position_open_close_fallback(cmd_svc, mock_hass):
     caps = {"has_set_position": False, "has_set_tilt_position": False}
 
     with patch(
-        "custom_components.adaptive_cover_pro.managers.cover_command.get_open_close_state",
+        "custom_components.adaptive_cover_pro.cover_types.base.get_open_close_state",
         return_value=100,
     ):
         result = cmd_svc._read_position_with_capabilities("cover.test", caps)

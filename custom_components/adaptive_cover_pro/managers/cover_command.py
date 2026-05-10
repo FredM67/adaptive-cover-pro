@@ -9,19 +9,12 @@ from collections.abc import Iterator
 from typing import Any
 
 from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    SERVICE_SET_COVER_POSITION,
-    SERVICE_SET_COVER_TILT_POSITION,
-    STATE_UNAVAILABLE,
-)
+from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
-from ..helpers import state_attr
+
 from ..const import (
-    ATTR_POSITION,
-    ATTR_TILT_POSITION,
     CONF_DEFAULT_HEIGHT,
     CONF_MY_POSITION_VALUE,
     CONF_SUNSET_POS,
@@ -34,8 +27,6 @@ from ..diagnostics.event_buffer import EventBuffer
 from ..helpers import (
     check_cover_features,
     get_last_updated,
-    get_open_close_state,
-    should_use_tilt,
 )
 
 
@@ -167,9 +158,22 @@ class CoverCommandService:
                 cover_command_sent and cover_command_skipped events are appended.
 
         """
+        # Local import: ``cover_types`` re-exports ``VenetianPolicy`` which
+        # imports ``DualAxisSequencer`` from this manager package, so a
+        # module-level import here would close the loop and ImportError on
+        # first load. The policy is only consulted at construction time and
+        # afterwards through ``self._policy``.
+        from ..cover_types import get_policy
+
         self._hass = hass
         self._logger = logger
         self._cover_type = cover_type
+        # Resolve once at construction time so internal call sites read
+        # ``self._policy`` instead of comparing ``cover_type`` strings. The
+        # policy carries the axis descriptors that control which HA service
+        # this manager calls — see ``_prepare_service_call`` and
+        # ``_read_position_with_capabilities``.
+        self._policy = get_policy(cover_type)
         self._grace_mgr = grace_mgr
         self._open_close_threshold = open_close_threshold
         self._check_interval_minutes = check_interval_minutes
@@ -364,8 +368,17 @@ class CoverCommandService:
 
     @property
     def is_tilt_cover(self) -> bool:
-        """Check if this is a tilt cover."""
-        return self._cover_type == "cover_tilt"
+        """Whether this cover's primary axis is the tilt axis.
+
+        Kept as a thin wrapper over the policy so existing tests / callers that
+        introspect this property keep working. New code should reach for the
+        cover-type policy (``self._policy.select_default_axis(caps)``) directly
+        because the answer to "use the tilt service?" depends on the entity's
+        capabilities, not just on the configured cover type.
+        """
+        from ..cover_types.base import AXIS_NAME_TILT
+
+        return self._policy.axes[0].name == AXIS_NAME_TILT
 
     @property
     def manual_override_entities(self) -> set[str]:
@@ -747,20 +760,9 @@ class CoverCommandService:
         self, entity: str, caps: dict[str, bool], state_obj=None
     ) -> int | None:
         """Read position based on cover type and capabilities."""
-        use_tilt = should_use_tilt(self.is_tilt_cover, caps)
-
-        if use_tilt:
-            if caps.get("has_set_tilt_position", True):
-                if state_obj:
-                    return state_obj.attributes.get("current_tilt_position")
-                return state_attr(self._hass, entity, "current_tilt_position")
-        else:
-            if caps.get("has_set_position", True):
-                if state_obj:
-                    return state_obj.attributes.get("current_position")
-                return state_attr(self._hass, entity, "current_position")
-
-        return get_open_close_state(self._hass, entity)
+        return self._policy.read_axis_value(
+            self._hass, entity, caps, state_obj=state_obj
+        )
 
     def read_position_with_capabilities(
         self, entity: str, caps: dict[str, bool], state_obj=None
@@ -1478,14 +1480,13 @@ class CoverCommandService:
         if caps is None:
             caps = self.get_cover_capabilities(entity)
 
-        # Determine whether to use tilt services for this entity.
-        use_tilt = should_use_tilt(self.is_tilt_cover, caps)
+        # Pick the axis the policy targets by default for this entity. Single-axis
+        # policies (blind/awning/tilt) always return the same axis; venetian
+        # returns its position axis here — its tilt axis is dispatched separately
+        # through ``after_position_command`` and the DualAxisSequencer.
+        axis = self._policy.select_default_axis(caps)
 
-        supports_position = (
-            caps.get("has_set_tilt_position", True)
-            if use_tilt
-            else caps.get("has_set_position", True)
-        )
+        supports_position = caps.get(axis.capability_key, True)
 
         self._logger.debug(
             "Prepare service call: %s supports_position=%s caps=%s",
@@ -1513,19 +1514,9 @@ class CoverCommandService:
             self._grace_mgr.start_command_grace_period(entity)
 
         if supports_position:
-            service = (
-                SERVICE_SET_COVER_TILT_POSITION
-                if use_tilt
-                else SERVICE_SET_COVER_POSITION
-            )
-            service_data = {ATTR_ENTITY_ID: entity}
-            if use_tilt:
-                service_data[ATTR_TILT_POSITION] = state
-            else:
-                service_data[ATTR_POSITION] = state
-
+            service_data = {ATTR_ENTITY_ID: entity, axis.service_attr: state}
             _record(state)
-            return service, service_data, True
+            return axis.service, service_data, True
 
         # "My" position path (non-position-capable covers only).
         # stop_cover sent to a stationary Somfy RTS cover triggers the user's
