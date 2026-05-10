@@ -599,6 +599,33 @@ class CoverCommandService:
             "cover", "stop_cover", {"entity_id": entity_id}, context=ctx
         )
 
+    async def _try_stop_one(self, entity_id: str, *, label: str) -> bool:
+        """Attempt a stop_cover on a single entity, honouring caps + dry-run.
+
+        Returns ``True`` when a stop was actually sent (or would have been sent
+        under dry-run), ``False`` when caps or motion state caused us to skip.
+        Centralises the "check has_stop → check in motion → dry-run vs send"
+        chain that ``stop_in_flight`` and ``stop_all`` previously each open-coded.
+        """
+        caps = check_cover_features(self._hass, entity_id)
+        if not caps_get(caps, CAP_HAS_STOP):
+            return False
+        if not self._is_cover_in_motion(entity_id):
+            state_val = getattr(self._hass.states.get(entity_id), "state", None)
+            self._logger.debug(
+                "%s: skipping %s — not in motion (state=%s)",
+                label,
+                entity_id,
+                state_val,
+            )
+            return False
+        if self._dry_run:
+            self._logger.info("[dry_run] would stop_cover %s", entity_id)
+        else:
+            await self._call_stop_cover(entity_id)
+        self._logger.debug("%s: stopped %s", label, entity_id)
+        return True
+
     async def stop_in_flight(self, entities: set[str] | None = None) -> list[str]:
         """Send stop_cover to every ACP-in-flight entity that supports STOP.
 
@@ -620,29 +647,16 @@ class CoverCommandService:
             if s.waiting and (entities is None or eid in entities)
         }
         for eid in candidates:
-            caps = check_cover_features(self._hass, eid)
-            if not caps_get(caps, CAP_HAS_STOP):
-                continue
             s = self.state(eid)
-            if not self._is_cover_in_motion(eid):
-                state_val = getattr(self._hass.states.get(eid), "state", None)
-                self._logger.debug(
-                    "stop_in_flight: skipping %s — not in motion (state=%s); "
-                    "clearing stale wait_for_target",
-                    eid,
-                    state_val,
-                )
-                s.waiting = False
-                s.sent_at = None
-                continue
-            if self._dry_run:
-                self._logger.info("[dry_run] would stop_cover %s", eid)
-            else:
-                await self._call_stop_cover(eid)
+            sent = await self._try_stop_one(eid, label="stop_in_flight")
+            # Whether we sent the stop or only logged "not in motion", the
+            # entity is no longer in flight from ACP's perspective — clear
+            # the waiting flag so the next reconciliation cycle does not
+            # think a fresh command is still travelling.
             s.waiting = False
             s.sent_at = None
-            stopped.append(eid)
-            self._logger.debug("stop_in_flight: stopped %s", eid)
+            if sent:
+                stopped.append(eid)
         return stopped
 
     async def stop_all(self, entity_ids: list[str]) -> list[str]:
@@ -660,23 +674,8 @@ class CoverCommandService:
         """
         stopped: list[str] = []
         for eid in entity_ids:
-            caps = check_cover_features(self._hass, eid)
-            if not caps_get(caps, CAP_HAS_STOP):
-                continue
-            if not self._is_cover_in_motion(eid):
-                state_val = getattr(self._hass.states.get(eid), "state", None)
-                self._logger.debug(
-                    "stop_all: skipping %s — not in motion (state=%s)",
-                    eid,
-                    state_val,
-                )
-                continue
-            if self._dry_run:
-                self._logger.info("[dry_run] would stop_cover %s", eid)
-            else:
-                await self._call_stop_cover(eid)
-            stopped.append(eid)
-            self._logger.debug("stop_all: stopped %s", eid)
+            if await self._try_stop_one(eid, label="stop_all"):
+                stopped.append(eid)
         return stopped
 
     # ------------------------------------------------------------------ #
