@@ -62,7 +62,8 @@ _COVER_COMMAND_SRC = (
     / "custom_components"
     / "adaptive_cover_pro"
     / "managers"
-    / "cover_command.py"
+    / "cover_command"
+    / "__init__.py"
 ).read_text()
 
 
