@@ -252,12 +252,17 @@ def should_use_tilt(is_tilt_cover: bool, caps) -> bool:
     """
     if is_tilt_cover:
         return True
-    if isinstance(caps, dict):
-        return not caps.get("has_set_position", True) and caps.get(
-            "has_set_tilt_position", False
-        )
-    # CoverCapabilities dataclass
-    return not caps.has_set_position and caps.has_set_tilt_position
+    # Local import — cover_types/base.py imports from helpers, so a top-level
+    # import here would cycle. The constants and accessor are cheap to fetch.
+    from .cover_types.base import (
+        CAP_HAS_SET_POSITION,
+        CAP_HAS_SET_TILT_POSITION,
+        caps_get,
+    )
+
+    has_position = caps_get(caps, CAP_HAS_SET_POSITION, default=True)
+    has_tilt = caps_get(caps, CAP_HAS_SET_TILT_POSITION, default=False)
+    return not has_position and has_tilt
 
 
 def get_open_close_state(hass: HomeAssistant, entity_id: str) -> int | None:

@@ -11,6 +11,8 @@ break them.
 from __future__ import annotations
 
 import dataclasses
+import pathlib
+import re
 from unittest.mock import MagicMock
 
 import pytest
@@ -331,3 +333,44 @@ class TestReadAxisValue:
         caps = {"has_set_position": False, "has_set_tilt_position": True}
         result = get_policy("cover_blind").read_axis_value(hass, "cover.blind", caps)
         assert result == 25
+
+
+# ---------------------------------------------------------------------------
+# Regression guard for CODING_GUIDELINES.md "no hardcoded capability strings"
+# ---------------------------------------------------------------------------
+
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+_PRODUCTION_ROOT = _REPO_ROOT / "custom_components" / "adaptive_cover_pro"
+
+# ``caps.get("has_X")`` is the banned form. ``caps.get(SOME_VAR)`` (where the
+# argument is not a string literal — typically ``axis.capability_key``) is
+# allowed. The pattern below matches exactly the banned shape.
+_BANNED_CAPS_GET_RE = re.compile(r'caps\.get\(\s*"has_[a-z_]+"')
+
+
+@pytest.mark.unit
+def test_no_hardcoded_caps_get_strings_in_production() -> None:
+    """Fail if any production module reintroduces a hardcoded ``caps.get("has_X")``.
+
+    Use ``caps_get(caps, CAP_HAS_X)`` (or read off a ``CoverAxis.capability_key``)
+    instead — see CODING_GUIDELINES.md "Cover Type Abstraction".
+    """
+    offenders: list[str] = []
+    for path in _PRODUCTION_ROOT.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if _BANNED_CAPS_GET_RE.search(line):
+                # Skip lines that are clearly comment/docstring (start with `#`
+                # or contain triple-quote markers). The pattern still catches
+                # genuine call sites because production code never starts a
+                # call-expression line with a comment marker.
+                stripped = line.strip()
+                if stripped.startswith(("#", '"', "'")):
+                    continue
+                rel = path.relative_to(_REPO_ROOT)
+                offenders.append(f"{rel}:{lineno}: {stripped}")
+    assert not offenders, (
+        "Hardcoded caps.get('has_*') strings found — replace with "
+        "caps_get(caps, CAP_HAS_*):\n  " + "\n  ".join(offenders)
+    )

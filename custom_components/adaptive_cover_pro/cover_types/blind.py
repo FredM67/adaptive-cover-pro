@@ -18,7 +18,13 @@ from ..const import (
 )
 from ..engine.covers import AdaptiveVerticalCover
 from ._helpers import window_dimensions_lines
-from .base import POSITION_AXIS, CoverAxis, CoverTypePolicy
+from .base import (
+    CAP_HAS_SET_POSITION,
+    POSITION_AXIS,
+    CoverAxis,
+    CoverTypePolicy,
+    caps_get,
+)
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -104,7 +110,7 @@ class BlindPolicy(CoverTypePolicy):
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""
-        if not any(caps.get("has_set_position") for caps in known.values()):
+        if not any(caps_get(caps, CAP_HAS_SET_POSITION) for caps in known.values()):
             return [
                 "⚠️ Configured as vertical blind but no bound cover supports "
                 "set_position — only open/close will be issued."

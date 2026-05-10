@@ -897,13 +897,15 @@ def _check_cover_capabilities(
     cap_map: dict[str, dict[str, bool] | None] = {}
     warnings: list[str] = []
 
+    from .cover_types.base import CAP_HAS_SET_POSITION, caps_get
+
     for eid in entities:
         caps = check_cover_features(hass, eid)
         cap_map[eid] = caps
         if caps is None:
             warnings.append(f"⚠️ {eid}: not ready (unavailable)")
         else:
-            if not caps.get("has_set_position"):
+            if not caps_get(caps, CAP_HAS_SET_POSITION):
                 warnings.append(
                     f"⚠️ {eid} is open/close-only — will be driven via "
                     "threshold compare, not set_position."
@@ -920,9 +922,13 @@ def _check_cover_capabilities(
     }
 
     if known:
-        has_pos = {eid for eid, caps in known.items() if caps.get("has_set_position")}
+        has_pos = {
+            eid for eid, caps in known.items() if caps_get(caps, CAP_HAS_SET_POSITION)
+        }
         no_pos = {
-            eid for eid, caps in known.items() if not caps.get("has_set_position")
+            eid
+            for eid, caps in known.items()
+            if not caps_get(caps, CAP_HAS_SET_POSITION)
         }
 
         if has_pos and no_pos:
@@ -971,12 +977,21 @@ def _build_cover_capabilities_text(
 
     cap_map, warnings = _check_cover_capabilities(config, sensor_type, hass)
 
+    from .cover_types.base import (
+        CAP_HAS_CLOSE,
+        CAP_HAS_OPEN,
+        CAP_HAS_SET_POSITION,
+        CAP_HAS_SET_TILT_POSITION,
+        CAP_HAS_STOP,
+        caps_get,
+    )
+
     cap_label_map = {
-        "has_set_position": "set position",
-        "has_set_tilt_position": "set tilt",
-        "has_open": "open",
-        "has_close": "close",
-        "has_stop": "stop",
+        CAP_HAS_SET_POSITION: "set position",
+        CAP_HAS_SET_TILT_POSITION: "set tilt",
+        CAP_HAS_OPEN: "open",
+        CAP_HAS_CLOSE: "close",
+        CAP_HAS_STOP: "stop",
     }
 
     lines: list[str] = ["**Cover Capabilities**"]
@@ -986,7 +1001,7 @@ def _build_cover_capabilities_text(
             lines.append(f"{eid}: not ready (unavailable)")
         else:
             cap_list = ", ".join(
-                label for key, label in cap_label_map.items() if caps.get(key)
+                label for key, label in cap_label_map.items() if caps_get(caps, key)
             )
             lines.append(f"{eid}: {cap_list or 'none detected'}")
 

@@ -33,7 +33,15 @@ from ..managers.dual_axis_sequencer import DualAxisSequencer
 from ..managers.manual_override import SecondaryAxisCheck
 from ..pipeline.types import DecisionStep
 from ._helpers import window_dimensions_lines
-from .base import POSITION_AXIS, TILT_AXIS, CoverAxis, CoverTypePolicy
+from .base import (
+    CAP_HAS_SET_POSITION,
+    CAP_HAS_SET_TILT_POSITION,
+    POSITION_AXIS,
+    TILT_AXIS,
+    CoverAxis,
+    CoverTypePolicy,
+    caps_get,
+)
 from .blind import GEOMETRY_VERTICAL_SCHEMA
 from .tilt import GEOMETRY_TILT_SCHEMA, TILT_CAPABLE_ENTITY_FILTER
 
@@ -130,10 +138,14 @@ class VenetianPolicy(CoverTypePolicy):
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
         warnings: list[str] = []
         missing_pos = [
-            eid for eid, caps in known.items() if not caps.get("has_set_position")
+            eid
+            for eid, caps in known.items()
+            if not caps_get(caps, CAP_HAS_SET_POSITION)
         ]
         missing_tilt = [
-            eid for eid, caps in known.items() if not caps.get("has_set_tilt_position")
+            eid
+            for eid, caps in known.items()
+            if not caps_get(caps, CAP_HAS_SET_TILT_POSITION)
         ]
         if missing_pos:
             warnings.append(

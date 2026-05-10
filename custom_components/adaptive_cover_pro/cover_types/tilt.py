@@ -9,7 +9,13 @@ from homeassistant.helpers import selector
 
 from ..const import CONF_TILT_DEPTH, CONF_TILT_DISTANCE, CONF_TILT_MODE
 from ..engine.covers import AdaptiveTiltCover
-from .base import TILT_AXIS, CoverAxis, CoverTypePolicy
+from .base import (
+    CAP_HAS_SET_TILT_POSITION,
+    TILT_AXIS,
+    CoverAxis,
+    CoverTypePolicy,
+    caps_get,
+)
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -92,7 +98,9 @@ class TiltPolicy(CoverTypePolicy):
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_tilt_position``."""
-        if not any(caps.get("has_set_tilt_position") for caps in known.values()):
+        if not any(
+            caps_get(caps, CAP_HAS_SET_TILT_POSITION) for caps in known.values()
+        ):
             return [
                 "⚠️ Configured as tilt (venetian) but no bound cover "
                 "advertises set_tilt_position."
