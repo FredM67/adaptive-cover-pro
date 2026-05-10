@@ -2,101 +2,45 @@
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
-from collections import deque
 from collections.abc import Iterator
 from typing import Any
 
 from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
-from ..const import (
-    CONF_DEFAULT_HEIGHT,
-    CONF_MY_POSITION_VALUE,
-    CONF_SUNSET_POS,
+from ...const import (
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
     MAX_POSITION_RETRIES,
     POSITION_CHECK_INTERVAL_MINUTES,
     POSITION_TOLERANCE_PERCENT,
 )
-from ..cover_types.base import (
-    CAP_HAS_CLOSE,
-    CAP_HAS_OPEN,
+from ...cover_types.base import (
     CAP_HAS_STOP,
     caps_get,
 )
-from ..diagnostics.event_buffer import EventBuffer
-from ..helpers import (
+from ...diagnostics.event_buffer import EventBuffer
+from ...helpers import (
     check_cover_features,
     get_last_updated,
 )
+from . import gates
+from .diagnostics import DiagnosticsRecorder
+from .routing import ServiceCallPlan, build_special_positions, route_service_call
+from .state_store import PerEntityState, PositionContext
+from .stop import StopTracker
 
-
-@dataclasses.dataclass(slots=True)
-class PerEntityState:
-    """Per-entity positioning state owned by CoverCommandService.
-
-    Replaces a fan of parallel dicts/sets keyed by entity_id. The service
-    holds a single dict[str, PerEntityState]; an entity has no state until
-    apply_position / send_my_position records one.
-
-    `target` and `sent_at` use ``None`` to mean "absent" — preserving the
-    "key not in dict" semantics of the previous parallel-dict design.
-
-    """
-
-    target: int | None = None
-    sent_at: dt.datetime | None = None
-    waiting: bool = False
-    last_progress_at: dt.datetime | None = None
-    retry_count: int = 0
-    gave_up: bool = False
-    is_safety: bool = False
-    last_reconcile_at: dt.datetime | None = None
-
-
-@dataclasses.dataclass
-class PositionContext:
-    """Context passed to apply_position() describing current coordinator state.
-
-    The coordinator builds this each time it wants to move a cover, passing in
-    all the contextual flags that govern whether the command should actually be
-    sent. CoverCommandService uses these instead of reaching back into the
-    coordinator.
-
-    """
-
-    auto_control: bool
-    manual_override: bool
-    sun_just_appeared: bool
-    min_change: int
-    time_threshold: int
-    special_positions: list[int]
-    inverse_state: bool = False
-    force: bool = False  # Skip delta/time/manual_override gates (NOT auto_control)
-    is_safety: bool = (
-        False  # Safety-critical target (persists across window boundaries; bypasses auto_control)
-    )
-    bypass_auto_control: bool = (
-        False  # Sanctioned one-shot bypass of auto_control gate (e.g. switch return-to-default)
-    )
-    use_my_position: bool = (
-        False  # Route through send_my_position() on non-position-capable covers
-    )
-    # Secondary-axis target (e.g. tilt for venetian blinds). The owning
-    # cover-type policy reads it inside ``after_position_command`` to decide
-    # whether and how to chase the position command with a second service
-    # call. ``None`` means "no secondary axis on this update cycle".
-    tilt: int | None = None
-    # The cover-type policy in effect. ``apply_position`` calls
-    # ``policy.after_position_command`` once the position service has fired so
-    # dual-axis covers can run their settle+tilt sequence without leaking the
-    # logic into this shared service.
-    policy: Any = None
+__all__ = [
+    "CoverCommandService",
+    "PerEntityState",
+    "PositionContext",
+    "ServiceCallPlan",
+    "build_special_positions",
+    "route_service_call",
+]
 
 
 class CoverCommandService:
@@ -169,7 +113,7 @@ class CoverCommandService:
         # module-level import here would close the loop and ImportError on
         # first load. The policy is only consulted at construction time and
         # afterwards through ``self._policy``.
-        from ..cover_types import get_policy
+        from ...cover_types import get_policy
 
         self._hass = hass
         self._logger = logger
@@ -197,10 +141,11 @@ class CoverCommandService:
         # for white-box / test access.
         self._state: dict[str, PerEntityState] = {}
 
-        # Context ids of cover.stop_cover calls that ACP itself originated.
-        # The EVENT_CALL_SERVICE listener in the coordinator uses this to
-        # distinguish our own stop commands from user-initiated stops.
-        self._acp_stop_contexts: deque[str] = deque(maxlen=16)
+        # Stop tracker owns the ACP-originated cover.stop_cover deque plus the
+        # try_stop_one orchestration. The EVENT_CALL_SERVICE listener in the
+        # coordinator uses ``was_acp_stop_context`` to distinguish our own stop
+        # commands from user-initiated stops.
+        self._stop_tracker = StopTracker(hass, logger, dry_run_fn=lambda: self._dry_run)
 
         # Entities currently under manual override — reconciliation skips these
         # so it doesn't fight the user by resending the old integration target.
@@ -231,29 +176,11 @@ class CoverCommandService:
         # Synced by the coordinator each update cycle from the Debug & Diagnostics option.
         self._dry_run: bool = False
 
-        # Diagnostic tracking
-        self.last_cover_action: dict[str, Any] = {
-            "entity_id": None,
-            "service": None,
-            "position": None,
-            "calculated_position": None,
-            "threshold_used": None,
-            "inverse_state_applied": False,
-            "timestamp": None,
-            "covers_controlled": 0,
-        }
-        self.last_skipped_action: dict[str, Any] = {
-            "entity_id": None,
-            "reason": None,
-            "calculated_position": None,
-            "current_position": None,
-            "trigger": None,
-            "inverse_state_applied": False,
-            "timestamp": None,
-        }
-
-        # Shared diagnostic ring buffer (coordinator-owned, injected here)
+        # Diagnostic recorder owns last_cover_action / last_skipped_action
+        # snapshots and pushes cover_command_sent / cover_command_skipped
+        # events into the shared event buffer.
         self._event_buffer: EventBuffer | None = event_buffer
+        self._diag = DiagnosticsRecorder(event_buffer=event_buffer)
 
         # Reconciliation timer handle (async_track_time_interval unsubscribe fn)
         self._reconcile_unsub = None
@@ -275,7 +202,7 @@ class CoverCommandService:
         interval = dt.timedelta(minutes=self._check_interval_minutes)
         self._reconcile_unsub = async_track_time_interval(
             self._hass,
-            self._reconcile,
+            self.run_reconciliation_pass,
             interval,
         )
         self._logger.debug(
@@ -382,7 +309,7 @@ class CoverCommandService:
         because the answer to "use the tilt service?" depends on the entity's
         capabilities, not just on the configured cover type.
         """
-        from ..cover_types.base import AXIS_NAME_TILT
+        from ...cover_types.base import AXIS_NAME_TILT
 
         return self._policy.axes[0].name == AXIS_NAME_TILT
 
@@ -462,6 +389,21 @@ class CoverCommandService:
         coordinator each update cycle from the Debug & Diagnostics option.
         """
         self._dry_run = value
+
+    @property
+    def transit_timeout_seconds(self) -> int:
+        """Configured transit-timeout used by manual-override transit backstop."""
+        return self._wait_for_target_timeout_seconds
+
+    @property
+    def last_cover_action(self) -> dict[str, Any]:
+        """Snapshot of the most recent cover command sent (for diagnostics)."""
+        return self._diag.last_cover_action
+
+    @property
+    def last_skipped_action(self) -> dict[str, Any]:
+        """Snapshot of the most recent skipped cover action (for diagnostics)."""
+        return self._diag.last_skipped_action
 
     def get_entity_state_snapshot(self, entity_id: str) -> dict:
         """Return a diagnostic snapshot of per-entity positioning state."""
@@ -561,70 +503,38 @@ class CoverCommandService:
             return None
         return (now - reference).total_seconds()
 
+    def transit_elapsed_without_progress(
+        self, entity_id: str, now: dt.datetime
+    ) -> float | None:
+        """Public surface for the transit backstop's elapsed-since-progress reading.
+
+        Delegates to :meth:`_transit_elapsed_without_progress` so existing tests
+        that mock the private name keep working until the cover_command split
+        replaces them in commit 4.
+        """
+        return self._transit_elapsed_without_progress(entity_id, now)
+
+    def was_acp_stop_context(self, context_id: str) -> bool:
+        """Whether ``context_id`` belongs to an ACP-originated cover.stop_cover call.
+
+        The coordinator's EVENT_CALL_SERVICE listener uses this predicate to
+        skip stop_cover events that ACP itself triggered (so they don't get
+        misread as user-initiated manual overrides).
+        """
+        return self._stop_tracker.was_acp_stop_context(context_id)
+
+    def acp_stop_context_count(self, *, unique: bool = False) -> int:
+        """Return the number of recorded ACP-originated stop_cover context ids.
+
+        With ``unique=True`` returns the count of distinct ids, which lets
+        callers verify production code minted a fresh context per stop call
+        without inspecting the underlying deque.
+        """
+        return self._stop_tracker.acp_stop_context_count(unique=unique)
+
     # ------------------------------------------------------------------ #
     # Stop helpers — bypass _enabled gate (shutdown / emergency paths)
     # ------------------------------------------------------------------ #
-
-    def _is_cover_in_motion(self, entity_id: str) -> bool:
-        """Return True only if HA reports the cover as opening or closing.
-
-        cover.stop_cover is overloaded on some hardware (Somfy "My", Hunter
-        Douglas favorite, etc.) — on stationary covers it triggers a preset
-        position move instead of a no-op.  Callers in shutdown/emergency
-        paths must gate on actual motion to avoid triggering that preset.
-
-        Note: send_my_position() intentionally does NOT call this method —
-        it deliberately sends stop_cover to a stationary cover (that is what
-        triggers the My preset).  This gate applies to shutdown paths only.
-        """
-        state_obj = self._hass.states.get(entity_id)
-        if state_obj is None:
-            return False
-        return state_obj.state in ("opening", "closing")
-
-    async def _call_stop_cover(self, entity_id: str) -> None:
-        """Issue cover.stop_cover and record the call context as ACP-originated.
-
-        All ACP-initiated stop_cover calls must go through this helper so that
-        the EVENT_CALL_SERVICE listener can identify and ignore them, avoiding
-        false manual-override detection.
-
-        Args:
-            entity_id: Cover entity_id to stop.
-
-        """
-        ctx = Context()
-        self._acp_stop_contexts.append(ctx.id)
-        await self._hass.services.async_call(
-            "cover", "stop_cover", {"entity_id": entity_id}, context=ctx
-        )
-
-    async def _try_stop_one(self, entity_id: str, *, label: str) -> bool:
-        """Attempt a stop_cover on a single entity, honouring caps + dry-run.
-
-        Returns ``True`` when a stop was actually sent (or would have been sent
-        under dry-run), ``False`` when caps or motion state caused us to skip.
-        Centralises the "check has_stop → check in motion → dry-run vs send"
-        chain that ``stop_in_flight`` and ``stop_all`` previously each open-coded.
-        """
-        caps = check_cover_features(self._hass, entity_id)
-        if not caps_get(caps, CAP_HAS_STOP):
-            return False
-        if not self._is_cover_in_motion(entity_id):
-            state_val = getattr(self._hass.states.get(entity_id), "state", None)
-            self._logger.debug(
-                "%s: skipping %s — not in motion (state=%s)",
-                label,
-                entity_id,
-                state_val,
-            )
-            return False
-        if self._dry_run:
-            self._logger.info("[dry_run] would stop_cover %s", entity_id)
-        else:
-            await self._call_stop_cover(entity_id)
-        self._logger.debug("%s: stopped %s", label, entity_id)
-        return True
 
     async def stop_in_flight(self, entities: set[str] | None = None) -> list[str]:
         """Send stop_cover to every ACP-in-flight entity that supports STOP.
@@ -648,7 +558,10 @@ class CoverCommandService:
         }
         for eid in candidates:
             s = self.state(eid)
-            sent = await self._try_stop_one(eid, label="stop_in_flight")
+            caps = check_cover_features(self._hass, eid)
+            sent = await self._stop_tracker.try_stop_one(
+                eid, caps, label="stop_in_flight"
+            )
             # Whether we sent the stop or only logged "not in motion", the
             # entity is no longer in flight from ACP's perspective — clear
             # the waiting flag so the next reconciliation cycle does not
@@ -674,7 +587,8 @@ class CoverCommandService:
         """
         stopped: list[str] = []
         for eid in entity_ids:
-            if await self._try_stop_one(eid, label="stop_all"):
+            caps = check_cover_features(self._hass, eid)
+            if await self._stop_tracker.try_stop_one(eid, caps, label="stop_all"):
                 stopped.append(eid)
         return stopped
 
@@ -718,7 +632,7 @@ class CoverCommandService:
                 "[dry_run] would stop_cover %s (My position = %d%%)", entity_id, target
             )
         else:
-            await self._call_stop_cover(entity_id)
+            await self._stop_tracker.call_stop_cover(entity_id)
         now = dt.datetime.now(dt.UTC)
         s = self.state(entity_id)
         s.target = target
@@ -780,6 +694,15 @@ class CoverCommandService:
         caps = self.get_cover_capabilities(entity)
         return self._read_position_with_capabilities(entity, caps)
 
+    def get_current_position(self, entity: str) -> int | None:
+        """Public surface for reading the cover's current position.
+
+        Delegates to :meth:`_get_current_position` so existing tests that mock
+        the private name keep working until the cover_command split replaces
+        them in commit 4.
+        """
+        return self._get_current_position(entity)
+
     # ------------------------------------------------------------------ #
     # Gate checks (used internally by apply_position)
     # ------------------------------------------------------------------ #
@@ -792,69 +715,25 @@ class CoverCommandService:
         special_positions: list[int],
         sun_just_appeared: bool = False,
     ) -> bool:
-        """Return True if a command should be sent based on position delta.
-
-        Bypasses delta check for:
-        - sun_just_appeared (cover may need to re-confirm same position)
-        - moves to/from special positions (0, 100, default, sunset)
-
-        Same-position short-circuit is handled upstream in apply_position and
-        applies to all callers including force=True (issue #290).
-        """
-        position = self._get_current_position(entity)
-        if position is None:
-            return True  # Unknown position — send command to be safe
-
-        if sun_just_appeared:
-            self._logger.debug(
-                "Delta check bypassed (sun appeared): %s current=%s target=%s",
-                entity,
-                position,
-                target,
-            )
-            return True
-
-        if target in special_positions:
-            self._logger.debug(
-                "Delta check bypassed (special target %s): %s", target, entity
-            )
-            return True
-
-        if position in special_positions:
-            self._logger.debug(
-                "Delta check bypassed (special current %s): %s", position, entity
-            )
-            return True
-
-        delta = abs(position - target)
-        passes = delta >= min_change
-        self._logger.debug(
-            "Delta check: %s current=%s target=%s delta=%s min=%s pass=%s",
+        """Return True if a command should be sent based on position delta."""
+        return gates.check_position_delta(
             entity,
-            position,
             target,
-            delta,
             min_change,
-            passes,
+            special_positions,
+            position=self._get_current_position(entity),
+            logger=self._logger,
+            sun_just_appeared=sun_just_appeared,
         )
-        return passes
 
     def _check_time_delta(self, entity: str, time_threshold: int) -> bool:
         """Return True if enough time has passed since last command."""
-        now = dt.datetime.now(dt.UTC)
-        last_updated = get_last_updated(entity, self._hass)
-        if last_updated is None:
-            return True
-        elapsed = now - last_updated
-        passes = elapsed >= dt.timedelta(minutes=time_threshold)
-        self._logger.debug(
-            "Time delta check: %s elapsed=%s threshold=%smin pass=%s",
+        return gates.check_time_delta(
             entity,
-            elapsed,
             time_threshold,
-            passes,
+            last_updated=get_last_updated(entity, self._hass),
+            logger=self._logger,
         )
-        return passes
 
     # ------------------------------------------------------------------ #
     # Primary entry point
@@ -1048,7 +927,7 @@ class CoverCommandService:
             self._track_action(
                 entity_id, service, position, supports_position, context.inverse_state
             )
-            self.last_cover_action["dry_run"] = True
+            self._diag.last_cover_action["dry_run"] = True
             return self._skip(
                 entity_id,
                 "dry_run",
@@ -1151,7 +1030,7 @@ class CoverCommandService:
     # Reconciliation timer
     # ------------------------------------------------------------------ #
 
-    async def _reconcile(self, now: dt.datetime) -> None:
+    async def run_reconciliation_pass(self, now: dt.datetime) -> None:
         """Periodic reconciliation: re-send target if cover missed it.
 
         Runs every ``check_interval_minutes``. Calls the optional ``on_tick``
@@ -1368,18 +1247,15 @@ class CoverCommandService:
                 position_delta, elapsed_minutes) merged into the record.
 
         """
-        record: dict[str, Any] = {
-            "entity_id": entity,
-            "reason": reason,
-            "calculated_position": state,
-            "current_position": current_position,
-            "trigger": trigger or None,
-            "inverse_state_applied": inverse_state,
-            "timestamp": dt.datetime.now(dt.UTC).isoformat(),
-        }
-        if extras:
-            record.update(extras)
-        self.last_skipped_action = record
+        self._diag.record_skipped_action(
+            entity,
+            reason,
+            state,
+            trigger=trigger,
+            current_position=current_position,
+            inverse_state=inverse_state,
+            extras=extras,
+        )
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -1387,11 +1263,7 @@ class CoverCommandService:
 
     def _elapsed_minutes(self, entity_id: str) -> float | None:
         """Return minutes elapsed since last command to entity_id, or None."""
-        last_updated = get_last_updated(entity_id, self._hass)
-        if last_updated is None:
-            return None
-        elapsed = dt.datetime.now(dt.UTC) - last_updated
-        return round(elapsed.total_seconds() / 60, 2)
+        return gates.elapsed_minutes(get_last_updated(entity_id, self._hass))
 
     def _skip(
         self,
@@ -1419,7 +1291,7 @@ class CoverCommandService:
         self._logger.debug(
             "Skipped %s → %s%% (%s) [trigger=%s]", entity_id, position, reason, trigger
         )
-        self.record_skipped_action(
+        self._diag.record_skipped_action(
             entity_id,
             reason,
             position,
@@ -1428,20 +1300,15 @@ class CoverCommandService:
             inverse_state=inverse_state,
             extras=extras,
         )
-        if self._event_buffer is not None:
-            event: dict = {
-                "ts": dt.datetime.now(dt.UTC).isoformat(),
-                "event": "cover_command_skipped",
-                "entity_id": entity_id,
-                "reason": reason,
-                "calculated_position": position,
-                "current_position": current_position,
-                "trigger": trigger,
-                "inverse_state_applied": inverse_state,
-            }
-            if extras:
-                event.update(extras)
-            self._event_buffer.record(event)
+        self._diag.record_skip_event(
+            entity_id,
+            reason,
+            position,
+            trigger=trigger,
+            inverse_state=inverse_state,
+            current_position=current_position,
+            extras=extras,
+        )
         return "skipped", reason
 
     def _prepare_service_call(
@@ -1491,78 +1358,64 @@ class CoverCommandService:
         # through ``after_position_command`` and the DualAxisSequencer.
         axis = self._policy.select_default_axis(caps)
 
-        supports_position = caps.get(axis.capability_key, True)
+        plan = route_service_call(
+            entity,
+            state,
+            caps,
+            axis=axis,
+            use_my_position=use_my_position,
+            open_close_threshold=self._open_close_threshold,
+        )
 
         self._logger.debug(
             "Prepare service call: %s supports_position=%s caps=%s",
             entity,
-            supports_position,
+            plan.supports_position,
             caps,
         )
 
-        now = dt.datetime.now(dt.UTC)
-
-        s = self.state(entity)
-
-        def _record(target_value: int) -> None:
-            """Update per-entity bookkeeping on a fresh outbound command."""
-            s.target = target_value
-            s.waiting = True
-            s.sent_at = now
-            s.last_progress_at = None
-            if reset_retries:
-                s.retry_count = 0  # New target resets retry count
-                s.gave_up = False  # Allow warnings again for new target
-            # Track whether this target was set by a safety override so
-            # reconciliation knows whether to resend it when auto_control is off.
-            s.is_safety = is_safety
-            self._grace_mgr.start_command_grace_period(entity)
-
-        if supports_position:
-            service_data = {ATTR_ENTITY_ID: entity, axis.service_attr: state}
-            _record(state)
-            return axis.service, service_data, True
-
-        # "My" position path (non-position-capable covers only).
-        # stop_cover sent to a stationary Somfy RTS cover triggers the user's
-        # hardware-programmed My preset.  Position-capable covers skip this
-        # branch and fall through to set_cover_position above.
-        if use_my_position and caps_get(caps, CAP_HAS_STOP):
-            self._logger.debug(
-                "My-position routing: stop_cover → %s (My = %d%%)", entity, state
-            )
-            _record(state)
-            return "stop_cover", {ATTR_ENTITY_ID: entity}, False
-
-        # Open/close-only cover
-        has_open = caps_get(caps, CAP_HAS_OPEN)
-        has_close = caps_get(caps, CAP_HAS_CLOSE)
-        if not has_open or not has_close:
+        if plan.service is None:
             self._logger.warning(
                 "Cover %s does not support both open and close. Skipping.", entity
             )
             return None, None, False
 
-        if state >= self._open_close_threshold:
-            service = "open_cover"
-            _record(100)
-        else:
-            service = "close_cover"
-            _record(0)
+        if plan.service == "stop_cover":
+            self._logger.debug(
+                "My-position routing: stop_cover → %s (My = %d%%)", entity, state
+            )
+        elif plan.service in ("open_cover", "close_cover"):
+            self._logger.debug(
+                "Open/close control: state=%s threshold=%s service=%s",
+                state,
+                self._open_close_threshold,
+                plan.service,
+            )
 
-        service_data = {ATTR_ENTITY_ID: entity}
-        self._logger.debug(
-            "Open/close control: state=%s threshold=%s service=%s",
-            state,
-            self._open_close_threshold,
-            service,
-        )
-        return service, service_data, False
+        # State mutation: record the outbound command so reconciliation, manual
+        # override detection, and the grace-period manager all see the same
+        # target/timestamp.
+        now = dt.datetime.now(dt.UTC)
+        s = self.state(entity)
+        s.target = plan.routed_target
+        s.waiting = True
+        s.sent_at = now
+        s.last_progress_at = None
+        if reset_retries:
+            s.retry_count = 0  # New target resets retry count
+            s.gave_up = False  # Allow warnings again for new target
+        # Track whether this target was set by a safety override so
+        # reconciliation knows whether to resend it when auto_control is off.
+        s.is_safety = is_safety
+        self._grace_mgr.start_command_grace_period(entity)
+
+        return plan.service, plan.service_data, plan.supports_position
 
     async def _execute_command(self, entity_id: str, target: int) -> None:
         """Send command directly, bypassing gate checks (reconciliation use only).
 
-        Does NOT reset the retry count — the caller (_reconcile) owns that.
+        Does NOT reset the retry count — the caller
+        (``run_reconciliation_pass``) owns that.
 
         NB: callers are responsible for entity-loaded-ness. Reconciliation only
         runs for entities that already passed the cover_unavailable gate in
@@ -1615,70 +1468,27 @@ class CoverCommandService:
         gates_evaluated: dict | None = None,
     ) -> None:
         """Update last_cover_action diagnostic dict and record to event buffer."""
-        ts = dt.datetime.now(dt.UTC).isoformat()
-        self.last_cover_action = {
-            "entity_id": entity,
-            "service": service,
-            "position": state if supports_position else self._get(entity).target,
-            "calculated_position": state,
-            "threshold_used": (
+        self._diag.record_action(
+            entity,
+            service,
+            state,
+            supports_position,
+            threshold_used=(
                 self._open_close_threshold if not supports_position else None
             ),
-            "inverse_state_applied": inverse_state,
-            "timestamp": ts,
-            "covers_controlled": 1,
-            "target_source": target_source,
-            "force": force,
-            "is_safety": is_safety,
-            "trigger": trigger,
-            "auto_control_at_call": auto_control_at_call,
-            "manual_override_at_call": manual_override_at_call,
-            "in_time_window_at_call": in_time_window_at_call,
-            "enabled_at_call": enabled_at_call,
-            "pipeline_handler": pipeline_handler,
-            "pipeline_control_method": pipeline_control_method,
-            "pipeline_bypass_auto_control": pipeline_bypass_auto_control,
-            "decision_trace_at_call": decision_trace_at_call,
-            "gates_evaluated": gates_evaluated,
-        }
-        if self._event_buffer is not None:
-            self._event_buffer.record(
-                {
-                    "ts": ts,
-                    "event": "cover_command_sent",
-                    "entity_id": entity,
-                    "service": service,
-                    "position": self.last_cover_action["position"],
-                    "calculated_position": state,
-                    "inverse_state_applied": inverse_state,
-                    "supports_position": supports_position,
-                    "trigger": trigger,
-                    "target_source": target_source,
-                    "force": force,
-                    "is_safety": is_safety,
-                }
-            )
-
-
-def build_special_positions(options: dict) -> list[int]:
-    """Build list of special positions from options.
-
-    Special positions (0, 100, default_height, sunset_pos) bypass the
-    *delta-threshold* check so covers are always allowed to transition
-    TO or FROM these key values even when the position change is smaller
-    than ``min_change``.  They do NOT bypass the same-position short-circuit
-    added in ``_check_position_delta`` — if the cover is already at the
-    target, no command is sent regardless of whether the target is special.
-
-    """
-    special_positions = [0, 100]
-    default_height = options.get(CONF_DEFAULT_HEIGHT)
-    sunset_pos = options.get(CONF_SUNSET_POS)
-    my_position_value = options.get(CONF_MY_POSITION_VALUE)
-    if default_height is not None:
-        special_positions.append(default_height)
-    if sunset_pos is not None:
-        special_positions.append(sunset_pos)
-    if my_position_value is not None:
-        special_positions.append(my_position_value)
-    return special_positions
+            recorded_target=self._get(entity).target,
+            inverse_state=inverse_state,
+            target_source=target_source,
+            force=force,
+            is_safety=is_safety,
+            trigger=trigger,
+            auto_control_at_call=auto_control_at_call,
+            manual_override_at_call=manual_override_at_call,
+            in_time_window_at_call=in_time_window_at_call,
+            enabled_at_call=enabled_at_call,
+            pipeline_handler=pipeline_handler,
+            pipeline_control_method=pipeline_control_method,
+            pipeline_bypass_auto_control=pipeline_bypass_auto_control,
+            decision_trace_at_call=decision_trace_at_call,
+            gates_evaluated=gates_evaluated,
+        )
