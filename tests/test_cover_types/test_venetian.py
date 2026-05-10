@@ -234,3 +234,141 @@ async def test_after_position_command_respects_custom_threshold() -> None:
 
     policy._sequencer.stamp_position_command.assert_not_called()
     policy._sequencer.run_sequence.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_after_position_command_skips_when_service_is_not_set_position() -> None:
+    """A tilt-only service call must not trigger the dual-axis sequence."""
+    policy = _make_policy()
+
+    await policy.after_position_command(
+        cmd_svc=MagicMock(),
+        entity_id="cover.venetian_x",
+        service="set_cover_tilt_position",
+        position=50,
+        context=_ctx(policy),
+        reason="solar",
+    )
+
+    policy._sequencer.stamp_position_command.assert_not_called()
+    policy._sequencer.run_sequence.assert_not_awaited()
+
+
+def test_disallowed_geometry_fields_rejects_only_awning_only() -> None:
+    """Venetian accepts vertical and tilt geometry; awning-only fields are rejected."""
+    policy = VenetianPolicy()
+    rules = policy.disallowed_geometry_fields(
+        vertical_only={"window_height"},
+        awning_only={"awning_drop"},
+        tilt_only={"tilt_depth"},
+    )
+    assert rules == [({"awning_drop"}, "awning")]
+
+
+def test_capability_warnings_flags_missing_set_position() -> None:
+    """An entity missing set_position produces a warning string."""
+    policy = VenetianPolicy()
+    warnings = policy.cover_capability_warnings(
+        {
+            "cover.tilt_only": {
+                "has_set_position": False,
+                "has_set_tilt_position": True,
+            }
+        }
+    )
+    assert len(warnings) == 1
+    assert "cover.tilt_only" in warnings[0]
+    assert "set_position" in warnings[0]
+
+
+def test_capability_warnings_flags_missing_set_tilt_position() -> None:
+    """An entity missing set_tilt_position produces its own warning string."""
+    policy = VenetianPolicy()
+    warnings = policy.cover_capability_warnings(
+        {
+            "cover.position_only": {
+                "has_set_position": True,
+                "has_set_tilt_position": False,
+            }
+        }
+    )
+    assert len(warnings) == 1
+    assert "cover.position_only" in warnings[0]
+    assert "set_tilt_position" in warnings[0]
+
+
+def test_capability_warnings_empty_when_all_capable() -> None:
+    """Fully capable entities produce no warnings."""
+    policy = VenetianPolicy()
+    warnings = policy.cover_capability_warnings(
+        {
+            "cover.full": {
+                "has_set_position": True,
+                "has_set_tilt_position": True,
+            }
+        }
+    )
+    assert warnings == []
+
+
+def test_position_context_overrides_returns_tilt_when_present() -> None:
+    """A pipeline result with tilt threads it into PositionContext.tilt."""
+    policy = VenetianPolicy()
+    result = MagicMock()
+    result.tilt = 60
+    assert policy.position_context_overrides(result) == {"tilt": 60}
+
+
+def test_position_context_overrides_returns_empty_when_no_tilt() -> None:
+    """No tilt on the result → no override (avoids stomping on default)."""
+    policy = VenetianPolicy()
+    result = MagicMock()
+    result.tilt = None
+    assert policy.position_context_overrides(result) == {}
+    assert policy.position_context_overrides(None) == {}
+
+
+def test_sequencer_property_exposes_attached_sequencer() -> None:
+    """The ``sequencer`` property returns whatever attach() wired in."""
+    policy = VenetianPolicy()
+    assert policy.sequencer is None
+    sentinel = object()
+    policy._sequencer = sentinel  # type: ignore[assignment]
+    assert policy.sequencer is sentinel
+
+
+def test_is_in_tilt_suppression_false_without_sequencer() -> None:
+    """No sequencer attached → suppression check short-circuits to False."""
+    policy = VenetianPolicy()
+    assert policy.is_in_tilt_suppression("cover.any") is False
+
+
+def test_is_in_tilt_suppression_delegates_to_sequencer() -> None:
+    """With a sequencer, is_in_tilt_suppression delegates to it."""
+    policy = _make_policy()
+    policy._sequencer.is_in_suppression = MagicMock(return_value=True)
+    assert policy.is_in_tilt_suppression("cover.x") is True
+    policy._sequencer.is_in_suppression.assert_called_once_with("cover.x")
+
+
+def test_secondary_axis_check_returns_none_without_tilt() -> None:
+    """Without a resolved tilt, the manual-override secondary check is skipped."""
+    policy = VenetianPolicy()
+    result = MagicMock()
+    result.tilt = None
+    assert policy.secondary_axis_check(result, cmd_svc=MagicMock()) is None
+    assert policy.secondary_axis_check(None, cmd_svc=MagicMock()) is None
+
+
+def test_secondary_axis_check_carries_expected_tilt() -> None:
+    """With a resolved tilt, the check exposes the expected slat angle and label."""
+    policy = VenetianPolicy()
+    result = MagicMock()
+    result.tilt = 75
+    check = policy.secondary_axis_check(result, cmd_svc=MagicMock())
+    assert check is not None
+    assert check.expected == 75
+    assert check.attribute == "current_tilt_position"
+    assert check.label == "tilt"
+    assert check.suppression.__func__ is VenetianPolicy.is_in_tilt_suppression
+    assert check.suppression.__self__ is policy
