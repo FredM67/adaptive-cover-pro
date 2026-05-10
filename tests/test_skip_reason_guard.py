@@ -70,7 +70,18 @@ _COVER_COMMAND_SRC = (
 class _MinimalSvc:
     """Minimal stand-in that satisfies record_skipped_action's only self dependency."""
 
-    last_skipped_action: dict = {}
+    def __init__(self) -> None:
+        # record_skipped_action delegates to self._diag.record_skipped_action,
+        # so the stub needs a real DiagnosticsRecorder to write into.
+        from custom_components.adaptive_cover_pro.managers.cover_command.diagnostics import (
+            DiagnosticsRecorder,
+        )
+
+        self._diag = DiagnosticsRecorder()
+
+    @property
+    def last_skipped_action(self) -> dict:
+        return self._diag.last_skipped_action
 
 
 class TestSkipCodeExhaustiveness:

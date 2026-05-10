@@ -28,6 +28,7 @@ from ...helpers import (
     get_last_updated,
 )
 from . import gates
+from .diagnostics import DiagnosticsRecorder
 from .routing import ServiceCallPlan, build_special_positions, route_service_call
 from .state_store import PerEntityState, PositionContext
 from .stop import StopTracker
@@ -175,29 +176,11 @@ class CoverCommandService:
         # Synced by the coordinator each update cycle from the Debug & Diagnostics option.
         self._dry_run: bool = False
 
-        # Diagnostic tracking
-        self.last_cover_action: dict[str, Any] = {
-            "entity_id": None,
-            "service": None,
-            "position": None,
-            "calculated_position": None,
-            "threshold_used": None,
-            "inverse_state_applied": False,
-            "timestamp": None,
-            "covers_controlled": 0,
-        }
-        self.last_skipped_action: dict[str, Any] = {
-            "entity_id": None,
-            "reason": None,
-            "calculated_position": None,
-            "current_position": None,
-            "trigger": None,
-            "inverse_state_applied": False,
-            "timestamp": None,
-        }
-
-        # Shared diagnostic ring buffer (coordinator-owned, injected here)
+        # Diagnostic recorder owns last_cover_action / last_skipped_action
+        # snapshots and pushes cover_command_sent / cover_command_skipped
+        # events into the shared event buffer.
         self._event_buffer: EventBuffer | None = event_buffer
+        self._diag = DiagnosticsRecorder(event_buffer=event_buffer)
 
         # Reconciliation timer handle (async_track_time_interval unsubscribe fn)
         self._reconcile_unsub = None
@@ -411,6 +394,16 @@ class CoverCommandService:
     def transit_timeout_seconds(self) -> int:
         """Configured transit-timeout used by manual-override transit backstop."""
         return self._wait_for_target_timeout_seconds
+
+    @property
+    def last_cover_action(self) -> dict[str, Any]:
+        """Snapshot of the most recent cover command sent (for diagnostics)."""
+        return self._diag.last_cover_action
+
+    @property
+    def last_skipped_action(self) -> dict[str, Any]:
+        """Snapshot of the most recent skipped cover action (for diagnostics)."""
+        return self._diag.last_skipped_action
 
     def get_entity_state_snapshot(self, entity_id: str) -> dict:
         """Return a diagnostic snapshot of per-entity positioning state."""
@@ -934,7 +927,7 @@ class CoverCommandService:
             self._track_action(
                 entity_id, service, position, supports_position, context.inverse_state
             )
-            self.last_cover_action["dry_run"] = True
+            self._diag.last_cover_action["dry_run"] = True
             return self._skip(
                 entity_id,
                 "dry_run",
@@ -1254,18 +1247,15 @@ class CoverCommandService:
                 position_delta, elapsed_minutes) merged into the record.
 
         """
-        record: dict[str, Any] = {
-            "entity_id": entity,
-            "reason": reason,
-            "calculated_position": state,
-            "current_position": current_position,
-            "trigger": trigger or None,
-            "inverse_state_applied": inverse_state,
-            "timestamp": dt.datetime.now(dt.UTC).isoformat(),
-        }
-        if extras:
-            record.update(extras)
-        self.last_skipped_action = record
+        self._diag.record_skipped_action(
+            entity,
+            reason,
+            state,
+            trigger=trigger,
+            current_position=current_position,
+            inverse_state=inverse_state,
+            extras=extras,
+        )
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -1301,7 +1291,7 @@ class CoverCommandService:
         self._logger.debug(
             "Skipped %s → %s%% (%s) [trigger=%s]", entity_id, position, reason, trigger
         )
-        self.record_skipped_action(
+        self._diag.record_skipped_action(
             entity_id,
             reason,
             position,
@@ -1310,20 +1300,15 @@ class CoverCommandService:
             inverse_state=inverse_state,
             extras=extras,
         )
-        if self._event_buffer is not None:
-            event: dict = {
-                "ts": dt.datetime.now(dt.UTC).isoformat(),
-                "event": "cover_command_skipped",
-                "entity_id": entity_id,
-                "reason": reason,
-                "calculated_position": position,
-                "current_position": current_position,
-                "trigger": trigger,
-                "inverse_state_applied": inverse_state,
-            }
-            if extras:
-                event.update(extras)
-            self._event_buffer.record(event)
+        self._diag.record_skip_event(
+            entity_id,
+            reason,
+            position,
+            trigger=trigger,
+            inverse_state=inverse_state,
+            current_position=current_position,
+            extras=extras,
+        )
         return "skipped", reason
 
     def _prepare_service_call(
@@ -1483,46 +1468,27 @@ class CoverCommandService:
         gates_evaluated: dict | None = None,
     ) -> None:
         """Update last_cover_action diagnostic dict and record to event buffer."""
-        ts = dt.datetime.now(dt.UTC).isoformat()
-        self.last_cover_action = {
-            "entity_id": entity,
-            "service": service,
-            "position": state if supports_position else self._get(entity).target,
-            "calculated_position": state,
-            "threshold_used": (
+        self._diag.record_action(
+            entity,
+            service,
+            state,
+            supports_position,
+            threshold_used=(
                 self._open_close_threshold if not supports_position else None
             ),
-            "inverse_state_applied": inverse_state,
-            "timestamp": ts,
-            "covers_controlled": 1,
-            "target_source": target_source,
-            "force": force,
-            "is_safety": is_safety,
-            "trigger": trigger,
-            "auto_control_at_call": auto_control_at_call,
-            "manual_override_at_call": manual_override_at_call,
-            "in_time_window_at_call": in_time_window_at_call,
-            "enabled_at_call": enabled_at_call,
-            "pipeline_handler": pipeline_handler,
-            "pipeline_control_method": pipeline_control_method,
-            "pipeline_bypass_auto_control": pipeline_bypass_auto_control,
-            "decision_trace_at_call": decision_trace_at_call,
-            "gates_evaluated": gates_evaluated,
-        }
-        if self._event_buffer is not None:
-            self._event_buffer.record(
-                {
-                    "ts": ts,
-                    "event": "cover_command_sent",
-                    "entity_id": entity,
-                    "service": service,
-                    "position": self.last_cover_action["position"],
-                    "calculated_position": state,
-                    "inverse_state_applied": inverse_state,
-                    "supports_position": supports_position,
-                    "trigger": trigger,
-                    "target_source": target_source,
-                    "force": force,
-                    "is_safety": is_safety,
-                }
-            )
+            recorded_target=self._get(entity).target,
+            inverse_state=inverse_state,
+            target_source=target_source,
+            force=force,
+            is_safety=is_safety,
+            trigger=trigger,
+            auto_control_at_call=auto_control_at_call,
+            manual_override_at_call=manual_override_at_call,
+            in_time_window_at_call=in_time_window_at_call,
+            enabled_at_call=enabled_at_call,
+            pipeline_handler=pipeline_handler,
+            pipeline_control_method=pipeline_control_method,
+            pipeline_bypass_auto_control=pipeline_bypass_auto_control,
+            decision_trace_at_call=decision_trace_at_call,
+            gates_evaluated=gates_evaluated,
+        )
