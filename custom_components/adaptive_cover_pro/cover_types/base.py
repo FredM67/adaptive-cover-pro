@@ -286,7 +286,7 @@ class CoverTypePolicy(ABC):
             if state_obj is not None:
                 return state_obj.attributes.get(axis.state_attr)
             return state_attr(hass, entity, axis.state_attr)
-        return get_open_close_state(hass, entity)
+        return get_open_close_state(hass, entity, state_obj=state_obj)
 
     # ---- Config-flow / options-service helpers ------------------------- #
 

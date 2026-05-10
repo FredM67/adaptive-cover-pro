@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
@@ -29,6 +29,7 @@ from ...helpers import (
 )
 from . import gates
 from .diagnostics import DiagnosticsRecorder
+from .position_context import PositionContextTracker
 from .routing import ServiceCallPlan, build_special_positions, route_service_call
 from .state_store import PerEntityState, PositionContext
 from .stop import StopTracker
@@ -146,6 +147,14 @@ class CoverCommandService:
         # coordinator uses ``was_acp_stop_context`` to distinguish our own stop
         # commands from user-initiated stops.
         self._stop_tracker = StopTracker(hass, logger, dry_run_fn=lambda: self._dry_run)
+
+        # Position-context tracker mirrors the stop tracker for the
+        # set_cover_position / open_cover / close_cover service calls. The
+        # coordinator's state-change handler uses ``was_acp_position_context``
+        # to fast-path user-initiated state changes into manual override
+        # detection (assumed-state and OPEN/CLOSE-only covers can't be detected
+        # via position math alone — see #manual-override-assumed-state fix).
+        self._position_context_tracker = PositionContextTracker()
 
         # Entities currently under manual override — reconciliation skips these
         # so it doesn't fight the user by resending the old integration target.
@@ -531,6 +540,21 @@ class CoverCommandService:
         without inspecting the underlying deque.
         """
         return self._stop_tracker.acp_stop_context_count(unique=unique)
+
+    def was_acp_position_context(self, context_id: str) -> bool:
+        """Whether ``context_id`` belongs to an ACP-originated position-command call.
+
+        Covers ``cover.set_cover_position`` / ``cover.open_cover`` /
+        ``cover.close_cover`` issued by ``apply_position`` or reconciliation.
+        The coordinator's state-change handler uses this predicate to skip
+        ACP's own state changes when fast-pathing user-initiated events into
+        manual-override detection.
+        """
+        return self._position_context_tracker.was_acp_position_context(context_id)
+
+    def acp_position_context_count(self, *, unique: bool = False) -> int:
+        """Return the number of recorded ACP-originated position-command context ids."""
+        return self._position_context_tracker.acp_position_context_count(unique=unique)
 
     # ------------------------------------------------------------------ #
     # Stop helpers — bypass _enabled gate (shutdown / emergency paths)
@@ -945,8 +969,12 @@ class CoverCommandService:
             position,
         )
 
+        ctx = Context()
+        self._position_context_tracker.record(ctx.id)
         try:
-            await self._hass.services.async_call(COVER_DOMAIN, service, service_data)
+            await self._hass.services.async_call(
+                COVER_DOMAIN, service, service_data, context=ctx
+            )
         except HomeAssistantError as err:
             self._logger.warning(
                 "Service call %s.%s failed for %s: %s",
@@ -1434,8 +1462,12 @@ class CoverCommandService:
                 target,
             )
             return
+        ctx = Context()
+        self._position_context_tracker.record(ctx.id)
         try:
-            await self._hass.services.async_call(COVER_DOMAIN, service, service_data)
+            await self._hass.services.async_call(
+                COVER_DOMAIN, service, service_data, context=ctx
+            )
         except HomeAssistantError as err:
             self._logger.warning(
                 "Reconciliation service call %s.%s failed for %s: %s",

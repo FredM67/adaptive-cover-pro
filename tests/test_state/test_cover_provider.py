@@ -227,7 +227,7 @@ class TestReadPositions:
                 ["cover.simple"], get_policy("cover_blind")
             )
         assert result == {"cover.simple": 100}
-        mock_oc.assert_called_once_with(provider._hass, "cover.simple")
+        mock_oc.assert_called_once_with(provider._hass, "cover.simple", state_obj=None)
 
     @pytest.mark.unit
     def test_tilt_cover_without_tilt_uses_open_close(self, provider):
@@ -248,7 +248,9 @@ class TestReadPositions:
                 ["cover.basic_tilt"], get_policy("cover_tilt")
             )
         assert result == {"cover.basic_tilt": 0}
-        mock_oc.assert_called_once_with(provider._hass, "cover.basic_tilt")
+        mock_oc.assert_called_once_with(
+            provider._hass, "cover.basic_tilt", state_obj=None
+        )
 
     @pytest.mark.unit
     def test_empty_entity_list_returns_empty_dict(self, provider):

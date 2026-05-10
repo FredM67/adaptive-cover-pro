@@ -340,6 +340,52 @@ class AdaptiveCoverManager:
             self.mark_manual_control(entity_id)
             self.set_last_updated(entity_id, new_state, allow_reset)
 
+    def handle_user_initiated_state_change(
+        self,
+        entity_id: str,
+        new_state,
+        allow_reset: bool,
+        *,
+        context_user_id: str | None,
+        context_id: str | None,
+    ) -> bool:
+        """Mark manual override for a state change confirmed user-initiated by HA context.
+
+        Called from the coordinator when ``new_state.context`` carries a non-None
+        ``user_id`` and ``context.id`` is **not** in the ACP position-context
+        tracker — i.e. a real user took action via the HA dashboard, voice
+        assistant, or another front-end. This path bypasses the position-math
+        comparison in :meth:`handle_state_change` because the math is unreliable
+        for assumed-state and OPEN/CLOSE-only covers (the live ``current_position``
+        either doesn't exist or has already been overwritten by ACP's
+        reconciliation by the time the queued event is drained).
+
+        Returns True when the override was set, False when the entity is not
+        tracked.
+        """
+        if entity_id not in self.covers:
+            return False
+        self.logger.debug(
+            "Manual override via user-initiated state change for %s "
+            "(context user_id=%s, id=%s)",
+            entity_id,
+            context_user_id,
+            context_id,
+        )
+        self._record_event(
+            entity_id,
+            "manual_override_set",
+            our_state=None,
+            new_position=None,
+            reason=(
+                f"user-initiated state change "
+                f"(context user_id={context_user_id}, id={context_id})"
+            ),
+        )
+        self.mark_manual_control(entity_id)
+        self.set_last_updated(entity_id, new_state, allow_reset)
+        return True
+
     def handle_stop_service_call(
         self,
         entity_id: str,
