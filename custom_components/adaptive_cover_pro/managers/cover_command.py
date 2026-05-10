@@ -27,6 +27,7 @@ from ..cover_types.base import (
     CAP_HAS_CLOSE,
     CAP_HAS_OPEN,
     CAP_HAS_STOP,
+    CoverAxis,
     caps_get,
 )
 from ..diagnostics.event_buffer import EventBuffer
@@ -97,6 +98,116 @@ class PositionContext:
     # dual-axis covers can run their settle+tilt sequence without leaking the
     # logic into this shared service.
     policy: Any = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ServiceCallPlan:
+    """Pure result of routing a cover state to an HA service call.
+
+    Produced by :func:`route_service_call`. ``CoverCommandService`` consumes
+    it to issue the actual service call and to update per-entity bookkeeping
+    via ``PerEntityState``.
+
+    Attributes:
+        service: HA service name (``set_cover_position`` /
+            ``set_cover_tilt_position`` / ``stop_cover`` / ``open_cover`` /
+            ``close_cover``), or ``None`` when the cover lacks any capable
+            service for this state.
+        service_data: Kwargs to pass to ``hass.services.async_call``, or
+            ``None`` when ``service`` is ``None``.
+        supports_position: Whether the routed service accepts an explicit
+            position (set_position / set_tilt_position).
+        routed_target: Value the orchestrator must record as
+            ``PerEntityState.target`` — equal to ``state`` for set_position
+            and the My-stop branch, ``100`` for ``open_cover``, ``0`` for
+            ``close_cover``.
+
+    """
+
+    service: str | None
+    service_data: dict | None
+    supports_position: bool
+    routed_target: int
+
+
+def route_service_call(
+    entity: str,
+    state: int,
+    caps: dict[str, bool],
+    *,
+    axis: CoverAxis,
+    use_my_position: bool,
+    open_close_threshold: int,
+) -> ServiceCallPlan:
+    """Pick the HA service to issue for a cover/state, ignoring side effects.
+
+    Pure helper extracted from ``CoverCommandService._prepare_service_call``.
+    Routing precedence: position-capable axis → My-position stop → open/close
+    threshold → no capable service.
+
+    Inverse-state ordering note (``CODING_GUIDELINES.md`` line 221):
+    ``state`` here is the value the caller wants the cover to land at, after
+    any inverse-state transformation upstream. This helper does NOT touch
+    inverse state.
+
+    Args:
+        entity: Cover entity ID (carried into ``service_data``).
+        state: Already-inverted target position (0–100).
+        caps: Pre-fetched capabilities dict for the entity.
+        axis: The policy-selected default axis for this cover. The caller
+            (``CoverCommandService``) computes this via
+            ``policy.select_default_axis(caps)`` so the routing function
+            stays free of cover-type imports.
+        use_my_position: Send ``stop_cover`` to trigger the hardware "My"
+            preset when the cover lacks ``set_cover_position`` but has
+            ``stop_cover``.
+        open_close_threshold: Position cutoff for the open/close fallback.
+
+    Returns:
+        :class:`ServiceCallPlan` describing what the orchestrator must do.
+
+    """
+    supports_position = caps.get(axis.capability_key, True)
+
+    if supports_position:
+        return ServiceCallPlan(
+            service=axis.service,
+            service_data={ATTR_ENTITY_ID: entity, axis.service_attr: state},
+            supports_position=True,
+            routed_target=state,
+        )
+
+    if use_my_position and caps_get(caps, CAP_HAS_STOP):
+        return ServiceCallPlan(
+            service="stop_cover",
+            service_data={ATTR_ENTITY_ID: entity},
+            supports_position=False,
+            routed_target=state,
+        )
+
+    has_open = caps_get(caps, CAP_HAS_OPEN)
+    has_close = caps_get(caps, CAP_HAS_CLOSE)
+    if not has_open or not has_close:
+        return ServiceCallPlan(
+            service=None,
+            service_data=None,
+            supports_position=False,
+            routed_target=state,
+        )
+
+    if state >= open_close_threshold:
+        return ServiceCallPlan(
+            service="open_cover",
+            service_data={ATTR_ENTITY_ID: entity},
+            supports_position=False,
+            routed_target=100,
+        )
+    return ServiceCallPlan(
+        service="close_cover",
+        service_data={ATTR_ENTITY_ID: entity},
+        supports_position=False,
+        routed_target=0,
+    )
 
 
 class CoverCommandService:
@@ -1536,73 +1647,58 @@ class CoverCommandService:
         # through ``after_position_command`` and the DualAxisSequencer.
         axis = self._policy.select_default_axis(caps)
 
-        supports_position = caps.get(axis.capability_key, True)
+        plan = route_service_call(
+            entity,
+            state,
+            caps,
+            axis=axis,
+            use_my_position=use_my_position,
+            open_close_threshold=self._open_close_threshold,
+        )
 
         self._logger.debug(
             "Prepare service call: %s supports_position=%s caps=%s",
             entity,
-            supports_position,
+            plan.supports_position,
             caps,
         )
 
-        now = dt.datetime.now(dt.UTC)
-
-        s = self.state(entity)
-
-        def _record(target_value: int) -> None:
-            """Update per-entity bookkeeping on a fresh outbound command."""
-            s.target = target_value
-            s.waiting = True
-            s.sent_at = now
-            s.last_progress_at = None
-            if reset_retries:
-                s.retry_count = 0  # New target resets retry count
-                s.gave_up = False  # Allow warnings again for new target
-            # Track whether this target was set by a safety override so
-            # reconciliation knows whether to resend it when auto_control is off.
-            s.is_safety = is_safety
-            self._grace_mgr.start_command_grace_period(entity)
-
-        if supports_position:
-            service_data = {ATTR_ENTITY_ID: entity, axis.service_attr: state}
-            _record(state)
-            return axis.service, service_data, True
-
-        # "My" position path (non-position-capable covers only).
-        # stop_cover sent to a stationary Somfy RTS cover triggers the user's
-        # hardware-programmed My preset.  Position-capable covers skip this
-        # branch and fall through to set_cover_position above.
-        if use_my_position and caps_get(caps, CAP_HAS_STOP):
-            self._logger.debug(
-                "My-position routing: stop_cover → %s (My = %d%%)", entity, state
-            )
-            _record(state)
-            return "stop_cover", {ATTR_ENTITY_ID: entity}, False
-
-        # Open/close-only cover
-        has_open = caps_get(caps, CAP_HAS_OPEN)
-        has_close = caps_get(caps, CAP_HAS_CLOSE)
-        if not has_open or not has_close:
+        if plan.service is None:
             self._logger.warning(
                 "Cover %s does not support both open and close. Skipping.", entity
             )
             return None, None, False
 
-        if state >= self._open_close_threshold:
-            service = "open_cover"
-            _record(100)
-        else:
-            service = "close_cover"
-            _record(0)
+        if plan.service == "stop_cover":
+            self._logger.debug(
+                "My-position routing: stop_cover → %s (My = %d%%)", entity, state
+            )
+        elif plan.service in ("open_cover", "close_cover"):
+            self._logger.debug(
+                "Open/close control: state=%s threshold=%s service=%s",
+                state,
+                self._open_close_threshold,
+                plan.service,
+            )
 
-        service_data = {ATTR_ENTITY_ID: entity}
-        self._logger.debug(
-            "Open/close control: state=%s threshold=%s service=%s",
-            state,
-            self._open_close_threshold,
-            service,
-        )
-        return service, service_data, False
+        # State mutation: record the outbound command so reconciliation, manual
+        # override detection, and the grace-period manager all see the same
+        # target/timestamp.
+        now = dt.datetime.now(dt.UTC)
+        s = self.state(entity)
+        s.target = plan.routed_target
+        s.waiting = True
+        s.sent_at = now
+        s.last_progress_at = None
+        if reset_retries:
+            s.retry_count = 0  # New target resets retry count
+            s.gave_up = False  # Allow warnings again for new target
+        # Track whether this target was set by a safety override so
+        # reconciliation knows whether to resend it when auto_control is off.
+        s.is_safety = is_safety
+        self._grace_mgr.start_command_grace_period(entity)
+
+        return plan.service, plan.service_data, plan.supports_position
 
     async def _execute_command(self, entity_id: str, target: int) -> None:
         """Send command directly, bypassing gate checks (reconciliation use only).
