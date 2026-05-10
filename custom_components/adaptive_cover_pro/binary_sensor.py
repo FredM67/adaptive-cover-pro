@@ -176,7 +176,7 @@ class AdaptiveCoverPositionMismatchSensor(AdaptiveCoverBaseEntity, BinarySensorE
             if target is None:
                 continue
 
-            actual = self.coordinator._get_current_position(entity_id)
+            actual = self.coordinator.get_current_position(entity_id)
             if actual is None:
                 continue
 

@@ -90,6 +90,7 @@ def _make_transit_coordinator(
     cmd_svc.has_target = MagicMock(return_value=True)
     cmd_svc._position_tolerance = 5
     cmd_svc._wait_for_target_timeout_seconds = transit_timeout
+    cmd_svc.transit_timeout_seconds = transit_timeout
 
     now = dt.datetime.now(dt.UTC)
     _sent_at_map = {entity_id: now - dt.timedelta(seconds=sent_seconds_ago)}
@@ -106,6 +107,7 @@ def _make_transit_coordinator(
         _progress[eid] = now_arg
 
     cmd_svc._transit_elapsed_without_progress = MagicMock(side_effect=_elapsed)
+    cmd_svc.transit_elapsed_without_progress = cmd_svc._transit_elapsed_without_progress
     cmd_svc.record_progress = MagicMock(side_effect=_record_prog)
     cmd_svc.check_target_reached = MagicMock(return_value=False)
     cmd_svc.get_cover_capabilities = MagicMock(return_value={"has_set_position": True})

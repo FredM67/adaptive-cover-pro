@@ -463,6 +463,11 @@ class CoverCommandService:
         """
         self._dry_run = value
 
+    @property
+    def transit_timeout_seconds(self) -> int:
+        """Configured transit-timeout used by manual-override transit backstop."""
+        return self._wait_for_target_timeout_seconds
+
     def get_entity_state_snapshot(self, entity_id: str) -> dict:
         """Return a diagnostic snapshot of per-entity positioning state."""
         s = self._get(entity_id)
@@ -560,6 +565,26 @@ class CoverCommandService:
         if reference is None:
             return None
         return (now - reference).total_seconds()
+
+    def transit_elapsed_without_progress(
+        self, entity_id: str, now: dt.datetime
+    ) -> float | None:
+        """Public surface for the transit backstop's elapsed-since-progress reading.
+
+        Delegates to :meth:`_transit_elapsed_without_progress` so existing tests
+        that mock the private name keep working until the cover_command split
+        replaces them in commit 4.
+        """
+        return self._transit_elapsed_without_progress(entity_id, now)
+
+    def was_acp_stop_context(self, context_id: str) -> bool:
+        """Whether ``context_id`` belongs to an ACP-originated cover.stop_cover call.
+
+        The coordinator's EVENT_CALL_SERVICE listener uses this predicate to
+        skip stop_cover events that ACP itself triggered (so they don't get
+        misread as user-initiated manual overrides).
+        """
+        return context_id in self._acp_stop_contexts
 
     # ------------------------------------------------------------------ #
     # Stop helpers — bypass _enabled gate (shutdown / emergency paths)
@@ -779,6 +804,15 @@ class CoverCommandService:
         """Get current position of cover (position-capable or open/close-only)."""
         caps = self.get_cover_capabilities(entity)
         return self._read_position_with_capabilities(entity, caps)
+
+    def get_current_position(self, entity: str) -> int | None:
+        """Public surface for reading the cover's current position.
+
+        Delegates to :meth:`_get_current_position` so existing tests that mock
+        the private name keep working until the cover_command split replaces
+        them in commit 4.
+        """
+        return self._get_current_position(entity)
 
     # ------------------------------------------------------------------ #
     # Gate checks (used internally by apply_position)
