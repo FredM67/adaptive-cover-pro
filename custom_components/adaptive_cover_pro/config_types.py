@@ -128,6 +128,7 @@ class TiltConfig:
     depth: float
     mode: TiltMode | str
     max_tilt: int = 100
+    min_tilt: int = 0
 
 
 # ---------------------------------------------------------------------------

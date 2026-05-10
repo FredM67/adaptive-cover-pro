@@ -116,6 +116,7 @@ class TestSummaryGeometryLines:
             "slat depth 3cm, spacing 2cm, mode: mode2",
             "skip tilt when position > 95%",
             "mode: position and tilt",
+            "min tilt 0%",
             "max tilt 100%",
         ]
 
@@ -128,6 +129,7 @@ class TestSummaryGeometryLines:
         assert lines == [
             "skip tilt when position > 95%",
             "mode: position and tilt",
+            "min tilt 0%",
             "max tilt 100%",
         ]
 

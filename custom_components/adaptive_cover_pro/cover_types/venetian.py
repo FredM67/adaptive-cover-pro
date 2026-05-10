@@ -19,14 +19,17 @@ from homeassistant.helpers import selector
 from ..const import (
     CONF_INVERSE_TILT,
     CONF_MAX_TILT,
+    CONF_MIN_TILT,
     CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
     DEFAULT_MAX_TILT,
+    DEFAULT_MIN_TILT,
     DEFAULT_VENETIAN_MODE,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
     MAX_VENETIAN_TILT_SKIP_ABOVE,
     MIN_VENETIAN_TILT_SKIP_ABOVE,
     POSITION_CLOSED,
+    POSITION_OPEN,
     VENETIAN_MODE_POSITION_AND_TILT,
     VENETIAN_MODE_TILT_ONLY,
     VENETIAN_MODES,
@@ -70,6 +73,9 @@ GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(
         ),
         vol.Optional(CONF_INVERSE_TILT, default=False): bool,
         vol.Optional(CONF_MAX_TILT, default=DEFAULT_MAX_TILT): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=100)
+        ),
+        vol.Optional(CONF_MIN_TILT, default=DEFAULT_MIN_TILT): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=100)
         ),
     }
@@ -142,12 +148,15 @@ class VenetianPolicy(CoverTypePolicy):
         inverse_tilt_line = ["Inverse tilt"] if config.get(CONF_INVERSE_TILT) else []
         max_tilt = config.get(CONF_MAX_TILT, DEFAULT_MAX_TILT)
         max_tilt_line = [f"max tilt {max_tilt}%"]
+        min_tilt = config.get(CONF_MIN_TILT, DEFAULT_MIN_TILT)
+        min_tilt_line = [f"min tilt {min_tilt}%"]
         return (
             window_dimensions_lines(config)
             + slat_line
             + retract_line
             + mode_line
             + inverse_tilt_line
+            + min_tilt_line
             + max_tilt_line
         )
 
@@ -354,7 +363,15 @@ class VenetianPolicy(CoverTypePolicy):
         context,
         reason: str,
     ) -> None:
-        """Run the dual-axis sequence after a successful ``set_cover_position``."""
+        """Run the dual-axis sequence after a successful ``set_cover_position``.
+
+        When the carriage is commanded above ``tilt_skip_above`` we still
+        sequence a tilt — but to ``POSITION_OPEN`` (neutral). KNX and Shelly
+        venetian actuators retain their last commanded tilt internally and
+        re-apply it ~1-2 s after the carriage settles. Without overwriting
+        the cache here, the prior solar-cycle tilt reasserts and closes the
+        slats on a fully-retracted blind (issue #33).
+        """
         # Only chain a tilt after the position axis fired — direct tilt
         # commands and open/close-only paths skip the sequence entirely.
         if service != SERVICE_SET_COVER_POSITION:
@@ -362,18 +379,18 @@ class VenetianPolicy(CoverTypePolicy):
         seq = self._sequencer
         if seq is None:
             return
-        # Skip when retracted — slats are hidden in the housing above this point.
         if position > self._tilt_skip_above:
-            return
+            tilt_target = POSITION_OPEN
+        else:
+            tilt_target = getattr(context, "tilt", None)
+            if tilt_target is None:
+                return
         # Open suppression early — covers position-axis settle events that
         # fire before _send_tilt_command runs (which itself stamps again).
         seq.stamp_position_command(entity_id)
-        tilt = getattr(context, "tilt", None)
-        if tilt is None:
-            return
         await seq.run_sequence(
             entity_id,
             position_target=position,
-            tilt_target=tilt,
+            tilt_target=tilt_target,
             reason=reason,
         )

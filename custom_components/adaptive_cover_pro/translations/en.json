@@ -43,7 +43,8 @@
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
           "venetian_mode": "Operating Mode",
           "inverse_tilt": "Inverse Tilt",
-          "max_tilt": "Maximum Slat Tilt (%)"
+          "max_tilt": "Maximum Slat Tilt (%)",
+          "min_tilt": "Minimum Slat Tilt (%)"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -58,7 +59,8 @@
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
           "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt.",
           "inverse_tilt": "Inverts the tilt axis only. Enable when your hardware sends tilt 0 for slats-open and 100 for slats-closed, which is the opposite of what the integration expects. This applies only to the tilt (slat) axis — the position axis is controlled separately by 'Inverse state'. Most covers do not need this. Useful for KNX or Somfy hardware where the tilt direction is wired opposite to the HA convention.",
-          "max_tilt": "Cap on the maximum slat tilt percentage (0–100). Lower values prevent slats from reaching angles that reflect direct sun into the room. Default: 100 (no cap). Example: set to 70 if fully-open slats cause glare at peak sun angles."
+          "max_tilt": "Cap on the maximum slat tilt percentage (0–100). Lower values prevent slats from reaching angles that reflect direct sun into the room. Default: 100 (no cap). Example: set to 70 if fully-open slats cause glare at peak sun angles.",
+          "min_tilt": "Floor on the minimum slat tilt percentage (0–100). Higher values prevent slats from closing fully — useful for blinds that block all light at 0%. Default: 0 (no floor). Example: set to 10 if your blinds become fully dark at 0% and you always want some light through."
         }
       },
       "sun_tracking": {
@@ -561,7 +563,8 @@
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
           "venetian_mode": "Operating Mode",
           "inverse_tilt": "Inverse Tilt",
-          "max_tilt": "Maximum Slat Tilt (%)"
+          "max_tilt": "Maximum Slat Tilt (%)",
+          "min_tilt": "Minimum Slat Tilt (%)"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -576,7 +579,8 @@
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
           "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt.",
           "inverse_tilt": "Inverts the tilt axis only. Enable when your hardware sends tilt 0 for slats-open and 100 for slats-closed, which is the opposite of what the integration expects. This applies only to the tilt (slat) axis — the position axis is controlled separately by 'Inverse state'. Most covers do not need this. Useful for KNX or Somfy hardware where the tilt direction is wired opposite to the HA convention.",
-          "max_tilt": "Cap on the maximum slat tilt percentage (0–100). Lower values prevent slats from reaching angles that reflect direct sun into the room. Default: 100 (no cap). Example: set to 70 if fully-open slats cause glare at peak sun angles."
+          "max_tilt": "Cap on the maximum slat tilt percentage (0–100). Lower values prevent slats from reaching angles that reflect direct sun into the room. Default: 100 (no cap). Example: set to 70 if fully-open slats cause glare at peak sun angles.",
+          "min_tilt": "Floor on the minimum slat tilt percentage (0–100). Higher values prevent slats from closing fully — useful for blinds that block all light at 0%. Default: 0 (no floor). Example: set to 10 if your blinds become fully dark at 0% and you always want some light through."
         }
       },
       "sun_tracking": {

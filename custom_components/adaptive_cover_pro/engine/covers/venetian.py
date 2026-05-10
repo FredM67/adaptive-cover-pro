@@ -83,14 +83,23 @@ class VenetianCoverCalculation:
         """
         return self._compute_tilt()
 
+    def _clamp_tilt(self, value: int) -> int:
+        """Clamp a tilt value to the configured ``[min_tilt, max_tilt]`` range.
+
+        Applied to every engine-derived tilt — including the NaN fallback — so
+        ``min_tilt`` is a true floor, not just "applied when geometry resolves".
+        """
+        cfg = self._tilt.tilt_config
+        return max(cfg.min_tilt, min(value, cfg.max_tilt))
+
     def _compute_tilt(self) -> int:
         try:
             raw_tilt = self._tilt.calculate_percentage()
         except (ValueError, ZeroDivisionError):
             return self._tilt.config.h_def
         if math.isnan(raw_tilt):
-            return 0
-        return min(round(raw_tilt), self._tilt.tilt_config.max_tilt)
+            return self._clamp_tilt(0)
+        return self._clamp_tilt(round(raw_tilt))
 
     @property
     def direct_sun_valid(self) -> bool:

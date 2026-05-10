@@ -166,10 +166,18 @@ async def test_apply_position_stamps_suppression_window(svc, hass, attached_poli
 
 
 @pytest.mark.asyncio
-async def test_apply_position_skips_tilt_when_position_above_threshold(
+async def test_apply_position_sends_neutral_tilt_when_position_above_threshold(
     svc, hass, attached_policy
 ):
-    """Tilt is suppressed when the commanded position exceeds the retract threshold."""
+    """Above the retract threshold the sequencer sends a neutral tilt (POSITION_OPEN).
+
+    KNX/Shelly venetian actuators retain their last commanded tilt and reapply
+    it after the carriage settles. Overwriting the cache with POSITION_OPEN
+    keeps slats from closing on a fully-retracted blind (issue #33 comment #54).
+    The context tilt (80) is intentionally ignored on the retract path.
+    """
+    from custom_components.adaptive_cover_pro.const import POSITION_OPEN
+
     entity_id = "cover.venetian_retracted"
     hass.states.get.return_value = _state_with_position(90)
 
@@ -179,8 +187,11 @@ async def test_apply_position_skips_tilt_when_position_above_threshold(
         )
 
     assert outcome == "sent"
-    assert hass.services.async_call.call_count == 1
+    assert hass.services.async_call.call_count == 2
     assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
+    tilt_call = hass.services.async_call.call_args_list[1]
+    assert tilt_call.args[1] == "set_cover_tilt_position"
+    assert tilt_call.args[2]["tilt_position"] == POSITION_OPEN
 
 
 @pytest.mark.asyncio

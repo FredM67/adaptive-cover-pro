@@ -301,6 +301,21 @@ def test_geometry_venetian_shows_max_tilt_custom():
     assert "max tilt 70%" in summary
 
 
+def test_geometry_venetian_shows_min_tilt_default():
+    """Venetian summary includes min tilt at the default value (0%)."""
+    summary = _build_config_summary({}, SensorType.VENETIAN)
+    assert "min tilt 0%" in summary
+
+
+def test_geometry_venetian_shows_min_tilt_custom():
+    """Venetian summary reflects a custom min_tilt value."""
+    from custom_components.adaptive_cover_pro.const import CONF_MIN_TILT
+
+    cfg = {CONF_MIN_TILT: 15}
+    summary = _build_config_summary(cfg, SensorType.VENETIAN)
+    assert "min tilt 15%" in summary
+
+
 # ---------------------------------------------------------------------------
 # Section 2: How It Decides — Sun Tracking
 # ---------------------------------------------------------------------------

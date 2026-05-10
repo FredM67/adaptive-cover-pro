@@ -1,6 +1,9 @@
 """Unit tests for VenetianPolicy — cover-type policy behaviour.
 
-Covers the retract-threshold guard in ``after_position_command`` (issue #33).
+Covers the retract-tilt-overwrite path in ``after_position_command`` (issue
+#33 comment #54): when the carriage is commanded above ``tilt_skip_above``,
+the policy sends a neutral tilt to overwrite the actuator's cached value so
+slats don't reassert a stale solar-cycle tilt after settle.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from homeassistant.const import SERVICE_SET_COVER_POSITION
 from custom_components.adaptive_cover_pro.const import (
     CONF_VENETIAN_TILT_SKIP_ABOVE,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
+    POSITION_OPEN,
 )
 from custom_components.adaptive_cover_pro.cover_types.venetian import VenetianPolicy
 from custom_components.adaptive_cover_pro.managers.cover_command import PositionContext
@@ -37,6 +41,19 @@ def test_max_tilt_constants_exist() -> None:
     assert OPTION_RANGES[CONF_MAX_TILT] == (0, 100)
 
 
+def test_min_tilt_constants_exist() -> None:
+    """CONF_MIN_TILT, DEFAULT_MIN_TILT, and OPTION_RANGES entry must be exported."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_MIN_TILT,
+        DEFAULT_MIN_TILT,
+        OPTION_RANGES,
+    )
+
+    assert CONF_MIN_TILT == "min_tilt"
+    assert DEFAULT_MIN_TILT == 0
+    assert OPTION_RANGES[CONF_MIN_TILT] == (0, 100)
+
+
 def test_geometry_schema_accepts_max_tilt() -> None:
     """GEOMETRY_VENETIAN_SCHEMA validates max_tilt: range 0–100, default 100."""
     import voluptuous as vol
@@ -54,6 +71,25 @@ def test_geometry_schema_accepts_max_tilt() -> None:
 
     with pytest.raises(vol.Invalid):
         GEOMETRY_VENETIAN_SCHEMA({CONF_MAX_TILT: 150})
+
+
+def test_geometry_schema_accepts_min_tilt() -> None:
+    """GEOMETRY_VENETIAN_SCHEMA validates min_tilt: range 0–100, default 0."""
+    import voluptuous as vol
+
+    from custom_components.adaptive_cover_pro.const import CONF_MIN_TILT
+    from custom_components.adaptive_cover_pro.cover_types.venetian import (
+        GEOMETRY_VENETIAN_SCHEMA,
+    )
+
+    result_default = GEOMETRY_VENETIAN_SCHEMA({})
+    assert result_default[CONF_MIN_TILT] == 0
+
+    result_custom = GEOMETRY_VENETIAN_SCHEMA({CONF_MIN_TILT: 15})
+    assert result_custom[CONF_MIN_TILT] == 15
+
+    with pytest.raises(vol.Invalid):
+        GEOMETRY_VENETIAN_SCHEMA({CONF_MIN_TILT: -5})
 
 
 def test_geometry_schema_accepts_venetian_mode() -> None:
@@ -119,10 +155,17 @@ def _ctx(policy: VenetianPolicy, *, tilt: int = 80) -> PositionContext:
 
 
 @pytest.mark.asyncio
-async def test_after_position_command_skips_run_sequence_when_position_above_threshold() -> (
+async def test_after_position_command_sends_neutral_tilt_when_position_above_threshold() -> (
     None
 ):
-    """When position > tilt_skip_above, neither stamp nor run_sequence fires."""
+    """When position > tilt_skip_above, the sequence fires with tilt=POSITION_OPEN.
+
+    KNX and Shelly venetian actuators retain their last commanded tilt and
+    reapply it ~1-2s after the carriage settle. When we retract above
+    tilt_skip_above we must overwrite that cache with a neutral angle
+    (POSITION_OPEN) — otherwise the previous solar-cycle tilt reasserts and
+    closes the slats on a fully-retracted blind.
+    """
     policy = _make_policy(tilt_skip_above=95)
 
     await policy.after_position_command(
@@ -134,13 +177,16 @@ async def test_after_position_command_skips_run_sequence_when_position_above_thr
         reason="solar",
     )
 
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
+    policy._sequencer.stamp_position_command.assert_called_once_with("cover.venetian_x")
+    policy._sequencer.run_sequence.assert_awaited_once()
+    kwargs = policy._sequencer.run_sequence.await_args.kwargs
+    assert kwargs["position_target"] == 98
+    assert kwargs["tilt_target"] == POSITION_OPEN
 
 
 @pytest.mark.asyncio
-async def test_after_position_command_skips_at_100_percent() -> None:
-    """Fully retracted (position=100) must also skip the tilt command."""
+async def test_after_position_command_sends_neutral_tilt_at_100_percent() -> None:
+    """Fully retracted (position=100) must also overwrite cached tilt with POSITION_OPEN."""
     policy = _make_policy(tilt_skip_above=95)
 
     await policy.after_position_command(
@@ -152,8 +198,40 @@ async def test_after_position_command_skips_at_100_percent() -> None:
         reason="solar",
     )
 
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
+    policy._sequencer.stamp_position_command.assert_called_once_with("cover.venetian_x")
+    policy._sequencer.run_sequence.assert_awaited_once()
+    kwargs = policy._sequencer.run_sequence.await_args.kwargs
+    assert kwargs["position_target"] == 100
+    assert kwargs["tilt_target"] == POSITION_OPEN
+
+
+@pytest.mark.asyncio
+async def test_after_position_command_ignores_context_tilt_when_retracted() -> None:
+    """The retract path uses POSITION_OPEN, never context.tilt — even if context carries one."""
+    policy = _make_policy(tilt_skip_above=95)
+    # context carries tilt=20 (a stale solar-cycle tilt) — must be ignored.
+    ctx = _ctx(policy, tilt=20)
+
+    await policy.after_position_command(
+        cmd_svc=MagicMock(),
+        entity_id="cover.venetian_x",
+        service=SERVICE_SET_COVER_POSITION,
+        position=100,
+        context=ctx,
+        reason="solar",
+    )
+
+    kwargs = policy._sequencer.run_sequence.await_args.kwargs
+    assert kwargs["tilt_target"] == POSITION_OPEN
+    assert kwargs["tilt_target"] != 20
+
+
+def test_retract_tilt_uses_position_open_constant() -> None:
+    """Guard against accidental ``100`` magic-number drift in the retract path."""
+    # POSITION_OPEN is the *only* physically meaningful neutral tilt for a
+    # fully retracted carriage. If this changes, the design intent has shifted
+    # and the retract path needs re-examining.
+    assert POSITION_OPEN == 100
 
 
 @pytest.mark.asyncio
@@ -252,7 +330,11 @@ async def test_after_position_command_fires_tilt_at_position_zero() -> None:
 
 @pytest.mark.asyncio
 async def test_after_position_command_respects_custom_threshold() -> None:
-    """Threshold is read from the policy instance, not a module-level constant."""
+    """Threshold is read from the policy instance, not a module-level constant.
+
+    With tilt_skip_above=80 and position=81 we cross into the retract path,
+    so the sequence fires with tilt=POSITION_OPEN.
+    """
     policy = _make_policy(tilt_skip_above=80)
 
     await policy.after_position_command(
@@ -264,8 +346,11 @@ async def test_after_position_command_respects_custom_threshold() -> None:
         reason="solar",
     )
 
-    policy._sequencer.stamp_position_command.assert_not_called()
-    policy._sequencer.run_sequence.assert_not_awaited()
+    policy._sequencer.stamp_position_command.assert_called_once_with("cover.venetian_x")
+    policy._sequencer.run_sequence.assert_awaited_once()
+    kwargs = policy._sequencer.run_sequence.await_args.kwargs
+    assert kwargs["position_target"] == 81
+    assert kwargs["tilt_target"] == POSITION_OPEN
 
 
 @pytest.mark.asyncio

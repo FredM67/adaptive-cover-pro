@@ -222,6 +222,12 @@ CONF_MAX_TILT = "max_tilt"
 DEFAULT_MAX_TILT = 100
 _RANGE_MAX_TILT = (0, 100)
 
+# Minimum slat tilt percentage (0–100). Floors the sun-derived slat angle so
+# slats never close fully — useful for blinds that block all light at 0%.
+CONF_MIN_TILT = "min_tilt"
+DEFAULT_MIN_TILT = 0
+_RANGE_MIN_TILT = (0, 100)
+
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command
 STARTUP_GRACE_PERIOD_SECONDS = (
@@ -449,6 +455,7 @@ def _build_option_ranges() -> dict[str, tuple[float, float]]:
         CONF_WEATHER_OVERRIDE_POSITION: _RANGE_WEATHER_OVERRIDE_POSITION,
         CONF_WEATHER_TIMEOUT: _RANGE_WEATHER_TIMEOUT,
         CONF_MAX_TILT: _RANGE_MAX_TILT,
+        CONF_MIN_TILT: _RANGE_MIN_TILT,
     }
     # Custom-position slots: per-slot position (0–100) and priority (1–99).
     for slot_keys in CUSTOM_POSITION_SLOTS.values():
