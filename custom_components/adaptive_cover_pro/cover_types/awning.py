@@ -17,7 +17,13 @@ from ..const import (
     MAX_AWNING_ANGLE,
 )
 from ..engine.covers import AdaptiveHorizontalCover
-from .base import POSITION_AXIS_OPEN_BLOCKS_SUN, CoverAxis, CoverTypePolicy
+from .base import (
+    CAP_HAS_SET_POSITION,
+    POSITION_AXIS_OPEN_BLOCKS_SUN,
+    CoverAxis,
+    CoverTypePolicy,
+    caps_get,
+)
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -102,7 +108,7 @@ class AwningPolicy(CoverTypePolicy):
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""
-        if not any(caps.get("has_set_position") for caps in known.values()):
+        if not any(caps_get(caps, CAP_HAS_SET_POSITION) for caps in known.values()):
             return [
                 "⚠️ Configured as awning but no bound cover supports "
                 "set_position — only open/close will be issued."

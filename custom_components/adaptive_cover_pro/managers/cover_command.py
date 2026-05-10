@@ -23,6 +23,12 @@ from ..const import (
     POSITION_CHECK_INTERVAL_MINUTES,
     POSITION_TOLERANCE_PERCENT,
 )
+from ..cover_types.base import (
+    CAP_HAS_CLOSE,
+    CAP_HAS_OPEN,
+    CAP_HAS_STOP,
+    caps_get,
+)
 from ..diagnostics.event_buffer import EventBuffer
 from ..helpers import (
     check_cover_features,
@@ -615,7 +621,7 @@ class CoverCommandService:
         }
         for eid in candidates:
             caps = check_cover_features(self._hass, eid)
-            if not (caps and caps.get("has_stop")):
+            if not caps_get(caps, CAP_HAS_STOP):
                 continue
             s = self.state(eid)
             if not self._is_cover_in_motion(eid):
@@ -655,7 +661,7 @@ class CoverCommandService:
         stopped: list[str] = []
         for eid in entity_ids:
             caps = check_cover_features(self._hass, eid)
-            if not (caps and caps.get("has_stop")):
+            if not caps_get(caps, CAP_HAS_STOP):
                 continue
             if not self._is_cover_in_motion(eid):
                 state_val = getattr(self._hass.states.get(eid), "state", None)
@@ -703,7 +709,7 @@ class CoverCommandService:
 
         """
         caps = check_cover_features(self._hass, entity_id)
-        if not (caps and caps.get("has_stop")):
+        if not caps_get(caps, CAP_HAS_STOP):
             self._logger.debug(
                 "send_my_position: skipping %s — cover does not support STOP", entity_id
             )
@@ -1522,7 +1528,7 @@ class CoverCommandService:
         # stop_cover sent to a stationary Somfy RTS cover triggers the user's
         # hardware-programmed My preset.  Position-capable covers skip this
         # branch and fall through to set_cover_position above.
-        if use_my_position and caps.get("has_stop"):
+        if use_my_position and caps_get(caps, CAP_HAS_STOP):
             self._logger.debug(
                 "My-position routing: stop_cover → %s (My = %d%%)", entity, state
             )
@@ -1530,8 +1536,8 @@ class CoverCommandService:
             return "stop_cover", {ATTR_ENTITY_ID: entity}, False
 
         # Open/close-only cover
-        has_open = caps.get("has_open", False)
-        has_close = caps.get("has_close", False)
+        has_open = caps_get(caps, CAP_HAS_OPEN)
+        has_close = caps_get(caps, CAP_HAS_CLOSE)
         if not has_open or not has_close:
             self._logger.warning(
                 "Cover %s does not support both open and close. Skipping.", entity

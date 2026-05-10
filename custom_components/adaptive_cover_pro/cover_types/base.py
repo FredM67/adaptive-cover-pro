@@ -46,6 +46,9 @@ STATE_ATTR_TILT_POSITION = "current_tilt_position"
 
 CAP_HAS_SET_POSITION = "has_set_position"
 CAP_HAS_SET_TILT_POSITION = "has_set_tilt_position"
+CAP_HAS_OPEN = "has_open"
+CAP_HAS_CLOSE = "has_close"
+CAP_HAS_STOP = "has_stop"
 
 AXIS_NAME_POSITION = "position"
 AXIS_NAME_TILT = "tilt"
@@ -106,18 +109,23 @@ TILT_AXIS = CoverAxis(
 )
 
 
-def _caps_get(caps: Any, key: str, default: bool = False) -> bool:
+def caps_get(caps: Any, key: str, default: bool = False) -> bool:
     """Read a capability flag from either a dict or a ``CoverCapabilities``.
 
     ``check_cover_features`` returns a dict; ``CoverProvider`` constructs the
-    dataclass form. Both shapes are consumed by ``read_axis_value`` and
-    ``select_default_axis`` so a single accessor keeps the routing path uniform.
+    dataclass form. Both shapes are consumed throughout the integration so a
+    single accessor — combined with the ``CAP_*`` constants above — replaces
+    hardcoded ``caps.get("has_…")`` strings at every call site.
     """
     if caps is None:
         return default
     if isinstance(caps, dict):
         return bool(caps.get(key, default))
     return bool(getattr(caps, key, default))
+
+
+# Internal alias retained for backward compatibility with existing imports.
+_caps_get = caps_get
 
 
 class CoverTypePolicy(ABC):

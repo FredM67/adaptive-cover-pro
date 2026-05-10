@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..cover_types.base import (
+    CAP_HAS_CLOSE,
+    CAP_HAS_OPEN,
+    CAP_HAS_SET_POSITION,
+    CAP_HAS_SET_TILT_POSITION,
+    caps_get,
+)
 from ..helpers import check_cover_features
 from .snapshot import CoverCapabilities
 
@@ -49,10 +56,12 @@ class CoverProvider:
         if caps is None:
             return _DEFAULT_CAPABILITIES
         return CoverCapabilities(
-            has_set_position=caps.get("has_set_position", True),
-            has_set_tilt_position=caps.get("has_set_tilt_position", False),
-            has_open=caps.get("has_open", True),
-            has_close=caps.get("has_close", True),
+            has_set_position=caps_get(caps, CAP_HAS_SET_POSITION, default=True),
+            has_set_tilt_position=caps_get(
+                caps, CAP_HAS_SET_TILT_POSITION, default=False
+            ),
+            has_open=caps_get(caps, CAP_HAS_OPEN, default=True),
+            has_close=caps_get(caps, CAP_HAS_CLOSE, default=True),
         )
 
     def read_all_capabilities(
