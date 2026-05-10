@@ -28,6 +28,7 @@ from ...helpers import (
     check_cover_features,
     get_last_updated,
 )
+from . import gates
 from .routing import ServiceCallPlan, build_special_positions, route_service_call
 from .state_store import PerEntityState, PositionContext
 
@@ -779,69 +780,25 @@ class CoverCommandService:
         special_positions: list[int],
         sun_just_appeared: bool = False,
     ) -> bool:
-        """Return True if a command should be sent based on position delta.
-
-        Bypasses delta check for:
-        - sun_just_appeared (cover may need to re-confirm same position)
-        - moves to/from special positions (0, 100, default, sunset)
-
-        Same-position short-circuit is handled upstream in apply_position and
-        applies to all callers including force=True (issue #290).
-        """
-        position = self._get_current_position(entity)
-        if position is None:
-            return True  # Unknown position — send command to be safe
-
-        if sun_just_appeared:
-            self._logger.debug(
-                "Delta check bypassed (sun appeared): %s current=%s target=%s",
-                entity,
-                position,
-                target,
-            )
-            return True
-
-        if target in special_positions:
-            self._logger.debug(
-                "Delta check bypassed (special target %s): %s", target, entity
-            )
-            return True
-
-        if position in special_positions:
-            self._logger.debug(
-                "Delta check bypassed (special current %s): %s", position, entity
-            )
-            return True
-
-        delta = abs(position - target)
-        passes = delta >= min_change
-        self._logger.debug(
-            "Delta check: %s current=%s target=%s delta=%s min=%s pass=%s",
+        """Return True if a command should be sent based on position delta."""
+        return gates.check_position_delta(
             entity,
-            position,
             target,
-            delta,
             min_change,
-            passes,
+            special_positions,
+            position=self._get_current_position(entity),
+            logger=self._logger,
+            sun_just_appeared=sun_just_appeared,
         )
-        return passes
 
     def _check_time_delta(self, entity: str, time_threshold: int) -> bool:
         """Return True if enough time has passed since last command."""
-        now = dt.datetime.now(dt.UTC)
-        last_updated = get_last_updated(entity, self._hass)
-        if last_updated is None:
-            return True
-        elapsed = now - last_updated
-        passes = elapsed >= dt.timedelta(minutes=time_threshold)
-        self._logger.debug(
-            "Time delta check: %s elapsed=%s threshold=%smin pass=%s",
+        return gates.check_time_delta(
             entity,
-            elapsed,
             time_threshold,
-            passes,
+            last_updated=get_last_updated(entity, self._hass),
+            logger=self._logger,
         )
-        return passes
 
     # ------------------------------------------------------------------ #
     # Primary entry point
@@ -1374,11 +1331,7 @@ class CoverCommandService:
 
     def _elapsed_minutes(self, entity_id: str) -> float | None:
         """Return minutes elapsed since last command to entity_id, or None."""
-        last_updated = get_last_updated(entity_id, self._hass)
-        if last_updated is None:
-            return None
-        elapsed = dt.datetime.now(dt.UTC) - last_updated
-        return round(elapsed.total_seconds() / 60, 2)
+        return gates.elapsed_minutes(get_last_updated(entity_id, self._hass))
 
     def _skip(
         self,
