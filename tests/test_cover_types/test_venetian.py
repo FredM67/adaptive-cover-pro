@@ -24,6 +24,38 @@ def test_retract_threshold_constants_exist() -> None:
     assert DEFAULT_VENETIAN_TILT_SKIP_ABOVE == 95
 
 
+def test_max_tilt_constants_exist() -> None:
+    """CONF_MAX_TILT, DEFAULT_MAX_TILT, and OPTION_RANGES entry must be exported."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_MAX_TILT,
+        DEFAULT_MAX_TILT,
+        OPTION_RANGES,
+    )
+
+    assert CONF_MAX_TILT == "max_tilt"
+    assert DEFAULT_MAX_TILT == 100
+    assert OPTION_RANGES[CONF_MAX_TILT] == (0, 100)
+
+
+def test_geometry_schema_accepts_max_tilt() -> None:
+    """GEOMETRY_VENETIAN_SCHEMA validates max_tilt: range 0–100, default 100."""
+    import voluptuous as vol
+
+    from custom_components.adaptive_cover_pro.const import CONF_MAX_TILT
+    from custom_components.adaptive_cover_pro.cover_types.venetian import (
+        GEOMETRY_VENETIAN_SCHEMA,
+    )
+
+    result_default = GEOMETRY_VENETIAN_SCHEMA({})
+    assert result_default[CONF_MAX_TILT] == 100
+
+    result_custom = GEOMETRY_VENETIAN_SCHEMA({CONF_MAX_TILT: 70})
+    assert result_custom[CONF_MAX_TILT] == 70
+
+    with pytest.raises(vol.Invalid):
+        GEOMETRY_VENETIAN_SCHEMA({CONF_MAX_TILT: 150})
+
+
 def test_geometry_schema_accepts_venetian_mode() -> None:
     """GEOMETRY_VENETIAN_SCHEMA validates both allowed mode values."""
     from custom_components.adaptive_cover_pro.const import (

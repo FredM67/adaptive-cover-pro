@@ -21,11 +21,12 @@ def check_position_delta(
     entity: str,
     target: int,
     min_change: int,
-    special_positions: list[int],
+    special_positions: list[int] | None,
     *,
     position: int | None,
     logger,
     sun_just_appeared: bool = False,
+    axis_label: str = "position",
 ) -> bool:
     """Return True if a command should be sent based on position delta.
 
@@ -36,7 +37,13 @@ def check_position_delta(
 
     Same-position short-circuit is handled upstream in apply_position and
     applies to all callers including force=True (issue #290).
+
+    ``special_positions`` may be ``None`` (treated as empty — no bypass for
+    special values). Used by the tilt axis, which has no special positions.
+    ``axis_label`` appears in debug log lines for readability.
     """
+    _special = special_positions or []
+
     if position is None:
         return True  # Unknown position — send command to be safe
 
@@ -49,18 +56,19 @@ def check_position_delta(
         )
         return True
 
-    if target in special_positions:
+    if target in _special:
         logger.debug("Delta check bypassed (special target %s): %s", target, entity)
         return True
 
-    if position in special_positions:
+    if position in _special:
         logger.debug("Delta check bypassed (special current %s): %s", position, entity)
         return True
 
     delta = abs(position - target)
     passes = delta >= min_change
     logger.debug(
-        "Delta check: %s current=%s target=%s delta=%s min=%s pass=%s",
+        "%s delta check: %s current=%s target=%s delta=%s min=%s pass=%s",
+        axis_label,
         entity,
         position,
         target,

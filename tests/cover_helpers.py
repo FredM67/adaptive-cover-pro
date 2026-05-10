@@ -67,6 +67,7 @@ def make_tilt_config(**overrides) -> TiltConfig:
         "slat_distance": 0.03,
         "depth": 0.02,
         "mode": "mode1",
+        "max_tilt": 100,
     }
     defaults.update(overrides)
     return TiltConfig(**defaults)

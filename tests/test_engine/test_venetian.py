@@ -263,3 +263,107 @@ class TestVenetianCoverCalculation:
         # passing any valid position must yield the same tilt as calculate_dual.
         for resolved_position in (0, 25, 50, dual.position, 100):
             assert calc.tilt_for_position(resolved_position) == dual.tilt
+
+
+class TestMaxTiltCap:
+    """Tests for max_tilt configuration cap on slat angle."""
+
+    @patch("custom_components.adaptive_cover_pro.engine.sun_geometry.datetime")
+    def test_compute_tilt_respects_max_tilt_cap(self, mock_datetime):
+        """When natural tilt exceeds max_tilt, calculate_dual returns max_tilt."""
+        mock_datetime.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+        cap = 30
+        uncapped_calc = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=100),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=80.0,
+            logger=_make_logger(),
+        )
+        capped_calc = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=cap),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=80.0,
+            logger=_make_logger(),
+        )
+        uncapped_tilt = uncapped_calc.calculate_dual().tilt
+        assert (
+            uncapped_tilt > cap
+        ), f"Test setup: natural tilt {uncapped_tilt} must exceed cap {cap}"
+        assert capped_calc.calculate_dual().tilt == cap
+
+    @patch("custom_components.adaptive_cover_pro.engine.sun_geometry.datetime")
+    def test_compute_tilt_passthrough_when_below_cap(self, mock_datetime):
+        """When natural tilt is below max_tilt, the cap has no effect."""
+        mock_datetime.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+        uncapped_calc = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=100),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=30.0,
+            logger=_make_logger(),
+        )
+        high_cap_calc = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=90),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=30.0,
+            logger=_make_logger(),
+        )
+        uncapped_tilt = uncapped_calc.calculate_dual().tilt
+        assert (
+            uncapped_tilt < 90
+        ), f"Test setup: natural tilt {uncapped_tilt} must be below cap 90"
+        assert high_cap_calc.calculate_dual().tilt == uncapped_tilt
+
+    @patch("custom_components.adaptive_cover_pro.engine.sun_geometry.datetime")
+    def test_max_tilt_default_100_is_no_op(self, mock_datetime):
+        """Default max_tilt=100 produces identical results to before the cap existed."""
+        mock_datetime.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+        calc_default = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=45.0,
+            logger=_make_logger(),
+        )
+        calc_explicit = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=100),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=45.0,
+            logger=_make_logger(),
+        )
+        assert calc_default.calculate_dual().tilt == calc_explicit.calculate_dual().tilt
+
+    @patch("custom_components.adaptive_cover_pro.engine.sun_geometry.datetime")
+    def test_tilt_for_position_uses_capped_value(self, mock_datetime):
+        """tilt_for_position also respects max_tilt — both paths share _compute_tilt."""
+        mock_datetime.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+        cap = 30
+        calc = VenetianCoverCalculation(
+            config=make_cover_config(win_azi=180),
+            vert_config=make_vertical_config(),
+            tilt_config=make_tilt_config(max_tilt=cap),
+            sun_data=_make_sun_data(),
+            sol_azi=180.0,
+            sol_elev=80.0,
+            logger=_make_logger(),
+        )
+        tilt_via_position = calc.tilt_for_position(50)
+        tilt_via_dual = calc.calculate_dual().tilt
+        assert tilt_via_position <= cap
+        assert tilt_via_position == tilt_via_dual

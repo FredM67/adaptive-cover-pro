@@ -348,6 +348,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 CONF_VENETIAN_MODE, DEFAULT_VENETIAN_MODE
             ),
             invert_tilt=lambda: self._inverse_tilt,
+            get_min_change=lambda: self.min_change,
         )
 
         # Time window manager (start/end time checks)

@@ -538,3 +538,69 @@ async def test_same_position_skip_does_not_call_hook_when_no_tilt(svc, hass):
 
     assert reason == "same_position"
     policy.maybe_update_tilt_only.assert_not_awaited()
+
+
+def test_attach_passes_min_change_callable_to_sequencer(svc, hass):
+    """attach() with get_min_change kwarg wires the callable into the sequencer."""
+    policy = VenetianPolicy()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=svc._get_current_position,
+        set_commanded_position=svc.set_target,
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+        get_min_change=lambda: 5,
+    )
+    assert policy._sequencer._get_min_change() == 5
+
+
+@pytest.mark.asyncio
+async def test_tilt_below_delta_threshold_skipped_in_full_pipeline(svc, hass):
+    """Tilt commands below min_change are skipped; skip event is emitted on second cycle."""
+    from custom_components.adaptive_cover_pro.diagnostics.event_buffer import (
+        EventBuffer,
+    )
+
+    buf = EventBuffer(maxlen=20)
+    entity_id = "cover.venetian_x"
+    hass.states.get.return_value = _state_with_position(0)
+
+    policy = VenetianPolicy()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=svc._get_current_position,
+        set_commanded_position=svc.set_target,
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+        event_buffer=buf,
+        get_min_change=lambda: 8,
+    )
+    policy._sequencer._wait_for_position_settle = AsyncMock(return_value=(True, 60))
+
+    ctx1 = _ctx_venetian(policy, tilt=50)
+    ctx2 = _ctx_venetian(policy, tilt=53)  # delta=3, below min_change=8
+
+    with _patch_caps_dual_axis():
+        await svc.apply_position(entity_id, 60, "solar", ctx1)
+        hass.services.async_call.reset_mock()
+        # Expire the suppression window (normally 90s; here cleared to simulate
+        # time having passed between update cycles) and set _last_tilt to
+        # simulate what post_pipeline_resolve would have computed.
+        policy._sequencer._suppression_at.clear()
+        policy._last_tilt = 53
+        hass.states.get.return_value = _state_with_position(60)
+        await svc.apply_position(entity_id, 60, "solar", ctx2)
+
+    # Second cycle: same position (no position command) + tilt below threshold → only 0 new calls
+    assert hass.services.async_call.call_count == 0
+    skip_events = [
+        e
+        for e in buf.snapshot()
+        if e.get("event") == "tilt_command_skipped"
+        and e.get("reason") == "delta_too_small"
+    ]
+    assert len(skip_events) >= 1

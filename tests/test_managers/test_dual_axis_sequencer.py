@@ -46,6 +46,7 @@ def _build_sequencer(
     get_current_tilt_position=None,
     event_buffer=None,
     invert_tilt=None,
+    get_min_change=None,
 ):
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -68,6 +69,7 @@ def _build_sequencer(
             get_current_tilt_position=get_current_tilt_position,
             event_buffer=event_buffer,
             invert_tilt=invert_tilt,
+            get_min_change=get_min_change,
         ),
     )
 
@@ -676,3 +678,72 @@ class TestTiltInversion:
             "cover.x", tilt_target=80, position_target=60, reason="solar"
         )
         assert seq.last_tilt_target("cover.x") is None
+
+
+@pytest.mark.asyncio
+class TestTiltDeltaGate:
+    """Tilt commands must respect the configured min-change threshold."""
+
+    async def test_below_min_change_skips_service_call(self):
+        """When tilt delta is below min_change, no service call is made and a skip event is emitted."""
+        from custom_components.adaptive_cover_pro.diagnostics.event_buffer import (
+            EventBuffer,
+        )
+
+        buf = EventBuffer(maxlen=20)
+        hass, seq = _build_sequencer(get_min_change=lambda: 8, event_buffer=buf)
+        seq._tilt_targets["cover.x"] = 50
+
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=53, position_target=60, reason="solar"
+        )
+
+        assert hass.services.async_call.call_count == 0
+        events = buf.snapshot()
+        assert len(events) == 1
+        assert events[0]["event"] == "tilt_command_skipped"
+        assert events[0]["reason"] == "delta_too_small"
+
+    async def test_at_or_above_min_change_emits_service_call(self):
+        """When tilt delta meets min_change, the tilt service call fires."""
+        hass, seq = _build_sequencer(get_min_change=lambda: 8)
+        seq._tilt_targets["cover.x"] = 50
+
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=58, position_target=60, reason="solar"
+        )
+
+        assert hass.services.async_call.call_count == 1
+
+    async def test_first_cycle_bypasses_gate(self):
+        """With no prior tilt target, the gate is bypassed (first-cycle send)."""
+        hass, seq = _build_sequencer(get_min_change=lambda: 50)
+        # No seed in _tilt_targets — simulates first cycle
+
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=10, position_target=60, reason="solar"
+        )
+
+        assert hass.services.async_call.call_count == 1
+
+    async def test_force_kwarg_bypasses_gate(self):
+        """force=True bypasses the delta gate regardless of delta size."""
+        hass, seq = _build_sequencer(get_min_change=lambda: 50)
+        seq._tilt_targets["cover.x"] = 50
+
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=51, position_target=60, reason="solar", force=True
+        )
+
+        assert hass.services.async_call.call_count == 1
+
+    async def test_default_min_change_one_is_permissive(self):
+        """Without get_min_change, any delta ≥ 1 sends — gate is permissive by default."""
+        hass, seq = _build_sequencer()  # no get_min_change
+        seq._tilt_targets["cover.x"] = 50
+
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=51, position_target=60, reason="solar"
+        )
+
+        assert hass.services.async_call.call_count == 1

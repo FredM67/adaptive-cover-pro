@@ -42,7 +42,8 @@
           "slat_distance": "Espacement des lamelles",
           "venetian_tilt_skip_above": "Ignorer l'inclinaison au-dessus de la position (%)",
           "venetian_mode": "Mode de fonctionnement",
-          "inverse_tilt": "Inverser l'inclinaison"
+          "inverse_tilt": "Inverser l'inclinaison",
+          "max_tilt": "Inclinaison Maximale des Lamelles (%)"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre en mètres (du bas au haut de la zone vitrée). Exemples : porte standard = 2,0 m, petite fenêtre = 1,5 m, du sol au plafond = 2,5 m. Mesurez du point de départ du store à son point d'arrivée lorsqu'il est complètement étendu. Utilisé pour calculer la position optimale du store pour bloquer la lumière directe du soleil. Remarque : 1 mètre ≈ 3,3 pieds.",
@@ -56,7 +57,8 @@
           "slat_distance": "Espacement vertical entre les centres des lamelles. Mesurez du milieu d'une lamelle au milieu de la lamelle suivante (verticalement). Généralement légèrement plus que la profondeur de la lamelle pour permettre le chevauchement quand fermé. Courant : 3-8 cm selon le type de store. Utilisé pour calculer l'angle d'inclinaison optimal.",
           "venetian_tilt_skip_above": "Quand la protection est commandée au-dessus de cette position (0–100%), la commande d'inclinaison est ignorée. À des positions élevées, les lamelles se rétractent dans le boîtier et l'inclinaison n'a pas de sens physique. Par défaut 95%. Augmentez si votre store s'incline correctement près du sommet ; diminuez s'il tente de s'incliner quand complètement levé.",
           "venetian_mode": "Comment le store vénitien utilise les deux axes lorsque le soleil se trouve dans la fenêtre de suivi. **Position et inclinaison** (par défaut) : le store descend à la position calculée et les lamelles s'inclinent à l'angle optimal — idéal pour une protection combinée et l'intimité. **Inclinaison uniquement** : le store reste fermé (position 0%) et seul l'angle des lamelles suit le soleil — idéal lorsque vous souhaitez une couverture complète et un contrôle continu de l'éblouissement par inclinaison.",
-          "inverse_tilt": "Inverse l'axe d'inclinaison uniquement. Activez si votre matériel envoie une inclinaison 0 pour lamelles ouvertes et 100 pour lamelles fermées, ce qui est l'opposé de ce que l'intégration attend. Cela s'applique uniquement à l'axe d'inclinaison (lamelles) — l'axe de position est contrôlé séparément par « Inverser l'état ». La plupart des protections n'ont pas besoin de ceci. Utile pour le matériel KNX ou Somfy où la direction d'inclinaison est câblée à l'opposé de la convention HA."
+          "inverse_tilt": "Inverse l'axe d'inclinaison uniquement. Activez si votre matériel envoie une inclinaison 0 pour lamelles ouvertes et 100 pour lamelles fermées, ce qui est l'opposé de ce que l'intégration attend. Cela s'applique uniquement à l'axe d'inclinaison (lamelles) — l'axe de position est contrôlé séparément par « Inverser l'état ». La plupart des protections n'ont pas besoin de ceci. Utile pour le matériel KNX ou Somfy où la direction d'inclinaison est câblée à l'opposé de la convention HA.",
+          "max_tilt": "Limite de l'angle d'inclinaison maximal des lamelles (0–100 %). Les valeurs plus basses empêchent les lamelles d'atteindre des angles qui réfléchissent la lumière directe du soleil dans la pièce. Défaut : 100 (pas de limite). Exemple : réglez à 70 si les lamelles complètement ouvertes causent des reflets à des angles de soleil maximum."
         }
       },
       "sun_tracking": {
@@ -558,7 +560,8 @@
           "slat_distance": "Espacement des lamelles",
           "venetian_tilt_skip_above": "Ignorer l'inclinaison au-dessus de la position (%)",
           "venetian_mode": "Mode de fonctionnement",
-          "inverse_tilt": "Inverser l'inclinaison"
+          "inverse_tilt": "Inverser l'inclinaison",
+          "max_tilt": "Inclinaison Maximale des Lamelles (%)"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre en mètres (du bas au haut de la zone vitrée). Exemples : porte standard = 2,0 m, petite fenêtre = 1,5 m, du sol au plafond = 2,5 m. Mesurez du point de départ du store à son point d'arrivée lorsqu'il est complètement étendu. Utilisé pour calculer la position optimale du store pour bloquer la lumière directe du soleil. Remarque : 1 mètre ≈ 3,3 pieds.",
@@ -572,7 +575,8 @@
           "slat_distance": "Espacement vertical entre les centres des lamelles. Mesurez du milieu d'une lamelle au milieu de la lamelle suivante (verticalement). Généralement légèrement plus que la profondeur de la lamelle pour permettre le chevauchement quand fermé. Courant : 3-8 cm selon le type de store. Utilisé pour calculer l'angle d'inclinaison optimal.",
           "venetian_tilt_skip_above": "Quand la protection est commandée au-dessus de cette position (0–100%), la commande d'inclinaison est ignorée. À des positions élevées, les lamelles se rétractent dans le boîtier et l'inclinaison n'a pas de sens physique. Par défaut 95%. Augmentez si votre store s'incline correctement près du sommet ; diminuez s'il tente de s'incliner quand complètement levé.",
           "venetian_mode": "Comment le store vénitien utilise les deux axes lorsque le soleil se trouve dans la fenêtre de suivi. **Position et inclinaison** (par défaut) : le store descend à la position calculée et les lamelles s'inclinent à l'angle optimal — idéal pour une protection combinée et l'intimité. **Inclinaison uniquement** : le store reste fermé (position 0%) et seul l'angle des lamelles suit le soleil — idéal lorsque vous souhaitez une couverture complète et un contrôle continu de l'éblouissement par inclinaison.",
-          "inverse_tilt": "Inverse l'axe d'inclinaison uniquement. Activez si votre matériel envoie une inclinaison 0 pour lamelles ouvertes et 100 pour lamelles fermées, ce qui est l'opposé de ce que l'intégration attend. Cela s'applique uniquement à l'axe d'inclinaison (lamelles) — l'axe de position est contrôlé séparément par « Inverser l'état ». La plupart des protections n'ont pas besoin de ceci. Utile pour le matériel KNX ou Somfy où la direction d'inclinaison est câblée à l'opposé de la convention HA."
+          "inverse_tilt": "Inverse l'axe d'inclinaison uniquement. Activez si votre matériel envoie une inclinaison 0 pour lamelles ouvertes et 100 pour lamelles fermées, ce qui est l'opposé de ce que l'intégration attend. Cela s'applique uniquement à l'axe d'inclinaison (lamelles) — l'axe de position est contrôlé séparément par « Inverser l'état ». La plupart des protections n'ont pas besoin de ceci. Utile pour le matériel KNX ou Somfy où la direction d'inclinaison est câblée à l'opposé de la convention HA.",
+          "max_tilt": "Limite de l'angle d'inclinaison maximal des lamelles (0–100 %). Les valeurs plus basses empêchent les lamelles d'atteindre des angles qui réfléchissent la lumière directe du soleil dans la pièce. Défaut : 100 (pas de limite). Exemple : réglez à 70 si les lamelles complètement ouvertes causent des reflets à des angles de soleil maximum."
         }
       },
       "sun_tracking": {

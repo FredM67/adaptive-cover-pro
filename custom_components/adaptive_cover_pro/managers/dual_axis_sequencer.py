@@ -35,6 +35,7 @@ from ..const import (
     VENETIAN_TILT_SUPPRESSION_SECONDS,
     VENETIAN_TILT_VERIFY_TOLERANCE,
 )
+from .cover_command.gates import check_position_delta
 from .manual_override import inverse_state
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ _COVER_MOVING_STATES = frozenset({"opening", "closing"})
 _TILT_SKIP_DRY_RUN = "dry_run"
 _TILT_SKIP_TARGET_UNCHANGED = "target_unchanged"
 _TILT_SKIP_SERVICE_FAILED = "service_call_failed"
+_TILT_SKIP_DELTA_TOO_SMALL = "delta_too_small"
 
 
 class DualAxisSequencer:
@@ -68,6 +70,7 @@ class DualAxisSequencer:
         get_current_tilt_position: Callable[[str], int | None] | None = None,
         event_buffer: EventBuffer | None = None,
         invert_tilt: Callable[[], bool] | None = None,
+        get_min_change: Callable[[], int] | None = None,
     ) -> None:
         """Bind HA + cmd_svc dependencies; per-entity timestamps start empty."""
         self._hass = hass
@@ -81,6 +84,7 @@ class DualAxisSequencer:
         self._get_current_tilt_position = get_current_tilt_position
         self._event_buffer = event_buffer
         self._invert_tilt = invert_tilt
+        self._get_min_change = get_min_change
         # Per-entity timestamps. Keep these in the sequencer (rather than on
         # CoverCommandService.PerEntityState) so non-venetian covers carry no
         # dual-axis state at all.
@@ -140,12 +144,36 @@ class DualAxisSequencer:
         tilt_target: int,
         position_target: int,
         reason: str,
+        force: bool = False,
     ) -> None:
         """Emit ``set_cover_tilt_position`` and rebase the commanded position.
 
         Shared by ``run_sequence`` (post-settle chase) and ``update_tilt_only``
         (tilt-only update when position hasn't changed).
         """
+        if not force and self._get_min_change is not None:
+            prior = self._tilt_targets.get(entity_id)
+            if prior is not None and not check_position_delta(
+                entity_id,
+                tilt_target,
+                self._get_min_change(),
+                None,
+                position=prior,
+                logger=self._logger,
+                axis_label="tilt",
+            ):
+                self._record_event(
+                    "tilt_command_skipped",
+                    reason=_TILT_SKIP_DELTA_TOO_SMALL,
+                    entity_id=entity_id,
+                    tilt_position=tilt_target,
+                    position_target=position_target,
+                    trigger=reason,
+                    prior_tilt_target=prior,
+                    min_delta_required=self._get_min_change(),
+                )
+                return
+
         if self._is_dry_run():
             self._logger.info(
                 "[dry_run] would send cover.set_cover_tilt_position %s → %s%%",

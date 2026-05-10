@@ -216,6 +216,12 @@ VENETIAN_MODE_TILT_ONLY = "tilt_only"
 DEFAULT_VENETIAN_MODE = VENETIAN_MODE_POSITION_AND_TILT
 VENETIAN_MODES = (VENETIAN_MODE_POSITION_AND_TILT, VENETIAN_MODE_TILT_ONLY)
 
+# Maximum slat tilt percentage (0–100). Caps the sun-derived slat angle so
+# slats never reach angles that can reflect direct sun into the room.
+CONF_MAX_TILT = "max_tilt"
+DEFAULT_MAX_TILT = 100
+_RANGE_MAX_TILT = (0, 100)
+
 # Manual override detection grace period (fixed values, not configurable)
 COMMAND_GRACE_PERIOD_SECONDS = 5.0  # Time to ignore position changes after command
 STARTUP_GRACE_PERIOD_SECONDS = (
@@ -442,6 +448,7 @@ def _build_option_ranges() -> dict[str, tuple[float, float]]:
         CONF_WEATHER_RAIN_THRESHOLD: _RANGE_WEATHER_RAIN,
         CONF_WEATHER_OVERRIDE_POSITION: _RANGE_WEATHER_OVERRIDE_POSITION,
         CONF_WEATHER_TIMEOUT: _RANGE_WEATHER_TIMEOUT,
+        CONF_MAX_TILT: _RANGE_MAX_TILT,
     }
     # Custom-position slots: per-slot position (0–100) and priority (1–99).
     for slot_keys in CUSTOM_POSITION_SLOTS.values():

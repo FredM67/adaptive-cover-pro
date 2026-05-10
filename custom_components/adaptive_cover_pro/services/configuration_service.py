@@ -24,12 +24,14 @@ from ..const import (
     CONF_ENABLE_GLARE_ZONES,
     CONF_HEIGHT_WIN,
     CONF_LENGTH_AWNING,
+    CONF_MAX_TILT,
     CONF_SILL_HEIGHT,
     CONF_TILT_DEPTH,
     CONF_TILT_DISTANCE,
     CONF_TILT_MODE,
     CONF_WINDOW_DEPTH,
     CONF_WINDOW_WIDTH,
+    DEFAULT_MAX_TILT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -133,6 +135,7 @@ class ConfigurationService:
             slat_distance=distance / 100,  # Convert cm to meters
             depth=depth / 100,  # Convert cm to meters
             mode=options.get(CONF_TILT_MODE),
+            max_tilt=options.get(CONF_MAX_TILT, DEFAULT_MAX_TILT),
         )
 
     def get_glare_zones_config(self, options: dict) -> GlareZonesConfig | None:

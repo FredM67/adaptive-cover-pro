@@ -83,6 +83,7 @@ from ..const import (
     CONF_TEMP_ENTITY,
     CONF_TEMP_HIGH,
     CONF_TEMP_LOW,
+    CONF_MAX_TILT,
     CONF_TILT_DEPTH,
     CONF_TILT_DISTANCE,
     CONF_TILT_MODE,
@@ -189,6 +190,7 @@ FIELD_VALIDATORS: dict[str, Any] = {
     CONF_TILT_DEPTH: _range(CONF_TILT_DEPTH),
     CONF_TILT_DISTANCE: _range(CONF_TILT_DISTANCE),
     CONF_TILT_MODE: _select_v("mode1", "mode2"),
+    CONF_MAX_TILT: _range(CONF_MAX_TILT),
     # Sun tracking
     CONF_ENABLE_SUN_TRACKING: _bool_v(),
     CONF_AZIMUTH: _range(CONF_AZIMUTH),

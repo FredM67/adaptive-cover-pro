@@ -286,6 +286,21 @@ def test_geometry_venetian_shows_retract_threshold_custom():
     assert "skip tilt when position > 80%" in summary
 
 
+def test_geometry_venetian_shows_max_tilt_default():
+    """Venetian summary includes max tilt at the default value (100%)."""
+    summary = _build_config_summary({}, SensorType.VENETIAN)
+    assert "max tilt 100%" in summary
+
+
+def test_geometry_venetian_shows_max_tilt_custom():
+    """Venetian summary reflects a custom max_tilt value."""
+    from custom_components.adaptive_cover_pro.const import CONF_MAX_TILT
+
+    cfg = {CONF_MAX_TILT: 70}
+    summary = _build_config_summary(cfg, SensorType.VENETIAN)
+    assert "max tilt 70%" in summary
+
+
 # ---------------------------------------------------------------------------
 # Section 2: How It Decides — Sun Tracking
 # ---------------------------------------------------------------------------

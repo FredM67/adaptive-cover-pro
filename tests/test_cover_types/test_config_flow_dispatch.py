@@ -116,6 +116,7 @@ class TestSummaryGeometryLines:
             "slat depth 3cm, spacing 2cm, mode: mode2",
             "skip tilt when position > 95%",
             "mode: position and tilt",
+            "max tilt 100%",
         ]
 
     def test_empty_config_renders_nothing(self):
@@ -124,7 +125,11 @@ class TestSummaryGeometryLines:
 
     def test_venetian_empty_config_renders_threshold_default(self):
         lines = VenetianPolicy().summary_geometry_lines({})
-        assert lines == ["skip tilt when position > 95%", "mode: position and tilt"]
+        assert lines == [
+            "skip tilt when position > 95%",
+            "mode: position and tilt",
+            "max tilt 100%",
+        ]
 
     def test_venetian_summary_shows_inverse_tilt_when_set(self):
         from custom_components.adaptive_cover_pro.const import CONF_INVERSE_TILT

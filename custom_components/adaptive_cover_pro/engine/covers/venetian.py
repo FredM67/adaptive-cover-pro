@@ -90,7 +90,7 @@ class VenetianCoverCalculation:
             return self._tilt.config.h_def
         if math.isnan(raw_tilt):
             return 0
-        return round(raw_tilt)
+        return min(round(raw_tilt), self._tilt.tilt_config.max_tilt)
 
     @property
     def direct_sun_valid(self) -> bool:

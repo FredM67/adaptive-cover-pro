@@ -127,6 +127,7 @@ class TiltConfig:
     slat_distance: float
     depth: float
     mode: TiltMode | str
+    max_tilt: int = 100
 
 
 # ---------------------------------------------------------------------------

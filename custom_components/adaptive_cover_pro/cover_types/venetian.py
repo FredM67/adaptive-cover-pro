@@ -18,8 +18,10 @@ from homeassistant.helpers import selector
 
 from ..const import (
     CONF_INVERSE_TILT,
+    CONF_MAX_TILT,
     CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
+    DEFAULT_MAX_TILT,
     DEFAULT_VENETIAN_MODE,
     DEFAULT_VENETIAN_TILT_SKIP_ABOVE,
     MAX_VENETIAN_TILT_SKIP_ABOVE,
@@ -67,6 +69,9 @@ GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(
             VENETIAN_MODES
         ),
         vol.Optional(CONF_INVERSE_TILT, default=False): bool,
+        vol.Optional(CONF_MAX_TILT, default=DEFAULT_MAX_TILT): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=100)
+        ),
     }
 )
 
@@ -135,12 +140,15 @@ class VenetianPolicy(CoverTypePolicy):
         }.get(venetian_mode, venetian_mode)
         mode_line = [f"mode: {_mode_label}"]
         inverse_tilt_line = ["Inverse tilt"] if config.get(CONF_INVERSE_TILT) else []
+        max_tilt = config.get(CONF_MAX_TILT, DEFAULT_MAX_TILT)
+        max_tilt_line = [f"max tilt {max_tilt}%"]
         return (
             window_dimensions_lines(config)
             + slat_line
             + retract_line
             + mode_line
             + inverse_tilt_line
+            + max_tilt_line
         )
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
@@ -278,6 +286,7 @@ class VenetianPolicy(CoverTypePolicy):
             get_current_tilt_position=kwargs.get("get_current_tilt_position"),
             event_buffer=kwargs.get("event_buffer"),
             invert_tilt=kwargs.get("invert_tilt"),
+            get_min_change=kwargs.get("get_min_change"),
         )
         if "tilt_skip_above" in kwargs:
             self._tilt_skip_above = int(kwargs["tilt_skip_above"])
