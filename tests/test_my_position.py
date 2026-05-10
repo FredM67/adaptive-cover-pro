@@ -533,11 +533,11 @@ class TestAcpStopContextTracking:
 
     @pytest.mark.asyncio
     async def test_send_my_position_records_context(self, svc, mock_hass):
-        """send_my_position adds a context id to _acp_stop_contexts."""
-        assert len(svc._acp_stop_contexts) == 0
+        """send_my_position records the call's context id as ACP-originated."""
+        assert svc.acp_stop_context_count() == 0
         with _patch_caps_my(has_stop=True):
             await svc.send_my_position("cover.somfy", 50)
-        assert len(svc._acp_stop_contexts) == 1
+        assert svc.acp_stop_context_count() == 1
 
     @pytest.mark.asyncio
     async def test_stop_all_records_context(self, svc, mock_hass):
@@ -545,7 +545,7 @@ class TestAcpStopContextTracking:
         _stub_all_covers_state(mock_hass, "opening")
         with _patch_caps_my(has_stop=True):
             await svc.stop_all(["cover.somfy"])
-        assert len(svc._acp_stop_contexts) == 1
+        assert svc.acp_stop_context_count() == 1
 
     @pytest.mark.asyncio
     async def test_stop_in_flight_records_context(self, svc, mock_hass):
@@ -554,7 +554,7 @@ class TestAcpStopContextTracking:
         _stub_all_covers_state(mock_hass, "opening")
         with _patch_caps_my(has_stop=True):
             await svc.stop_in_flight({"cover.somfy"})
-        assert len(svc._acp_stop_contexts) == 1
+        assert svc.acp_stop_context_count() == 1
 
     @pytest.mark.asyncio
     async def test_context_ids_are_unique(self, svc, mock_hass):
@@ -563,17 +563,17 @@ class TestAcpStopContextTracking:
         with _patch_caps_my(has_stop=True):
             await svc.stop_all(["cover.somfy"])
             await svc.stop_all(["cover.somfy"])
-        assert len(svc._acp_stop_contexts) == 2
-        assert len(set(svc._acp_stop_contexts)) == 2
+        assert svc.acp_stop_context_count() == 2
+        assert svc.acp_stop_context_count(unique=True) == 2
 
     @pytest.mark.asyncio
     async def test_context_deque_bounded(self, svc, mock_hass):
-        """_acp_stop_contexts deque is capped at 16 entries."""
+        """ACP-originated stop_cover context tracking is capped at 16 entries."""
         _stub_all_covers_state(mock_hass, "opening")
         with _patch_caps_my(has_stop=True):
             for _ in range(20):
                 await svc.stop_all(["cover.somfy"])
-        assert len(svc._acp_stop_contexts) == 16
+        assert svc.acp_stop_context_count() == 16
 
 
 # ---------------------------------------------------------------------------
