@@ -103,6 +103,20 @@ These were identified during the full code review but kept out of the chore/tier
 - ~~Standardize timestamp handling in `MotionManager` (managers/motion.py:78–80, 134) — currently mixes `dt.datetime.now().timestamp()` (float) with `dt.datetime.now(dt.UTC)` (aware datetime).~~ (done — PR #322 commit 2: routed all 5 sites through a single `_now()` UTC-aware helper)
 - Add per-handler priority-rationale docstrings (each `pipeline/handlers/*.py`) — explain _why_ the priority number is what it is, not just what the handler does.
 
+Cover Command Split Follow-ups (deferred from `feature/cover-command-split`)
+
+The cover_command split landed 11 commits on `feature/cover-command-split`: test surface migration off `_reconcile`, `_acp_stop_contexts`, `_get_current_position`, `_transit_elapsed_without_progress`, plus 6 of 7 structural sub-extractions into `managers/cover_command/` (routing, state_store, gates, stop, diagnostics + the package conversion). Two seams were intentionally left for follow-up because each warrants its own design pass:
+
+- **Extract `Reconciler` to `managers/cover_command/reconcile.py`.** Owns `run_reconciliation_pass(now)`, `_execute_command(entity_id, target)`, and the `async_track_time_interval` wiring currently in `start()` / `stop()`. Touches ~14 fields on the orchestrator (`_state` dict, `_manual_override_entities`, `_auto_control_enabled`, `_in_time_window`, `_enabled`, `_wait_for_target_timeout_seconds`, `_max_retries`, `_position_tolerance`, `_dry_run`, `_logger`, `_policy`, `_get_current_position`, `_prepare_service_call`, `_track_action`, `_event_buffer`, `_hass.services.async_call`). Two viable approaches:
+
+  1. **`Reconciler` with explicit dependency injection** — pass each field/callable in via constructor. Cleanest interface; biggest constructor.
+  2. **`Reconciler` with a back-reference to `CoverCommandService`** — pass `self` in. Lower-quality coupling but matches what `start()` / `stop()` already implicitly express. Pick this only if option 1's parameter list is unmanageable.
+     Decide before starting. The reconciliation loop is well-tested (54 sites in `tests/test_position_reconciliation.py` already migrated to `run_reconciliation_pass(now)`), so a verbatim move is safe.
+
+- **Wrap `_state` dict in an `EntityStateStore` class on `state_store.py`.** Today the `dict[str, PerEntityState]` and the ~17 typed accessors (`state`, `_get`, `has_target`, `get_target`, `set_target`, `iter_targets`, `is_waiting_for_target`, `set_waiting`, `waiting_entities`, `is_safety_target`, `clear_safety_targets`, `clear_non_safety_targets`, `discard_target`, `record_progress`, `get_entity_state_snapshot`, `get_all_entity_state_snapshots`, `transit_elapsed_without_progress`) live on the orchestrator. Wrapping them in a class would shrink `__init__.py` by ~280 lines but introduces another layer of forwarders. Worth doing in conjunction with the reconcile extraction since `Reconciler` would then take the store directly and avoid most of the orchestrator surface.
+
+After both: `__init__.py` should drop from 1,494 lines to ~1,000 lines and become genuinely an orchestrator (apply_position, \_prepare_service_call's mutation half, send_my_position, properties, lifecycle).
+
 Issue #33 Venetian Follow-ups (deferred from v2.20.0 dual-axis venetian release)
 
 These were intentionally scoped out of the dual-axis venetian PR (`feature/venetian-blinds` → v2.20.0). The dual-axis core ships first; each item below is independently picked up as its own follow-up issue/PR.
