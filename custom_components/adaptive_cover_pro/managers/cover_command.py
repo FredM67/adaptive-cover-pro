@@ -586,6 +586,17 @@ class CoverCommandService:
         """
         return context_id in self._acp_stop_contexts
 
+    def acp_stop_context_count(self, *, unique: bool = False) -> int:
+        """Return the number of recorded ACP-originated stop_cover context ids.
+
+        With ``unique=True`` returns the count of distinct ids, which lets
+        callers verify production code minted a fresh context per stop call
+        without inspecting the underlying deque.
+        """
+        if unique:
+            return len(set(self._acp_stop_contexts))
+        return len(self._acp_stop_contexts)
+
     # ------------------------------------------------------------------ #
     # Stop helpers — bypass _enabled gate (shutdown / emergency paths)
     # ------------------------------------------------------------------ #
