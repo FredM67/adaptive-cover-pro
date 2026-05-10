@@ -4,16 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..helpers import (
-    check_cover_features,
-    get_open_close_state,
-    should_use_tilt,
-    state_attr,
-)
+from ..helpers import check_cover_features
 from .snapshot import CoverCapabilities
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
+    from ..cover_types.base import CoverTypePolicy
 
 _DEFAULT_CAPABILITIES = CoverCapabilities(
     has_set_position=True,
@@ -32,27 +29,18 @@ class CoverProvider:
         self.logger = logger
 
     def read_positions(
-        self, entities: list[str], cover_type: str
+        self, entities: list[str], policy: CoverTypePolicy
     ) -> dict[str, int | None]:
-        """Read current positions for all managed cover entities."""
-        positions = {}
+        """Read current positions for all managed cover entities.
+
+        Delegates the per-entity axis routing to ``policy.read_axis_value`` so
+        the same "pick the axis, fall back to open/close" rule used by
+        ``CoverCommandService`` lives in exactly one place.
+        """
+        positions: dict[str, int | None] = {}
         for entity in entities:
             caps = self.read_single_capabilities(entity)
-            use_tilt = should_use_tilt(cover_type == "cover_tilt", caps)
-            if use_tilt:
-                if caps.has_set_tilt_position:
-                    positions[entity] = state_attr(
-                        self._hass, entity, "current_tilt_position"
-                    )
-                else:
-                    positions[entity] = get_open_close_state(self._hass, entity)
-            else:
-                if caps.has_set_position:
-                    positions[entity] = state_attr(
-                        self._hass, entity, "current_position"
-                    )
-                else:
-                    positions[entity] = get_open_close_state(self._hass, entity)
+            positions[entity] = policy.read_axis_value(self._hass, entity, caps)
         return positions
 
     def read_single_capabilities(self, entity: str) -> CoverCapabilities:

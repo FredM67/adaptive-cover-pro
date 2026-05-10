@@ -26,6 +26,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.adaptive_cover_pro.cover_types import get_policy
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -236,7 +238,7 @@ def test_position_within_tolerance_floor_not_flagged_as_manual():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=None,  # No user threshold configured
@@ -259,7 +261,7 @@ def test_position_within_tolerance_floor_not_flagged_strict_user_threshold():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=1,
@@ -282,7 +284,7 @@ def test_position_exceeding_tolerance_floor_and_no_user_threshold_triggers_overr
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=None,
@@ -304,7 +306,7 @@ def test_position_exceeding_user_threshold_and_tolerance_triggers_override():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=5,
@@ -334,7 +336,7 @@ def test_position_exactly_at_tolerance_boundary_not_flagged():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=None,
@@ -360,7 +362,7 @@ def test_position_just_inside_tolerance_boundary_not_flagged():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=None,
@@ -385,7 +387,7 @@ def test_large_user_threshold_wins_over_tolerance_floor():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=10,
@@ -406,7 +408,7 @@ def test_large_user_threshold_triggers_when_difference_exceeds_it():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=10,
@@ -428,7 +430,7 @@ def test_wait_for_target_prevents_override_regardless_of_tolerance():
     manager.handle_state_change(
         state_data,
         our_state=72,
-        blind_type="cover_blind",
+        policy=get_policy("cover_blind"),
         allow_reset=False,
         is_waiting=lambda _eid: True,  # Still waiting for target
         manual_threshold=None,
@@ -459,7 +461,7 @@ def test_tolerance_floor_applies_to_tilt_cover():
     manager.handle_state_change(
         state_data,
         our_state=45,
-        blind_type="cover_tilt",
+        policy=get_policy("cover_tilt"),
         allow_reset=False,
         is_waiting=lambda _eid: False,
         manual_threshold=None,

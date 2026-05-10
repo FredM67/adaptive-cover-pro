@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import voluptuous as vol
 from homeassistant.helpers import selector
 
 from ..const import CONF_TILT_DEPTH, CONF_TILT_DISTANCE, CONF_TILT_MODE
 from ..engine.covers import AdaptiveTiltCover
-from .base import CoverTypePolicy
+from .base import TILT_AXIS, CoverAxis, CoverTypePolicy
 
 if TYPE_CHECKING:
     from ..engine.covers import AdaptiveGeneralCover
@@ -59,6 +59,7 @@ class TiltPolicy(CoverTypePolicy):
     """Cover that rotates slats only (no vertical movement)."""
 
     cover_type = "cover_tilt"
+    axes: ClassVar[tuple[CoverAxis, ...]] = (TILT_AXIS,)
 
     def disallowed_geometry_fields(
         self,

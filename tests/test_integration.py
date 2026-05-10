@@ -6,6 +6,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 from custom_components.adaptive_cover_pro.calculation import NormalCoverState
+from custom_components.adaptive_cover_pro.cover_types import get_policy
 from tests.conftest import make_snapshot_for_cover
 from custom_components.adaptive_cover_pro.pipeline.handlers.climate import (
     ClimateCoverData,
@@ -86,7 +87,7 @@ def _make_climate_data(**overrides) -> ClimateCoverData:
         "temp_low": 20.0,
         "temp_high": 25.0,
         "temp_switch": True,
-        "blind_type": "cover_blind",
+        "policy": get_policy("cover_blind"),
         "transparent_blind": False,
         "temp_summer_outside": 22.0,
         "outside_temperature": 22.5,

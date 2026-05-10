@@ -14,18 +14,121 @@ overrides everything.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from homeassistant.const import (
+    SERVICE_SET_COVER_POSITION,
+    SERVICE_SET_COVER_TILT_POSITION,
+)
+
+from ..const import ATTR_POSITION, ATTR_TILT_POSITION, POSITION_CLOSED, POSITION_OPEN
+from ..helpers import get_open_close_state, should_use_tilt, state_attr
+
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant, State
+
     from ..engine.covers import AdaptiveGeneralCover
     from ..pipeline.types import PipelineResult
     from ..services.configuration_service import ConfigurationService
+
+
+# ---------------------------------------------------------------------------
+# Axis-related string constants
+# ---------------------------------------------------------------------------
+# HA cover entities expose two scalar attributes for current state and two
+# capability flags in supported_features. These names are part of HA's contract
+# so they're stable strings — naming them here lets the policy/axis layer
+# reference symbolic identifiers instead of raw literals.
+
+STATE_ATTR_POSITION = "current_position"
+STATE_ATTR_TILT_POSITION = "current_tilt_position"
+
+CAP_HAS_SET_POSITION = "has_set_position"
+CAP_HAS_SET_TILT_POSITION = "has_set_tilt_position"
+
+AXIS_NAME_POSITION = "position"
+AXIS_NAME_TILT = "tilt"
+
+
+@dataclass(frozen=True, slots=True)
+class CoverAxis:
+    """One controllable axis on a cover entity.
+
+    Encodes everything the control code currently re-derives from the cover
+    type string: the HA service to call, the service-data attribute that
+    carries the target value, the state attribute that carries the current
+    value, the capability flag that signals "this entity exposes this axis",
+    and the cover-type semantic of "what does fully-open mean". Passing a
+    ``CoverAxis`` around eliminates ``cover_type == "cover_tilt"`` checks at
+    call sites.
+    """
+
+    name: str
+    service: str
+    service_attr: str
+    state_attr: str
+    capability_key: str
+    open_blocks_sun: bool
+
+
+# Module-level singletons. Each policy declares ``axes`` referencing these so
+# every policy describing a position axis shares one ``CoverAxis`` instance.
+# Awning's "open=blocks-sun" semantic differs from blind/tilt/venetian, so
+# awning declares its own ``POSITION_AXIS_OPEN_BLOCKS_SUN`` rather than
+# mutating the shared singleton.
+
+POSITION_AXIS = CoverAxis(
+    name=AXIS_NAME_POSITION,
+    service=SERVICE_SET_COVER_POSITION,
+    service_attr=ATTR_POSITION,
+    state_attr=STATE_ATTR_POSITION,
+    capability_key=CAP_HAS_SET_POSITION,
+    open_blocks_sun=False,
+)
+
+POSITION_AXIS_OPEN_BLOCKS_SUN = CoverAxis(
+    name=AXIS_NAME_POSITION,
+    service=SERVICE_SET_COVER_POSITION,
+    service_attr=ATTR_POSITION,
+    state_attr=STATE_ATTR_POSITION,
+    capability_key=CAP_HAS_SET_POSITION,
+    open_blocks_sun=True,
+)
+
+TILT_AXIS = CoverAxis(
+    name=AXIS_NAME_TILT,
+    service=SERVICE_SET_COVER_TILT_POSITION,
+    service_attr=ATTR_TILT_POSITION,
+    state_attr=STATE_ATTR_TILT_POSITION,
+    capability_key=CAP_HAS_SET_TILT_POSITION,
+    open_blocks_sun=False,
+)
+
+
+def _caps_get(caps: Any, key: str, default: bool = False) -> bool:
+    """Read a capability flag from either a dict or a ``CoverCapabilities``.
+
+    ``check_cover_features`` returns a dict; ``CoverProvider`` constructs the
+    dataclass form. Both shapes are consumed by ``read_axis_value`` and
+    ``select_default_axis`` so a single accessor keeps the routing path uniform.
+    """
+    if caps is None:
+        return default
+    if isinstance(caps, dict):
+        return bool(caps.get(key, default))
+    return bool(getattr(caps, key, default))
 
 
 class CoverTypePolicy(ABC):
     """Per-cover-type policy."""
 
     cover_type: ClassVar[str]
+
+    # Ordered tuple: the primary axis comes first. ``select_default_axis``
+    # consults this when picking which HA service to call. Single-axis covers
+    # (blind, awning, tilt) declare one entry; venetian declares two.
+    axes: ClassVar[tuple[CoverAxis, ...]] = ()
 
     # Whether this cover type can shield specific floor zones from direct sun
     # (the "glare zones" feature). Only meaningful for vertical blinds today,
@@ -118,6 +221,64 @@ class CoverTypePolicy(ABC):
         command, not after a direct tilt command).
         """
         return
+
+    # ---- Axis routing -------------------------------------------------- #
+
+    def select_default_axis(self, caps: Any) -> CoverAxis:
+        """Pick the axis ``CoverCommandService`` should target for this entity.
+
+        Built on top of ``should_use_tilt`` so the existing fallback rule —
+        "an entity that only advertises set_tilt_position routes to tilt
+        regardless of declared cover type" — is preserved bit-for-bit.
+
+        ``caps=None`` happens when ``check_cover_features`` could not read the
+        entity (HA hasn't initialised it yet, or it's unavailable). The legacy
+        callers normalised that to an empty dict; doing the same here means
+        callers don't have to guard at every call site.
+        """
+        primary = self.axes[0]
+        is_tilt_default = primary.name == AXIS_NAME_TILT
+        if should_use_tilt(is_tilt_default, caps if caps is not None else {}):
+            return TILT_AXIS
+        return primary
+
+    def position_for_intent(self, *, sun_through: bool) -> int:
+        """Map a semantic intent to the numeric value for the primary axis.
+
+        ``sun_through=True`` → "let sun reach the window" (winter heating).
+        ``sun_through=False`` → "block sun" (summer cooling).
+
+        Awning's "open=blocks-sun" semantic flips the answer compared to
+        blind/tilt/venetian; the flip lives on ``axes[0].open_blocks_sun``
+        rather than on the policy class itself.
+        """
+        primary = self.axes[0]
+        if sun_through:
+            return POSITION_CLOSED if primary.open_blocks_sun else POSITION_OPEN
+        return POSITION_OPEN if primary.open_blocks_sun else POSITION_CLOSED
+
+    def read_axis_value(
+        self,
+        hass: HomeAssistant,
+        entity: str,
+        caps: Any,
+        *,
+        state_obj: State | None = None,
+    ) -> int | None:
+        """Read the current value on the axis this policy targets by default.
+
+        Single source of truth for the four call sites that historically did
+        the same ``should_use_tilt → branch on attribute`` dance:
+        ``CoverCommandService._read_position_with_capabilities``,
+        ``CoverProvider.read_positions``, manual_override state-change
+        handling, and the position-capability check inside ``_prepare_service_call``.
+        """
+        axis = self.select_default_axis(caps)
+        if _caps_get(caps, axis.capability_key, default=True):
+            if state_obj is not None:
+                return state_obj.attributes.get(axis.state_attr)
+            return state_attr(hass, entity, axis.state_attr)
+        return get_open_close_state(hass, entity)
 
     # ---- Config-flow / options-service helpers ------------------------- #
 

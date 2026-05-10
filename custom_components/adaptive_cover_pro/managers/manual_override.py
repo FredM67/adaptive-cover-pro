@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import DEFAULT_DEBUG_EVENT_BUFFER_SIZE, POSITION_TOLERANCE_PERCENT
 from ..diagnostics.event_buffer import EventBuffer
-from ..helpers import check_cover_features, get_open_close_state, should_use_tilt
+from ..helpers import check_cover_features
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -197,7 +197,7 @@ class AdaptiveCoverManager:
         self,
         states_data,
         our_state,
-        blind_type,
+        policy,
         allow_reset,
         is_waiting,
         manual_threshold,
@@ -214,8 +214,9 @@ class AdaptiveCoverManager:
         Args:
             states_data: StateChangedData with entity_id, old_state, new_state
             our_state: Expected position from coordinator calculation
-            blind_type: Cover type (cover_blind, cover_awning, cover_tilt,
-                cover_venetian)
+            policy: ``CoverTypePolicy`` describing the cover's axes. Used to
+                read the new entity position via the same axis-routing rule
+                that drives ``CoverCommandService`` and ``CoverProvider``.
             allow_reset: If True, updates timestamp on subsequent changes
             is_waiting: Callable(entity_id) -> bool indicating whether the cover
                 is currently expected to be moving toward a commanded target.
@@ -263,17 +264,14 @@ class AdaptiveCoverManager:
             if res.consumed:
                 return
 
+        # Single source of truth for "which axis carries the current value
+        # on this entity?" — same path used by CoverCommandService and
+        # CoverProvider, so manual-override detection sees the same number
+        # the coordinator commanded against.
         caps = check_cover_features(self.hass, entity_id)
-        if should_use_tilt(
-            blind_type == "cover_tilt", caps if caps is not None else {}
-        ):
-            new_position = new_state.attributes.get("current_tilt_position")
-        else:
-            new_position = new_state.attributes.get("current_position")
-
-        # If position is None, try mapping from open/close state
-        if new_position is None:
-            new_position = get_open_close_state(self.hass, entity_id)
+        new_position = policy.read_axis_value(
+            self.hass, entity_id, caps, state_obj=new_state
+        )
 
         # Position still unavailable (entity in transient state like "opening")
         # — nothing to compare against, skip override detection.

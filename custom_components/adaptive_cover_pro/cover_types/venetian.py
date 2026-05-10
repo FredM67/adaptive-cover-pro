@@ -10,7 +10,7 @@ position-context so ``CoverCommandService`` can run the dual-axis sequence.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import voluptuous as vol
 from homeassistant.const import SERVICE_SET_COVER_POSITION
@@ -33,7 +33,7 @@ from ..managers.dual_axis_sequencer import DualAxisSequencer
 from ..managers.manual_override import SecondaryAxisCheck
 from ..pipeline.types import DecisionStep
 from ._helpers import window_dimensions_lines
-from .base import CoverTypePolicy
+from .base import POSITION_AXIS, TILT_AXIS, CoverAxis, CoverTypePolicy
 from .blind import GEOMETRY_VERTICAL_SCHEMA
 from .tilt import GEOMETRY_TILT_SCHEMA, TILT_CAPABLE_ENTITY_FILTER
 
@@ -65,6 +65,12 @@ class VenetianPolicy(CoverTypePolicy):
     """Dual-axis cover (single HA entity, position + tilt)."""
 
     cover_type = "cover_venetian"
+    # Position drives the carriage; tilt drives the slats. Order matters —
+    # ``select_default_axis`` returns the first entry by default, so a venetian
+    # entity with full capabilities routes ``set_cover_position`` calls through
+    # the position axis. The tilt axis is filled in by ``post_pipeline_resolve``
+    # and dispatched separately by the ``DualAxisSequencer``.
+    axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS, TILT_AXIS)
 
     def __init__(self) -> None:
         """Initialise without a sequencer; ``attach()`` wires one up later."""
