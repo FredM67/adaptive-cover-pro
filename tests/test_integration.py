@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
-from custom_components.adaptive_cover_pro.calculation import NormalCoverState
 from custom_components.adaptive_cover_pro.cover_types import get_policy
 from tests.conftest import make_snapshot_for_cover
 from custom_components.adaptive_cover_pro.pipeline.handlers.climate import (
@@ -210,10 +209,7 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
             assert cover.direct_sun_valid is True
-            calc_pos = normal_state.get_state()
-            assert 0 <= calc_pos <= 100
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(cover, cover_type="cover_blind")
@@ -260,10 +256,7 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
             assert cover.direct_sun_valid is False
-            calc_pos = normal_state.get_state()
-            assert calc_pos == 50  # h_def
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(cover, cover_type="cover_blind")
@@ -468,9 +461,7 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
             assert cover.direct_sun_valid is True
-            normal_state.get_state()
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(
@@ -523,9 +514,6 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
-            normal_state.get_state()
-
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(
                 cover, cover_type="cover_blind", manual_override_active=True
@@ -567,9 +555,6 @@ class TestEndToEndIntegration:
                 max_pos=100,
                 min_pos=0,
             )
-
-            normal_state = NormalCoverState(cover=cover)
-            normal_state.get_state()
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(
@@ -616,10 +601,7 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
             assert cover.direct_sun_valid is True
-            calc_pos = normal_state.get_state()
-            assert 0 <= calc_pos <= 100
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(cover, cover_type="cover_awning")
@@ -667,10 +649,7 @@ class TestEndToEndIntegration:
                 min_pos=0,
             )
 
-            normal_state = NormalCoverState(cover=cover)
             assert cover.direct_sun_valid is True
-            calc_pos = normal_state.get_state()
-            assert 0 <= calc_pos <= 100
 
             pipeline = _make_pipeline()
             snapshot = _build_pipeline_snapshot(cover, cover_type="cover_tilt")
