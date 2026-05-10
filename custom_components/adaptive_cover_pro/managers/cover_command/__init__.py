@@ -14,7 +14,7 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_interval
 
-from ..const import (
+from ...const import (
     CONF_DEFAULT_HEIGHT,
     CONF_MY_POSITION_VALUE,
     CONF_SUNSET_POS,
@@ -23,15 +23,15 @@ from ..const import (
     POSITION_CHECK_INTERVAL_MINUTES,
     POSITION_TOLERANCE_PERCENT,
 )
-from ..cover_types.base import (
+from ...cover_types.base import (
     CAP_HAS_CLOSE,
     CAP_HAS_OPEN,
     CAP_HAS_STOP,
     CoverAxis,
     caps_get,
 )
-from ..diagnostics.event_buffer import EventBuffer
-from ..helpers import (
+from ...diagnostics.event_buffer import EventBuffer
+from ...helpers import (
     check_cover_features,
     get_last_updated,
 )
@@ -280,7 +280,7 @@ class CoverCommandService:
         # module-level import here would close the loop and ImportError on
         # first load. The policy is only consulted at construction time and
         # afterwards through ``self._policy``.
-        from ..cover_types import get_policy
+        from ...cover_types import get_policy
 
         self._hass = hass
         self._logger = logger
@@ -493,7 +493,7 @@ class CoverCommandService:
         because the answer to "use the tilt service?" depends on the entity's
         capabilities, not just on the configured cover type.
         """
-        from ..cover_types.base import AXIS_NAME_TILT
+        from ...cover_types.base import AXIS_NAME_TILT
 
         return self._policy.axes[0].name == AXIS_NAME_TILT
 
