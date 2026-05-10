@@ -57,6 +57,7 @@ from .const import (
     CONF_FOV_RIGHT,
     CONF_INTERP,
     CONF_INVERSE_STATE,
+    CONF_INVERSE_TILT,
     CONF_MANUAL_IGNORE_INTERMEDIATE,
     CONF_MANUAL_OVERRIDE_DURATION,
     CONF_MANUAL_OVERRIDE_RESET,
@@ -184,6 +185,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._policy: CoverTypePolicy = get_policy(self._cover_type)
         self._climate_mode = self.config_entry.options.get(CONF_CLIMATE_MODE, False)
         self._inverse_state = self.config_entry.options.get(CONF_INVERSE_STATE, False)
+        self._inverse_tilt = self.config_entry.options.get(CONF_INVERSE_TILT, False)
         self._use_interpolation = self.config_entry.options.get(CONF_INTERP, False)
         self._track_end_time = self.config_entry.options.get(CONF_RETURN_SUNSET)
         # Toggle state manager (switch entities delegate here)
@@ -345,6 +347,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             venetian_mode=self.config_entry.options.get(
                 CONF_VENETIAN_MODE, DEFAULT_VENETIAN_MODE
             ),
+            invert_tilt=lambda: self._inverse_tilt,
         )
 
         # Time window manager (start/end time checks)

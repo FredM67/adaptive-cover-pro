@@ -41,7 +41,8 @@
           "slat_depth": "Slat Depth",
           "slat_distance": "Slat Spacing",
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
-          "venetian_mode": "Operating Mode"
+          "venetian_mode": "Operating Mode",
+          "inverse_tilt": "Inverse Tilt"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -54,7 +55,8 @@
           "slat_depth": "Width of each slat (measure one slat front to back). Common sizes: Mini blinds (1 inch) = 2.5cm, Standard blinds (2 inch) = 5cm, Wide slats (2.5-3 inch) = 6.5-7.5cm. Measure a single slat with a ruler for precise sun blocking calculation.",
           "slat_distance": "Vertical spacing between slat centers. Measure from the middle of one slat to the middle of the next slat (vertically). Usually slightly more than slat depth to allow overlap when closed. Common: 3-8cm depending on blind type. Used to calculate optimal tilt angle.",
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
-          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt."
+          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt.",
+          "inverse_tilt": "Inverts the tilt axis only. Enable when your hardware sends tilt 0 for slats-open and 100 for slats-closed, which is the opposite of what the integration expects. This applies only to the tilt (slat) axis — the position axis is controlled separately by 'Inverse state'. Most covers do not need this. Useful for KNX or Somfy hardware where the tilt direction is wired opposite to the HA convention."
         }
       },
       "sun_tracking": {
@@ -103,7 +105,7 @@
         },
         "data_description": {
           "default_percentage": "Cover position when sun is not in front of window (0-100%). 0% = closed (blinds lowered / awning retracted), 50% = half open (balanced light and privacy), 100% = open (blinds raised / awning extended). This is the 'rest position' used when sun tracking is not active (sun is behind the window, blocked by obstacles, or outside tracking hours).",
-          "max_position": "Maximum cover position limit (0-100%). 100% = open (blinds raised / awning extended). Cover will never go above this value. Use this to: prevent cover from fully opening (set to 80%), keep some shade at all times (set to 60-70%), protect from jamming at top (set to 95%). This creates an upper boundary for all automatic positions.",
+          "max_position": "Maximum cover position limit (0-100%). 100% = open (blinds raised / awning extended). Cover will never go above this value. Use this to: prevent cover from fully opening (set to 80%), keep some shade at all times (set to 60-70%), protect from jamming at top (set to 95%). This creates an upper boundary for all automatic positions. On venetian blinds this constrains the carriage (vertical) axis only — slat tilt is computed from sun geometry and is not capped here.",
           "enable_max_position": "Controls WHEN maximum position limit applies. UNCHECKED (default, recommended): Maximum position applies ALL THE TIME - during sun tracking, default position, climate modes, etc. Cover never goes above max value. CHECKED (advanced): Maximum position ONLY applies when sun is directly in front of window. During default/fallback states, cover can go above max value. Most users should leave this UNCHECKED for consistent protection.",
           "min_position": "Minimum cover position limit (0-99%). 0% = closed (blinds lowered / awning retracted). Cover will never go below this value. Use this to: prevent cover from fully closing (set to 20%), maintain some light (set to 30-40%), protect from jamming at bottom (set to 5%). This creates a lower boundary for all automatic positions. Works with 'Apply min only during sun tracking' toggle below.",
           "enable_min_position": "Controls WHEN minimum position limit applies. UNCHECKED (default, recommended): Minimum position applies ALL THE TIME - during sun tracking, default position, climate modes, etc. Cover never goes below min value. CHECKED (advanced): Minimum position ONLY applies when sun is directly in front of window. During default/fallback states, cover can go below min value. Most users should leave this UNCHECKED for consistent protection.",
@@ -555,7 +557,8 @@
           "slat_depth": "Slat Depth",
           "slat_distance": "Slat Spacing",
           "venetian_tilt_skip_above": "Skip Tilt Above Position (%)",
-          "venetian_mode": "Operating Mode"
+          "venetian_mode": "Operating Mode",
+          "inverse_tilt": "Inverse Tilt"
         },
         "data_description": {
           "window_height": "Height of your window in meters (from bottom to top of the glass area). Examples: Standard door = 2.0m, Small window = 1.5m, Floor-to-ceiling = 2.5m. Measure from where the cover starts to where it ends when fully extended. Used to calculate optimal cover position to block direct sunlight. Note: 1 meter ≈ 3.3 feet.",
@@ -568,7 +571,8 @@
           "slat_depth": "Width of each slat (measure one slat front to back). Common sizes: Mini blinds (1 inch) = 2.5cm, Standard blinds (2 inch) = 5cm, Wide slats (2.5-3 inch) = 6.5-7.5cm. Measure a single slat with a ruler for precise sun blocking calculation.",
           "slat_distance": "Vertical spacing between slat centers. Measure from the middle of one slat to the middle of the next slat (vertically). Usually slightly more than slat depth to allow overlap when closed. Common: 3-8cm depending on blind type. Used to calculate optimal tilt angle.",
           "venetian_tilt_skip_above": "When the cover is commanded above this position (0–100%), the tilt command is skipped. At high positions the slats retract into the housing and tilting is physically meaningless. Default 95%. Increase if your blind tilts correctly near the top; decrease if it tries to tilt when fully raised.",
-          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt."
+          "venetian_mode": "How the venetian blind uses both axes when the sun is in the tracking window. **Position and tilt** (default): the cover lowers to the calculated position and the slats tilt to the optimal angle — best for combined shading and privacy. **Tilt only**: the cover stays closed (position 0%) and only the slat angle tracks the sun — best when you always want full coverage and want continuous glare control via tilt.",
+          "inverse_tilt": "Inverts the tilt axis only. Enable when your hardware sends tilt 0 for slats-open and 100 for slats-closed, which is the opposite of what the integration expects. This applies only to the tilt (slat) axis — the position axis is controlled separately by 'Inverse state'. Most covers do not need this. Useful for KNX or Somfy hardware where the tilt direction is wired opposite to the HA convention."
         }
       },
       "sun_tracking": {
@@ -617,7 +621,7 @@
         },
         "data_description": {
           "default_percentage": "Cover position when sun is not in front of window (0-100%). 0% = closed (blinds lowered / awning retracted), 50% = half open (balanced light and privacy), 100% = open (blinds raised / awning extended). This is the 'rest position' used when sun tracking is not active (sun is behind the window, blocked by obstacles, or outside tracking hours).",
-          "max_position": "Maximum cover position limit (0-100%). 100% = open (blinds raised / awning extended). Cover will never go above this value. Use this to: prevent cover from fully opening (set to 80%), keep some shade at all times (set to 60-70%), protect from jamming at top (set to 95%). This creates an upper boundary for all automatic positions.",
+          "max_position": "Maximum cover position limit (0-100%). 100% = open (blinds raised / awning extended). Cover will never go above this value. Use this to: prevent cover from fully opening (set to 80%), keep some shade at all times (set to 60-70%), protect from jamming at top (set to 95%). This creates an upper boundary for all automatic positions. On venetian blinds this constrains the carriage (vertical) axis only — slat tilt is computed from sun geometry and is not capped here.",
           "enable_max_position": "Controls WHEN maximum position limit applies. UNCHECKED (default, recommended): Maximum position applies ALL THE TIME - during sun tracking, default position, climate modes, etc. Cover never goes above max value. CHECKED (advanced): Maximum position ONLY applies when sun is directly in front of window. During default/fallback states, cover can go above max value. Most users should leave this UNCHECKED for consistent protection.",
           "min_position": "Minimum cover position limit (0-99%). 0% = closed (blinds lowered / awning retracted). Cover will never go below this value. Use this to: prevent cover from fully closing (set to 20%), maintain some light (set to 30-40%), protect from jamming at bottom (set to 5%). This creates a lower boundary for all automatic positions. Works with 'Apply min only during sun tracking' toggle below.",
           "enable_min_position": "Controls WHEN minimum position limit applies. UNCHECKED (default, recommended): Minimum position applies ALL THE TIME - during sun tracking, default position, climate modes, etc. Cover never goes below min value. CHECKED (advanced): Minimum position ONLY applies when sun is directly in front of window. During default/fallback states, cover can go below min value. Most users should leave this UNCHECKED for consistent protection.",

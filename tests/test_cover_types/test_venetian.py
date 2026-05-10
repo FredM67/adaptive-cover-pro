@@ -360,6 +360,46 @@ def test_secondary_axis_check_returns_none_without_tilt() -> None:
     assert policy.secondary_axis_check(None, cmd_svc=MagicMock()) is None
 
 
+def test_attach_threads_invert_tilt_callable_into_sequencer() -> None:
+    """attach() with invert_tilt=lambda: True must wire that callable into the sequencer."""
+    from unittest.mock import MagicMock
+
+    policy = VenetianPolicy()
+    hass = MagicMock()
+    hass.services.async_call = MagicMock()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=lambda _: None,
+        set_commanded_position=lambda *_: None,
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+        invert_tilt=lambda: True,
+    )
+    assert policy.sequencer is not None
+    assert policy.sequencer._invert_tilt() is True
+
+
+def test_attach_invert_tilt_defaults_to_none() -> None:
+    """When invert_tilt is not passed, the sequencer must have _invert_tilt=None."""
+    from unittest.mock import MagicMock
+
+    policy = VenetianPolicy()
+    hass = MagicMock()
+    policy.attach(
+        hass=hass,
+        logger=MagicMock(),
+        grace_mgr=MagicMock(),
+        get_current_position=lambda _: None,
+        set_commanded_position=lambda *_: None,
+        position_tolerance=5,
+        is_dry_run=lambda: False,
+    )
+    assert policy.sequencer is not None
+    assert policy.sequencer._invert_tilt is None
+
+
 def test_secondary_axis_check_carries_expected_tilt() -> None:
     """With a resolved tilt, the check exposes the expected slat angle and label."""
     policy = VenetianPolicy()

@@ -126,6 +126,36 @@ class TestSummaryGeometryLines:
         lines = VenetianPolicy().summary_geometry_lines({})
         assert lines == ["skip tilt when position > 95%", "mode: position and tilt"]
 
+    def test_venetian_summary_shows_inverse_tilt_when_set(self):
+        from custom_components.adaptive_cover_pro.const import CONF_INVERSE_TILT
+
+        lines = VenetianPolicy().summary_geometry_lines({CONF_INVERSE_TILT: True})
+        assert "Inverse tilt" in lines
+
+    def test_venetian_summary_omits_inverse_tilt_when_false(self):
+        from custom_components.adaptive_cover_pro.const import CONF_INVERSE_TILT
+
+        lines = VenetianPolicy().summary_geometry_lines({CONF_INVERSE_TILT: False})
+        assert "Inverse tilt" not in lines
+
+    def test_venetian_geometry_schema_accepts_inverse_tilt(self):
+        from custom_components.adaptive_cover_pro.const import CONF_INVERSE_TILT
+        from custom_components.adaptive_cover_pro.cover_types.venetian import (
+            GEOMETRY_VENETIAN_SCHEMA,
+        )
+
+        result = GEOMETRY_VENETIAN_SCHEMA({CONF_INVERSE_TILT: True})
+        assert result[CONF_INVERSE_TILT] is True
+
+    def test_venetian_geometry_schema_inverse_tilt_defaults_to_false(self):
+        from custom_components.adaptive_cover_pro.const import CONF_INVERSE_TILT
+        from custom_components.adaptive_cover_pro.cover_types.venetian import (
+            GEOMETRY_VENETIAN_SCHEMA,
+        )
+
+        result = GEOMETRY_VENETIAN_SCHEMA({})
+        assert result[CONF_INVERSE_TILT] is False
+
     def test_venetian_summary_shows_tilt_only_mode(self):
         from custom_components.adaptive_cover_pro.const import (
             CONF_VENETIAN_MODE,

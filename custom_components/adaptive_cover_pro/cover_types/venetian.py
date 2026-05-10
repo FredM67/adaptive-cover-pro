@@ -17,6 +17,7 @@ from homeassistant.const import SERVICE_SET_COVER_POSITION
 from homeassistant.helpers import selector
 
 from ..const import (
+    CONF_INVERSE_TILT,
     CONF_VENETIAN_MODE,
     CONF_VENETIAN_TILT_SKIP_ABOVE,
     DEFAULT_VENETIAN_MODE,
@@ -65,6 +66,7 @@ GEOMETRY_VENETIAN_SCHEMA = GEOMETRY_VERTICAL_SCHEMA.extend(
         vol.Optional(CONF_VENETIAN_MODE, default=DEFAULT_VENETIAN_MODE): vol.In(
             VENETIAN_MODES
         ),
+        vol.Optional(CONF_INVERSE_TILT, default=False): bool,
     }
 )
 
@@ -132,7 +134,14 @@ class VenetianPolicy(CoverTypePolicy):
             VENETIAN_MODE_TILT_ONLY: "tilt only",
         }.get(venetian_mode, venetian_mode)
         mode_line = [f"mode: {_mode_label}"]
-        return window_dimensions_lines(config) + slat_line + retract_line + mode_line
+        inverse_tilt_line = ["Inverse tilt"] if config.get(CONF_INVERSE_TILT) else []
+        return (
+            window_dimensions_lines(config)
+            + slat_line
+            + retract_line
+            + mode_line
+            + inverse_tilt_line
+        )
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Require both ``set_position`` and ``set_tilt_position`` on every entity."""
@@ -268,6 +277,7 @@ class VenetianPolicy(CoverTypePolicy):
             get_state=kwargs.get("get_state"),
             get_current_tilt_position=kwargs.get("get_current_tilt_position"),
             event_buffer=kwargs.get("event_buffer"),
+            invert_tilt=kwargs.get("invert_tilt"),
         )
         if "tilt_skip_above" in kwargs:
             self._tilt_skip_above = int(kwargs["tilt_skip_above"])

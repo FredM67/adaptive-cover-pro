@@ -35,6 +35,7 @@ from ..const import (
     VENETIAN_TILT_SUPPRESSION_SECONDS,
     VENETIAN_TILT_VERIFY_TOLERANCE,
 )
+from .manual_override import inverse_state
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -66,6 +67,7 @@ class DualAxisSequencer:
         get_state: Callable[[str], str | None] | None = None,
         get_current_tilt_position: Callable[[str], int | None] | None = None,
         event_buffer: EventBuffer | None = None,
+        invert_tilt: Callable[[], bool] | None = None,
     ) -> None:
         """Bind HA + cmd_svc dependencies; per-entity timestamps start empty."""
         self._hass = hass
@@ -78,12 +80,21 @@ class DualAxisSequencer:
         self._get_state = get_state
         self._get_current_tilt_position = get_current_tilt_position
         self._event_buffer = event_buffer
+        self._invert_tilt = invert_tilt
         # Per-entity timestamps. Keep these in the sequencer (rather than on
         # CoverCommandService.PerEntityState) so non-venetian covers carry no
         # dual-axis state at all.
         self._suppression_at: dict[str, dt.datetime] = {}
         self._tilt_targets: dict[str, int] = {}
         self._tilt_sent_at: dict[str, dt.datetime] = {}
+
+    # -- tilt inversion ---------------------------------------------------- #
+
+    def _to_wire(self, tilt: int) -> int:
+        """Convert logical tilt to wire value, applying inversion if configured."""
+        if self._invert_tilt is not None and self._invert_tilt():
+            return inverse_state(tilt)
+        return tilt
 
     # -- suppression window ------------------------------------------------ #
 
@@ -151,17 +162,19 @@ class DualAxisSequencer:
             )
             return
 
-        self._tilt_targets[entity_id] = tilt_target
+        self._tilt_targets[entity_id] = tilt_target  # store logical value
         self._tilt_sent_at[entity_id] = dt.datetime.now(dt.UTC)
         # Restart the grace window so the tilt-axis change isn't read as a
         # user touch by manual_override detection.
         self._grace_mgr.start_command_grace_period(entity_id)
 
+        wire_target = self._to_wire(tilt_target)
         self._logger.info(
-            "[%s] Tilt %s → %s%% (paired with position %s%%)",
+            "[%s] Tilt %s → %s%% (wire: %s%%) (paired with position %s%%)",
             reason,
             entity_id,
             tilt_target,
+            wire_target,
             position_target,
         )
 
@@ -176,7 +189,7 @@ class DualAxisSequencer:
             await self._hass.services.async_call(
                 COVER_DOMAIN,
                 SERVICE_SET_COVER_TILT_POSITION,
-                {ATTR_ENTITY_ID: entity_id, ATTR_TILT_POSITION: tilt_target},
+                {ATTR_ENTITY_ID: entity_id, ATTR_TILT_POSITION: wire_target},
             )
         except HomeAssistantError as err:
             self._logger.warning(
@@ -350,9 +363,12 @@ class DualAxisSequencer:
         """
         if self._get_current_tilt_position is None:
             return
-        actual = self._get_current_tilt_position(entity_id)
-        if actual is None:
+        actual_wire = self._get_current_tilt_position(entity_id)
+        if actual_wire is None:
             return
+        # Convert wire reading back to logical space so comparison is consistent
+        # with the logical tilt_target regardless of inversion setting.
+        actual = self._to_wire(actual_wire)
         delta = abs(actual - tilt_target)
         if delta <= VENETIAN_TILT_VERIFY_TOLERANCE:
             self._record_event(

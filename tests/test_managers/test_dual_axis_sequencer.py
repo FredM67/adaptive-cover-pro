@@ -45,6 +45,7 @@ def _build_sequencer(
     get_state=None,
     get_current_tilt_position=None,
     event_buffer=None,
+    invert_tilt=None,
 ):
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -66,6 +67,7 @@ def _build_sequencer(
             get_state=get_state,
             get_current_tilt_position=get_current_tilt_position,
             event_buffer=event_buffer,
+            invert_tilt=invert_tilt,
         ),
     )
 
@@ -600,3 +602,77 @@ class TestTiltDiagnosticEvents:
             if e["event"] in ("tilt_command_verified", "tilt_command_drift")
         ]
         assert len(verify_events) == 0
+
+
+@pytest.mark.asyncio
+class TestTiltInversion:
+    """_send_tilt_command applies optional tilt-axis inversion before sending."""
+
+    async def test_inverts_wire_value_when_invert_tilt_is_true(self):
+        """With invert_tilt=True, wire value sent must be 100 - tilt_target."""
+        hass, seq = _build_sequencer(invert_tilt=lambda: True)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        wire = hass.services.async_call.call_args.args[2]["tilt_position"]
+        assert wire == 20  # 100 - 80
+
+    async def test_passes_target_through_when_invert_tilt_is_false(self):
+        """With invert_tilt=False, wire value must equal tilt_target unchanged."""
+        hass, seq = _build_sequencer(invert_tilt=lambda: False)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        wire = hass.services.async_call.call_args.args[2]["tilt_position"]
+        assert wire == 80
+
+    async def test_recorded_tilt_target_stays_logical(self):
+        """last_tilt_target must store the logical (user-facing) value, not the wire value."""
+        _, seq = _build_sequencer(invert_tilt=lambda: True)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_invert_tilt_callable_evaluated_per_call(self):
+        """Callable must be evaluated on each send so runtime option changes take effect."""
+        inverted = [True]
+        hass, seq = _build_sequencer(invert_tilt=lambda: inverted[0])
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        first_wire = hass.services.async_call.call_args_list[-1].args[2][
+            "tilt_position"
+        ]
+        assert first_wire == 20
+
+        inverted[0] = False
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        second_wire = hass.services.async_call.call_args_list[-1].args[2][
+            "tilt_position"
+        ]
+        assert second_wire == 80
+
+    async def test_verify_keeps_target_when_wire_actual_matches_inverted_target(self):
+        """Verification must compare in logical space: wire=20 → logical=80, matches tilt_target=80."""
+        _, seq = _build_sequencer(
+            invert_tilt=lambda: True,
+            get_current_tilt_position=lambda _eid: 20,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_verify_detects_drift_in_logical_space_when_inverted(self):
+        """Wire=80 → logical=20 when inverted; delta against tilt_target=80 is 60 → drift."""
+        _, seq = _build_sequencer(
+            invert_tilt=lambda: True,
+            get_current_tilt_position=lambda _eid: 80,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") is None
