@@ -289,6 +289,23 @@ class AdaptiveCoverManager:
             )
             return
 
+        # Cover's own state attribute says it's still in transit. The
+        # current_position it just reported can lag the actual physical
+        # position — Zigbee covers that emit a single end-of-move report
+        # look like a stale-position event with state=closing/opening.
+        # Wait for the next event when the cover stops; that event runs
+        # the full position-math path.
+        new_state_str = getattr(new_state, "state", None)
+        if new_state_str in ("opening", "closing"):
+            self._record_event(
+                entity_id,
+                "manual_override_rejected_in_transit",
+                our_state=our_state,
+                new_position=new_position,
+                reason=f"cover state '{new_state_str}' indicates in-transit",
+            )
+            return
+
         if new_position != our_state:
             # Use the larger of the user-configured threshold and the position
             # tolerance constant as the minimum detectable change.  This prevents
