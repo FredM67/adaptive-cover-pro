@@ -427,7 +427,7 @@
       },
       "light_cloud": {
         "title": "Light Sensors & Cloud Suppression",
-        "description": "Suppress glare control when sunlight is absent. Configure sensors to detect clouds or low light — when triggered, the integration stops sun tracking and optionally moves covers to a parked position. Prevents unnecessary cover movement on overcast days.\n\nAny of the four inputs (weather state, lux sensor, irradiance sensor, cloud-coverage sensor) can be used individually or together — any single match is enough to suppress tracking. The optional **cloudy position** moves covers to a specific position when suppression fires; leave it blank to hold the current position instead.\n\n[Learn more]({learn_more})",
+        "description": "**Glare suppression in low light.** The first toggle below is the master on/off for this feature — leave it off and the rest of this screen is ignored. When on, set the optional **Cloudy position** the cover parks at when suppression fires (leave blank to use the default position).\n\nThe remaining sensors tell the integration *when* the sun is absent — any one of weather state, lux, solar irradiance, or cloud coverage will trigger suppression. Configure only the sensors you actually have; any single match is enough.\n\n[Learn more]({learn_more})",
         "data": {
           "weather_entity": "Weather entity (optional)",
           "lux_entity": "Lux sensor (optional)",
@@ -436,7 +436,7 @@
           "irradiance_threshold": "Irradiance threshold",
           "cloud_coverage_entity": "Cloud coverage sensor (optional)",
           "cloud_coverage_threshold": "Cloud coverage threshold",
-          "cloud_suppression": "Suppress glare control in low light",
+          "cloud_suppression": "Enable cloud suppression (master switch)",
           "cloudy_position": "Cloudy position (optional)",
           "weather_state": "Weather Conditions"
         },
@@ -449,7 +449,7 @@
           "irradiance_threshold": "Solar irradiance level above which the sun is considered present. Below this value the cover returns to its default position. Typical values: 300–500 W/m² for direct sunlight, 100–200 W/m² for an overcast day. Adjust based on your climate and preference.",
           "cloud_coverage_entity": "Optional cloud coverage sensor reporting 0–100% (e.g. from a weather integration). When the reading reaches the threshold, glare control is suppressed and the cover returns to its default position. Leave empty if you don't have this sensor.",
           "cloud_coverage_threshold": "Cloud coverage percentage at or above which glare control is suppressed. For example, 75 means the cover stops sun-tracking when the sky is 75% or more overcast.",
-          "cloud_suppression": "When enabled, any configured light or cloud sensor (weather state, lux, irradiance, or cloud coverage) can suppress glare control. If any sensor indicates no real direct sun, the cover returns to its default position instead of tracking the sun. Does not require climate mode — this works as a standalone light-aware glare control.",
+          "cloud_suppression": "Master on/off for this entire screen. When **off** (default), every sensor below is ignored and glare control runs as usual. When **on**, any configured sensor (weather state, lux, irradiance, or cloud coverage) that indicates the sun is absent will stop sun-tracking and move the cover to the **Cloudy position** above (or the default position if that is blank). Works on its own — climate mode does not need to be enabled.",
           "cloudy_position": "Position (0-100%) to move covers to when cloud suppression fires (cloudy / low-light conditions). 0% = closed (blinds lowered / awning retracted), 100% = open (blinds raised / awning extended). Leave blank to use the default position."
         }
       },
@@ -932,7 +932,7 @@
       },
       "light_cloud": {
         "title": "Light Sensors & Cloud Suppression",
-        "description": "Suppress glare control when sunlight is absent. Configure sensors to detect clouds or low light — when triggered, the integration stops sun tracking and optionally moves covers to a parked position. Prevents unnecessary cover movement on overcast days.\n\nAny of the four inputs (weather state, lux sensor, irradiance sensor, cloud-coverage sensor) can be used individually or together — any single match is enough to suppress tracking. The optional **cloudy position** moves covers to a specific position when suppression fires; leave it blank to hold the current position instead.\n\n[Learn more]({learn_more})",
+        "description": "**Glare suppression in low light.** The first toggle below is the master on/off for this feature — leave it off and the rest of this screen is ignored. When on, set the optional **Cloudy position** the cover parks at when suppression fires (leave blank to use the default position).\n\nThe remaining sensors tell the integration *when* the sun is absent — any one of weather state, lux, solar irradiance, or cloud coverage will trigger suppression. Configure only the sensors you actually have; any single match is enough.\n\n[Learn more]({learn_more})",
         "data": {
           "weather_entity": "Weather entity (optional)",
           "lux_entity": "Lux sensor (optional)",
@@ -941,7 +941,7 @@
           "irradiance_threshold": "Irradiance threshold",
           "cloud_coverage_entity": "Cloud coverage sensor (optional)",
           "cloud_coverage_threshold": "Cloud coverage threshold",
-          "cloud_suppression": "Suppress glare control in low light",
+          "cloud_suppression": "Enable cloud suppression (master switch)",
           "cloudy_position": "Cloudy position (optional)",
           "weather_state": "Weather Conditions"
         },
@@ -954,7 +954,7 @@
           "irradiance_threshold": "Solar irradiance level above which the sun is considered present. Below this value the cover returns to its default position. Typical values: 300–500 W/m² for direct sunlight, 100–200 W/m² for an overcast day. Adjust based on your climate and preference.",
           "cloud_coverage_entity": "Optional cloud coverage sensor reporting 0–100% (e.g. from a weather integration). When the reading reaches the threshold, glare control is suppressed and the cover returns to its default position. Leave empty if you don't have this sensor.",
           "cloud_coverage_threshold": "Cloud coverage percentage at or above which glare control is suppressed. For example, 75 means the cover stops sun-tracking when the sky is 75% or more overcast.",
-          "cloud_suppression": "When enabled, any configured light or cloud sensor (weather state, lux, irradiance, or cloud coverage) can suppress glare control. If any sensor indicates no real direct sun, the cover returns to its default position instead of tracking the sun. Does not require climate mode — this works as a standalone light-aware glare control.",
+          "cloud_suppression": "Master on/off for this entire screen. When **off** (default), every sensor below is ignored and glare control runs as usual. When **on**, any configured sensor (weather state, lux, irradiance, or cloud coverage) that indicates the sun is absent will stop sun-tracking and move the cover to the **Cloudy position** above (or the default position if that is blank). Works on its own — climate mode does not need to be enabled.",
           "cloudy_position": "Position (0-100%) to move covers to when cloud suppression fires (cloudy / low-light conditions). 0% = closed (blinds lowered / awning retracted), 100% = open (blinds raised / awning extended). Leave blank to use the default position."
         }
       },

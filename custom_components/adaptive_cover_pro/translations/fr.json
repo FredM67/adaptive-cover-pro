@@ -427,7 +427,7 @@
       },
       "light_cloud": {
         "title": "Capteurs de lumière et suppression des nuages",
-        "description": "Supprimez le contrôle de l'éblouissement lorsque la lumière solaire est absente. Configurez les capteurs pour détecter les nuages ou la faible luminosité — lorsqu'ils sont déclenchés, l'intégration arrête le suivi du soleil et déplace optionnellement les protections vers une position de stationnement. Empêche le mouvement inutile des protections par temps couvert.\n\nN'importe lequel des quatre éléments (état météo, capteur lux, capteur d'irradiance, capteur de couverture nuageuse) peut être utilisé individuellement ou ensemble — n'importe quel seul match est suffisant pour supprimer le suivi. La **position nuageuse** optionnelle déplace les protections à une position spécifique lorsque la suppression se déclenche ; laissez vide pour maintenir la position actuelle à la place.\n\n[Learn more]({learn_more})",
+        "description": "**Suppression de l'éblouissement en faible luminosité.** Le premier curseur ci-dessous est l'interrupteur principal de cette fonction — laissez-le désactivé et le reste de cet écran sera ignoré. Lorsqu'il est activé, définissez la **position nuageuse** facultative vers laquelle la protection se déplacera lorsque la suppression se déclenche (laissez vide pour utiliser la position par défaut).\n\nLes capteurs restants indiquent à l'intégration *quand* le soleil est absent — l'un des états météorologiques, de la luminosité, du rayonnement solaire ou de la couverture nuageuse peut déclencher la suppression. Configurez uniquement les capteurs que vous avez réellement ; n'importe quelle correspondance suffit.\n\n[En savoir plus]({learn_more})",
         "data": {
           "weather_entity": "Entité météo (optionnelle)",
           "lux_entity": "Capteur de lux (optionnel)",
@@ -436,7 +436,7 @@
           "irradiance_threshold": "Seuil d'irradiance",
           "cloud_coverage_entity": "Capteur de couverture nuageuse (optionnel)",
           "cloud_coverage_threshold": "Seuil de couverture nuageuse",
-          "cloud_suppression": "Supprimer le contrôle d'éblouissement en faible lumière",
+          "cloud_suppression": "Activer la suppression des nuages (interrupteur principal)",
           "weather_state": "Conditions météorologiques",
           "cloudy_position": "Position nuageux (optionnel)"
         },
@@ -449,7 +449,7 @@
           "irradiance_threshold": "Niveau d'irradiance solaire au-dessus duquel le soleil est considéré comme présent. En dessous de cette valeur, le store revient à sa position par défaut. Valeurs typiques : 300-500 W/m² pour le soleil direct, 100-200 W/m² pour un jour couvert. Ajustez selon votre climat et vos préférences.",
           "cloud_coverage_entity": "Capteur de couverture nuageuse optionnel indiquant une valeur de 0 à 100 % (par ex. d'une intégration météo). Quand la valeur atteint le seuil, le contrôle de l'éblouissement est supprimé et le store revient à sa position par défaut. Laissez vide si vous ne disposez pas de ce capteur.",
           "cloud_coverage_threshold": "Pourcentage de couverture nuageuse à partir duquel le contrôle de l'éblouissement est supprimé. Par exemple, 75 signifie que le store arrête de suivre le soleil quand le ciel est couvert à 75 % ou plus.",
-          "cloud_suppression": "Quand cette option est activée, tout capteur de lumière ou de nuages configuré (état météo, lux, irradiance ou couverture nuageuse) peut supprimer le contrôle de l'éblouissement. Si un capteur indique l'absence de soleil direct, le store revient à sa position par défaut au lieu de suivre le soleil. Ne nécessite pas le mode climatique — fonctionne comme un contrôle de l'éblouissement autonome adapté à la lumière.",
+          "cloud_suppression": "Interrupteur principal de cet écran entier. Lorsqu'il est **désactivé** (par défaut), tous les capteurs ci-dessous sont ignorés et le contrôle de l'éblouissement fonctionne normalement. Lorsqu'il est **activé**, tout capteur configuré (état météorologique, luminosité, rayonnement ou couverture nuageuse) indiquant l'absence du soleil arrêtera le suivi du soleil et déplacera la protection vers la **position nuageuse** ci-dessus (ou la position par défaut si celle-ci est vide). Fonctionne seul — le mode climatique n'a pas besoin d'être activé.",
           "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut."
         }
       },
@@ -932,7 +932,7 @@
       },
       "light_cloud": {
         "title": "Capteurs de lumière et suppression des nuages",
-        "description": "Supprimez le contrôle de l'éblouissement lorsque la lumière solaire est absente. Configurez les capteurs pour détecter les nuages ou la faible luminosité — lorsqu'ils sont déclenchés, l'intégration arrête le suivi du soleil et déplace optionnellement les protections vers une position de stationnement. Empêche le mouvement inutile des protections par temps couvert.\n\nN'importe lequel des quatre éléments (état météo, capteur lux, capteur d'irradiance, capteur de couverture nuageuse) peut être utilisé individuellement ou ensemble — n'importe quel seul match est suffisant pour supprimer le suivi. La **position nuageuse** optionnelle déplace les protections à une position spécifique lorsque la suppression se déclenche ; laissez vide pour maintenir la position actuelle à la place.\n\n[Learn more]({learn_more})",
+        "description": "**Suppression de l'éblouissement en faible luminosité.** Le premier curseur ci-dessous est l'interrupteur principal de cette fonction — laissez-le désactivé et le reste de cet écran sera ignoré. Lorsqu'il est activé, définissez la **position nuageuse** facultative vers laquelle la protection se déplacera lorsque la suppression se déclenche (laissez vide pour utiliser la position par défaut).\n\nLes capteurs restants indiquent à l'intégration *quand* le soleil est absent — l'un des états météorologiques, de la luminosité, du rayonnement solaire ou de la couverture nuageuse peut déclencher la suppression. Configurez uniquement les capteurs que vous avez réellement ; n'importe quelle correspondance suffit.\n\n[En savoir plus]({learn_more})",
         "data": {
           "weather_entity": "Entité météo (optionnelle)",
           "lux_entity": "Capteur de lux (optionnel)",
@@ -941,7 +941,7 @@
           "irradiance_threshold": "Seuil d'irradiance",
           "cloud_coverage_entity": "Capteur de couverture nuageuse (optionnel)",
           "cloud_coverage_threshold": "Seuil de couverture nuageuse",
-          "cloud_suppression": "Supprimer le contrôle d'éblouissement en faible lumière",
+          "cloud_suppression": "Activer la suppression des nuages (interrupteur principal)",
           "weather_state": "Conditions météorologiques",
           "cloudy_position": "Position nuageux (optionnel)"
         },
@@ -954,7 +954,7 @@
           "irradiance_threshold": "Niveau d'irradiance solaire au-dessus duquel le soleil est considéré comme présent. En dessous de cette valeur, le store revient à sa position par défaut. Valeurs typiques : 300-500 W/m² pour le soleil direct, 100-200 W/m² pour un jour couvert. Ajustez selon votre climat et vos préférences.",
           "cloud_coverage_entity": "Capteur de couverture nuageuse optionnel indiquant une valeur de 0 à 100 % (par ex. d'une intégration météo). Quand la valeur atteint le seuil, le contrôle de l'éblouissement est supprimé et le store revient à sa position par défaut. Laissez vide si vous ne disposez pas de ce capteur.",
           "cloud_coverage_threshold": "Pourcentage de couverture nuageuse à partir duquel le contrôle de l'éblouissement est supprimé. Par exemple, 75 signifie que le store arrête de suivre le soleil quand le ciel est couvert à 75 % ou plus.",
-          "cloud_suppression": "Quand cette option est activée, tout capteur de lumière ou de nuages configuré (état météo, lux, irradiance ou couverture nuageuse) peut supprimer le contrôle de l'éblouissement. Si un capteur indique l'absence de soleil direct, le store revient à sa position par défaut au lieu de suivre le soleil. Ne nécessite pas le mode climatique — fonctionne comme un contrôle de l'éblouissement autonome adapté à la lumière.",
+          "cloud_suppression": "Interrupteur principal de cet écran entier. Lorsqu'il est **désactivé** (par défaut), tous les capteurs ci-dessous sont ignorés et le contrôle de l'éblouissement fonctionne normalement. Lorsqu'il est **activé**, tout capteur configuré (état météorologique, luminosité, rayonnement ou couverture nuageuse) indiquant l'absence du soleil arrêtera le suivi du soleil et déplacera la protection vers la **position nuageuse** ci-dessus (ou la position par défaut si celle-ci est vide). Fonctionne seul — le mode climatique n'a pas besoin d'être activé.",
           "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut."
         }
       },

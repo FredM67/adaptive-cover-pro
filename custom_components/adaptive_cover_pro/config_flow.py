@@ -651,6 +651,16 @@ WEATHER_OVERRIDE_SCHEMA = vol.Schema(
 # --- Light & Cloud (works without climate mode) ---
 LIGHT_CLOUD_SCHEMA = vol.Schema(
     {
+        vol.Optional(CONF_CLOUD_SUPPRESSION, default=False): selector.BooleanSelector(),
+        vol.Optional(CONF_CLOUDY_POSITION): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=100,
+                step=1,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="%",
+            )
+        ),
         vol.Optional(
             CONF_WEATHER_ENTITY, default=vol.UNDEFINED
         ): selector.EntitySelector(
@@ -706,16 +716,6 @@ LIGHT_CLOUD_SCHEMA = vol.Schema(
         ): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 mode=selector.NumberSelectorMode.BOX, unit_of_measurement="%"
-            )
-        ),
-        vol.Optional(CONF_CLOUD_SUPPRESSION, default=False): selector.BooleanSelector(),
-        vol.Optional(CONF_CLOUDY_POSITION): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0,
-                max=100,
-                step=1,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="%",
             )
         ),
     }
