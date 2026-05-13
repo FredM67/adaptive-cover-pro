@@ -41,6 +41,7 @@ from custom_components.adaptive_cover_pro.const import (
     CONF_INVERSE_STATE,
     CONF_IRRADIANCE_ENTITY,
     CONF_IRRADIANCE_THRESHOLD,
+    CONF_IS_SUNNY_SENSOR,
     CONF_LENGTH_AWNING,
     CONF_LUX_ENTITY,
     CONF_LUX_THRESHOLD,
@@ -643,6 +644,27 @@ def test_light_sensors_without_suppression_noted():
     cfg = {CONF_LUX_ENTITY: "sensor.lux", CONF_CLOUD_SUPPRESSION: False}
     summary = _build_config_summary(cfg, SensorType.BLIND)
     assert "lux" in summary
+    assert "cloud suppression is off" in summary
+
+
+def test_is_sunny_sensor_shown_with_suppression():
+    """is_sunny_sensor appears in cloud suppression bullet when suppression on (issue #363)."""
+    cfg = {
+        CONF_CLOUD_SUPPRESSION: True,
+        CONF_IS_SUNNY_SENSOR: "binary_sensor.sun_on_window",
+    }
+    summary = _build_config_summary(cfg, SensorType.BLIND)
+    assert "is_sunny=binary_sensor.sun_on_window" in summary
+
+
+def test_is_sunny_sensor_without_suppression_noted():
+    """is_sunny_sensor configured but suppression off shows informational note."""
+    cfg = {
+        CONF_IS_SUNNY_SENSOR: "binary_sensor.sun_on_window",
+        CONF_CLOUD_SUPPRESSION: False,
+    }
+    summary = _build_config_summary(cfg, SensorType.BLIND)
+    assert "binary_sensor.sun_on_window" in summary
     assert "cloud suppression is off" in summary
 
 

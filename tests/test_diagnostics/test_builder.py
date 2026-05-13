@@ -725,6 +725,7 @@ class TestConfigurationDiagnostics:
             "enabled_toggle",
             "cloud_suppression_enabled",
             "cloudy_position",
+            "is_sunny_source",
         }
         assert expected_keys == set(config.keys())
 

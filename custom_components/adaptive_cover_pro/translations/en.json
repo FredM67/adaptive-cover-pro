@@ -430,6 +430,7 @@
         "description": "**Glare suppression in low light.** The first toggle below is the master on/off for this feature — leave it off and the rest of this screen is ignored. When on, set the optional **Cloudy position** the cover parks at when suppression fires (leave blank to use the default position).\n\nThe remaining sensors tell the integration *when* the sun is absent — any one of weather state, lux, solar irradiance, or cloud coverage will trigger suppression. Configure only the sensors you actually have; any single match is enough.\n\n[Learn more]({learn_more})",
         "data": {
           "weather_entity": "Weather entity (optional)",
+          "is_sunny_sensor": "Is Sunny binary sensor (optional)",
           "lux_entity": "Lux sensor (optional)",
           "lux_threshold": "Lux threshold",
           "irradiance_entity": "Irradiance sensor (optional)",
@@ -443,6 +444,7 @@
         "data_description": {
           "weather_entity": "Optional weather integration used to detect cloud cover. When the current weather state is not in the selected list below, direct sun is assumed absent and glare control is suppressed. Leave empty to ignore weather state.",
           "weather_state": "The weather states that count as 'sun is out'. When the live weather state matches one of these, glare tracking runs normally. When it does not match, the cover returns to its default position. Keep the defaults (sunny, partlycloudy, clear) unless your weather integration uses different state names.",
+          "is_sunny_sensor": "Optional binary sensor, input_boolean, switch, or schedule that authoritatively reports whether the sun is hitting the window. When ON, sun is assumed present; when OFF, sun is assumed absent and cloud suppression fires regardless of weather state. When unavailable or unknown, the integration falls back to the Weather Entity / Weather Conditions logic below. Use this when you compute sun-on-window upstream (e.g. azimuth-gated irradiance) and want to feed Adaptive Cover Pro a clean boolean.",
           "lux_entity": "Optional illuminance sensor (indoor or outdoor) for precise sun detection. When the sensor reads below the threshold, direct sun is absent and glare control is suppressed. Typical direct-sun values: 5,000–10,000 lux. Leave empty if you don't have this sensor.",
           "lux_threshold": "Illuminance level above which the sun is considered present. Below this value the cover returns to its default position instead of tracking the sun. Typical values: 5,000–10,000 lux for direct sunlight, 2,000–3,000 lux for bright indirect light. Adjust based on sensor placement.",
           "irradiance_entity": "Optional solar irradiance sensor (outdoor) for precise sun detection. Measures solar power in W/m². When the sensor reads below the threshold, direct sun is absent and glare control is suppressed. Leave empty if you don't have this sensor.",
@@ -935,6 +937,7 @@
         "description": "**Glare suppression in low light.** The first toggle below is the master on/off for this feature — leave it off and the rest of this screen is ignored. When on, set the optional **Cloudy position** the cover parks at when suppression fires (leave blank to use the default position).\n\nThe remaining sensors tell the integration *when* the sun is absent — any one of weather state, lux, solar irradiance, or cloud coverage will trigger suppression. Configure only the sensors you actually have; any single match is enough.\n\n[Learn more]({learn_more})",
         "data": {
           "weather_entity": "Weather entity (optional)",
+          "is_sunny_sensor": "Is Sunny binary sensor (optional)",
           "lux_entity": "Lux sensor (optional)",
           "lux_threshold": "Lux threshold",
           "irradiance_entity": "Irradiance sensor (optional)",
@@ -948,6 +951,7 @@
         "data_description": {
           "weather_entity": "Optional weather integration used to detect cloud cover. When the current weather state is not in the selected list below, direct sun is assumed absent and glare control is suppressed. Leave empty to ignore weather state.",
           "weather_state": "The weather states that count as 'sun is out'. When the live weather state matches one of these, glare tracking runs normally. When it does not match, the cover returns to its default position. Keep the defaults (sunny, partlycloudy, clear) unless your weather integration uses different state names.",
+          "is_sunny_sensor": "Optional binary sensor, input_boolean, switch, or schedule that authoritatively reports whether the sun is hitting the window. When ON, sun is assumed present; when OFF, sun is assumed absent and cloud suppression fires regardless of weather state. When unavailable or unknown, the integration falls back to the Weather Entity / Weather Conditions logic below. Use this when you compute sun-on-window upstream (e.g. azimuth-gated irradiance) and want to feed Adaptive Cover Pro a clean boolean.",
           "lux_entity": "Optional illuminance sensor (indoor or outdoor) for precise sun detection. When the sensor reads below the threshold, direct sun is absent and glare control is suppressed. Typical direct-sun values: 5,000–10,000 lux. Leave empty if you don't have this sensor.",
           "lux_threshold": "Illuminance level above which the sun is considered present. Below this value the cover returns to its default position instead of tracking the sun. Typical values: 5,000–10,000 lux for direct sunlight, 2,000–3,000 lux for bright indirect light. Adjust based on sensor placement.",
           "irradiance_entity": "Optional solar irradiance sensor (outdoor) for precise sun detection. Measures solar power in W/m². When the sensor reads below the threshold, direct sun is absent and glare control is suppressed. Leave empty if you don't have this sensor.",
@@ -1383,6 +1387,10 @@
         "cloud_suppression": {
           "name": "Enable cloud suppression",
           "description": "Suppress solar positioning when cloud coverage exceeds threshold."
+        },
+        "is_sunny_sensor": {
+          "name": "Is Sunny binary sensor",
+          "description": "Binary entity that authoritatively reports sun-on-window. ON = sunny, OFF = cloud suppression fires. Unavailable falls back to weather state. Null = none."
         }
       }
     },

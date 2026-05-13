@@ -53,6 +53,7 @@ from ..const import (
     CONF_INVERSE_STATE,
     CONF_IRRADIANCE_ENTITY,
     CONF_IRRADIANCE_THRESHOLD,
+    CONF_IS_SUNNY_SENSOR,
     CONF_LENGTH_AWNING,
     CONF_LUX_ENTITY,
     CONF_LUX_THRESHOLD,
@@ -272,6 +273,7 @@ FIELD_VALIDATORS: dict[str, Any] = {
     CONF_CLOUD_COVERAGE_ENTITY: _entity_v(),
     CONF_CLOUD_COVERAGE_THRESHOLD: vol.Any(None, vol.Coerce(float)),
     CONF_CLOUD_SUPPRESSION: _bool_v(),
+    CONF_IS_SUNNY_SENSOR: _entity_v(),
     # Climate
     CONF_CLIMATE_MODE: _bool_v(),
     CONF_TEMP_ENTITY: _entity_v(),
@@ -368,6 +370,7 @@ _SECTION_LIGHT_CLOUD = frozenset(
         CONF_CLOUD_COVERAGE_ENTITY,
         CONF_CLOUD_COVERAGE_THRESHOLD,
         CONF_CLOUD_SUPPRESSION,
+        CONF_IS_SUNNY_SENSOR,
     }
 )
 

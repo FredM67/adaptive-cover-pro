@@ -59,6 +59,7 @@ from .const import (
     CONF_CLOUD_COVERAGE_THRESHOLD,
     CONF_IRRADIANCE_ENTITY,
     CONF_IRRADIANCE_THRESHOLD,
+    CONF_IS_SUNNY_SENSOR,
     CONF_LENGTH_AWNING,
     CONF_LUX_ENTITY,
     CONF_LUX_THRESHOLD,
@@ -692,6 +693,9 @@ LIGHT_CLOUD_SCHEMA = vol.Schema(
                 ],
             )
         ),
+        vol.Optional(
+            CONF_IS_SUNNY_SENSOR, default=vol.UNDEFINED
+        ): _binary_on_selector(),
         vol.Optional(CONF_LUX_ENTITY, default=vol.UNDEFINED): _numeric_selector(
             device_class="illuminance"
         ),
@@ -1321,6 +1325,8 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     # Cloud suppression (60)
     if has_cloud:
         cloud_parts = []
+        if v := config.get(CONF_IS_SUNNY_SENSOR):
+            cloud_parts.append(f"is_sunny={v}")
         if v := config.get(CONF_LUX_ENTITY):
             t = config.get(CONF_LUX_THRESHOLD)
             cloud_parts.append(f"lux < {t} lx" if t is not None else f"lux ({v})")
@@ -1350,6 +1356,7 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
             config.get(CONF_LUX_ENTITY),
             config.get(CONF_IRRADIANCE_ENTITY),
             config.get(CONF_CLOUD_COVERAGE_ENTITY),
+            config.get(CONF_IS_SUNNY_SENSOR),
         ]
     ):
         # Sensors configured but suppression toggle off — mention them as informational
@@ -1360,6 +1367,8 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
             sensor_names.append("irradiance")
         if config.get(CONF_CLOUD_COVERAGE_ENTITY):
             sensor_names.append("cloud coverage")
+        if v := config.get(CONF_IS_SUNNY_SENSOR):
+            sensor_names.append(v)
         lines.append(
             f"📊 Light sensors configured ({', '.join(sensor_names)}) but cloud suppression is off."
         )
@@ -1833,6 +1842,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_LUX_ENTITY,
             CONF_IRRADIANCE_ENTITY,
             CONF_CLOUD_COVERAGE_ENTITY,
+            CONF_IS_SUNNY_SENSOR,
         }
     ),
     # Legacy alias: full union of light_cloud_values + light_cloud_sensors
@@ -1848,6 +1858,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_CLOUD_COVERAGE_THRESHOLD,
             CONF_CLOUD_SUPPRESSION,
             CONF_CLOUDY_POSITION,
+            CONF_IS_SUNNY_SENSOR,
         }
     ),
     "temperature_climate_values": frozenset(
@@ -1893,6 +1904,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_CLOUD_COVERAGE_THRESHOLD,
             CONF_CLOUD_SUPPRESSION,
             CONF_CLOUDY_POSITION,
+            CONF_IS_SUNNY_SENSOR,
             CONF_CLIMATE_MODE,
             CONF_TEMP_ENTITY,
             CONF_TEMP_LOW,

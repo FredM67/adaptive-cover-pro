@@ -80,6 +80,7 @@ from .const import (
     CONF_CLOUDY_POSITION,
     CONF_CLOUD_COVERAGE_ENTITY,
     CONF_CLOUD_COVERAGE_THRESHOLD,
+    CONF_IS_SUNNY_SENSOR,
     CONF_LUX_ENTITY,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_THRESHOLD,
@@ -1962,6 +1963,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             use_cloud_coverage=cloud_suppression_enabled,
             cloud_coverage_entity=options.get(CONF_CLOUD_COVERAGE_ENTITY),
             cloud_coverage_threshold=options.get(CONF_CLOUD_COVERAGE_THRESHOLD),
+            is_sunny_sensor=options.get(CONF_IS_SUNNY_SENSOR),
         )
 
     def _build_climate_options(self, options) -> ClimateOptions:

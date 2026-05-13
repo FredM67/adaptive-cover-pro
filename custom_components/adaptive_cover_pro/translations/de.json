@@ -438,7 +438,8 @@
           "cloud_coverage_threshold": "Wolkendecken-Schwellwert",
           "cloud_suppression": "Wolkenunterdrückung aktivieren (Hauptschalter)",
           "weather_state": "Wetterbedingungen",
-          "cloudy_position": "Bewölkungsposition (optional)"
+          "cloudy_position": "Bewölkungsposition (optional)",
+          "is_sunny_sensor": "Binärsensor \"Sonne scheint\" (optional)"
         },
         "data_description": {
           "weather_entity": "Optionale Wetterintegrationen zur Erkennung von Wolkenbedeckung. Wenn der aktuelle Wetterzustand nicht in der unten ausgewählten Liste enthalten ist, wird angenommen, dass direktes Sonnenlicht nicht vorhanden ist, und die Blendungskontrolle wird unterdrückt. Leer lassen, um den Wetterzustand zu ignorieren.",
@@ -450,7 +451,8 @@
           "cloud_coverage_entity": "Optionaler Wolkenbedeckungssensor, der 0–100 % meldet (z. B. von einer Wetterintegrationen). Wenn der Wert den Schwellwert erreicht, wird die Blendungskontrolle unterdrückt und die Beschattung kehrt zu ihrer Standardposition zurück. Leer lassen, wenn Sie diesen Sensor nicht haben.",
           "cloud_coverage_threshold": "Wolkenbedeckungsprozentsatz, bei dem oder über dem die Blendungskontrolle unterdrückt wird. Beispiel: 75 bedeutet, dass die Beschattung die Sonnenverfolgung stoppt, wenn der Himmel zu 75 % oder stärker bewölkt ist.",
           "cloud_suppression": "Hauptein/Ausschaltung für diesen gesamten Bildschirm. Wenn **aus** (Standard), werden alle Sensoren unten ignoriert und die Blendungskontrolle läuft wie gewohnt. Wenn **ein**, zeigt ein beliebiger konfigurierter Sensor (Wetterzustand, Lux, Strahlung oder Bewölkung) an, dass die Sonne abwesend ist, stoppt die Sonnenverfolgung und fährt die Beschattung zur **Wolkenposition** oben (oder zur Standardposition, wenn diese leer ist). Funktioniert eigenständig — der Klimamodus muss nicht aktiviert sein.",
-          "cloudy_position": "Position (0-100%), zu der Beschattungen verschoben werden, wenn Wolkenunterdrückung aktiv ist (bewölkt / niedriges Licht). 0% = geschlossen (Jalousien heruntergelassen / Markise eingezogen), 100% = offen (Jalousien hochgezogen / Markise ausgefahren). Leer lassen, um die Standardposition zu verwenden."
+          "cloudy_position": "Position (0-100%), zu der Beschattungen verschoben werden, wenn Wolkenunterdrückung aktiv ist (bewölkt / niedriges Licht). 0% = geschlossen (Jalousien heruntergelassen / Markise eingezogen), 100% = offen (Jalousien hochgezogen / Markise ausgefahren). Leer lassen, um die Standardposition zu verwenden.",
+          "is_sunny_sensor": "Optionaler Binärsensor, input_boolean, Schalter oder Zeitplan, der angibt, ob die Sonne auf das Fenster scheint. Bei EIN wird Sonneneinstrahlung angenommen; bei AUS wird Wolkenunterdrückung unabhängig vom Wetterzustand aktiviert. Bei Nicht verfügbar oder Unbekannt fällt die Integration auf die nachstehende Wetter-Entität/Wetterbedingungen-Logik zurück. Verwenden Sie diese Option, wenn Sie die Sonneneinstrahlung auf das Fenster upstream berechnen (z. B. Azimut-geregelte Bestrahlung) und Adaptive Cover Pro ein eindeutiges Boolesches Signal geben möchten."
         }
       },
       "temperature_climate": {
@@ -943,7 +945,8 @@
           "cloud_coverage_threshold": "Wolkendecken-Schwellwert",
           "cloud_suppression": "Wolkenunterdrückung aktivieren (Hauptschalter)",
           "weather_state": "Wetterbedingungen",
-          "cloudy_position": "Bewölkungsposition (optional)"
+          "cloudy_position": "Bewölkungsposition (optional)",
+          "is_sunny_sensor": "Binärsensor \"Sonne scheint\" (optional)"
         },
         "data_description": {
           "weather_entity": "Optionale Wetter-Integration, um Wolkendeckung zu erkennen. Wenn der aktuelle Wetterzustand nicht in der unten ausgewählten Liste enthalten ist, wird davon ausgegangen, dass direkte Sonne abwesend ist und die Blendungskontrolle wird unterdrückt. Leer lassen, um den Wetterzustand zu ignorieren.",
@@ -955,7 +958,8 @@
           "cloud_coverage_entity": "Optionaler Wolkendeckungssensor, der 0–100 % meldet (z. B. von einer Wetter-Integration). Wenn der Messwert den Schwellwert erreicht, wird die Blendungskontrolle unterdrückt und der Behang kehrt zu seiner Standardposition zurück. Leer lassen, wenn Sie diesen Sensor nicht haben.",
           "cloud_coverage_threshold": "Wolkendeckungsprozentsatz bei oder über dem die Blendungskontrolle unterdrückt wird. Zum Beispiel bedeutet 75, dass der Behang die Sonnenverfolgung stoppt, wenn der Himmel zu 75 % oder mehr bewölkt ist.",
           "cloud_suppression": "Hauptein/Ausschaltung für diesen gesamten Bildschirm. Wenn **aus** (Standard), werden alle Sensoren unten ignoriert und die Blendungskontrolle läuft wie gewohnt. Wenn **ein**, zeigt ein beliebiger konfigurierter Sensor (Wetterzustand, Lux, Strahlung oder Bewölkung) an, dass die Sonne abwesend ist, stoppt die Sonnenverfolgung und fährt die Beschattung zur **Wolkenposition** oben (oder zur Standardposition, wenn diese leer ist). Funktioniert eigenständig — der Klimamodus muss nicht aktiviert sein.",
-          "cloudy_position": "Position (0-100%), zu der Beschattungen verschoben werden, wenn Wolkenunterdrückung aktiv ist (bewölkt / niedriges Licht). 0% = geschlossen (Jalousien heruntergelassen / Markise eingezogen), 100% = offen (Jalousien hochgezogen / Markise ausgefahren). Leer lassen, um die Standardposition zu verwenden."
+          "cloudy_position": "Position (0-100%), zu der Beschattungen verschoben werden, wenn Wolkenunterdrückung aktiv ist (bewölkt / niedriges Licht). 0% = geschlossen (Jalousien heruntergelassen / Markise eingezogen), 100% = offen (Jalousien hochgezogen / Markise ausgefahren). Leer lassen, um die Standardposition zu verwenden.",
+          "is_sunny_sensor": "Optionaler Binärsensor, input_boolean, Schalter oder Zeitplan, der angibt, ob die Sonne auf das Fenster scheint. Bei EIN wird Sonneneinstrahlung angenommen; bei AUS wird Wolkenunterdrückung unabhängig vom Wetterzustand aktiviert. Bei Nicht verfügbar oder Unbekannt fällt die Integration auf die nachstehende Wetter-Entität/Wetterbedingungen-Logik zurück. Verwenden Sie diese Option, wenn Sie die Sonneneinstrahlung auf das Fenster upstream berechnen (z. B. Azimut-geregelte Bestrahlung) und Adaptive Cover Pro ein eindeutiges Boolesches Signal geben möchten."
         }
       },
       "temperature_climate": {
@@ -1412,6 +1416,10 @@
         "weather_state": {
           "description": "Wetterbedingungszustände als sonnig für Sonnenverfolgung betrachtet.",
           "name": "Sonnige Wetterzustände"
+        },
+        "is_sunny_sensor": {
+          "name": "Binärsensor \"Sonne scheint\"",
+          "description": "Binär-Entität, die definitiv angibt, ob die Sonne auf das Fenster scheint. EIN = sonnig, AUS = Wolkenunterdrückung aktiv. Nicht verfügbar fällt auf Wetterzustand zurück. Null = keine."
         }
       },
       "name": "Licht- & Bewölkungseinstellungen festlegen"

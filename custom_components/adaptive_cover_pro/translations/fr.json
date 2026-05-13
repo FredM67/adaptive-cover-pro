@@ -438,7 +438,8 @@
           "cloud_coverage_threshold": "Seuil de couverture nuageuse",
           "cloud_suppression": "Activer la suppression des nuages (interrupteur principal)",
           "weather_state": "Conditions météorologiques",
-          "cloudy_position": "Position nuageux (optionnel)"
+          "cloudy_position": "Position nuageux (optionnel)",
+          "is_sunny_sensor": "Capteur binaire « Ensoleillé » (optionnel)"
         },
         "data_description": {
           "weather_entity": "Intégration météo optionnelle utilisée pour détecter la couverture nuageuse. Quand l'état météo actuel ne figure pas dans la liste sélectionnée ci-dessous, le soleil direct est supposé absent et le contrôle de l'éblouissement est supprimé. Laissez vide pour ignorer l'état météo.",
@@ -450,7 +451,8 @@
           "cloud_coverage_entity": "Capteur de couverture nuageuse optionnel indiquant une valeur de 0 à 100 % (par ex. d'une intégration météo). Quand la valeur atteint le seuil, le contrôle de l'éblouissement est supprimé et le store revient à sa position par défaut. Laissez vide si vous ne disposez pas de ce capteur.",
           "cloud_coverage_threshold": "Pourcentage de couverture nuageuse à partir duquel le contrôle de l'éblouissement est supprimé. Par exemple, 75 signifie que le store arrête de suivre le soleil quand le ciel est couvert à 75 % ou plus.",
           "cloud_suppression": "Interrupteur principal de cet écran entier. Lorsqu'il est **désactivé** (par défaut), tous les capteurs ci-dessous sont ignorés et le contrôle de l'éblouissement fonctionne normalement. Lorsqu'il est **activé**, tout capteur configuré (état météorologique, luminosité, rayonnement ou couverture nuageuse) indiquant l'absence du soleil arrêtera le suivi du soleil et déplacera la protection vers la **position nuageuse** ci-dessus (ou la position par défaut si celle-ci est vide). Fonctionne seul — le mode climatique n'a pas besoin d'être activé.",
-          "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut."
+          "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut.",
+          "is_sunny_sensor": "Capteur binaire, input_boolean, interrupteur ou planning optionnel qui rapporte de manière fiable si le soleil frappe la fenêtre. Lorsque ACTIVÉ, le soleil est supposé présent ; lorsque DÉSACTIVÉ, le soleil est supposé absent et la suppression des nuages se déclenche indépendamment de l'état météorologique. En cas d'indisponibilité ou d'état inconnu, l'intégration revient à la logique de l'entité météo / conditions météorologiques ci-dessous. Utilisez ceci si vous calculez le soleil-sur-fenêtre en amont (par exemple, irradiance filtrée par azimut) et que vous souhaitez fournir à Adaptive Cover Pro un booléen épuré."
         }
       },
       "temperature_climate": {
@@ -943,7 +945,8 @@
           "cloud_coverage_threshold": "Seuil de couverture nuageuse",
           "cloud_suppression": "Activer la suppression des nuages (interrupteur principal)",
           "weather_state": "Conditions météorologiques",
-          "cloudy_position": "Position nuageux (optionnel)"
+          "cloudy_position": "Position nuageux (optionnel)",
+          "is_sunny_sensor": "Capteur binaire « Ensoleillé » (optionnel)"
         },
         "data_description": {
           "weather_entity": "Intégration météo optionnelle utilisée pour détecter la couverture nuageuse. Quand l'état météo actuel ne figure pas dans la liste sélectionnée ci-dessous, le soleil direct est supposé absent et le contrôle de l'éblouissement est supprimé. Laissez vide pour ignorer l'état météo.",
@@ -955,7 +958,8 @@
           "cloud_coverage_entity": "Capteur de couverture nuageuse optionnel indiquant une valeur de 0 à 100 % (par ex. d'une intégration météo). Quand la valeur atteint le seuil, le contrôle de l'éblouissement est supprimé et le store revient à sa position par défaut. Laissez vide si vous ne disposez pas de ce capteur.",
           "cloud_coverage_threshold": "Pourcentage de couverture nuageuse à partir duquel le contrôle de l'éblouissement est supprimé. Par exemple, 75 signifie que le store arrête de suivre le soleil quand le ciel est couvert à 75 % ou plus.",
           "cloud_suppression": "Interrupteur principal de cet écran entier. Lorsqu'il est **désactivé** (par défaut), tous les capteurs ci-dessous sont ignorés et le contrôle de l'éblouissement fonctionne normalement. Lorsqu'il est **activé**, tout capteur configuré (état météorologique, luminosité, rayonnement ou couverture nuageuse) indiquant l'absence du soleil arrêtera le suivi du soleil et déplacera la protection vers la **position nuageuse** ci-dessus (ou la position par défaut si celle-ci est vide). Fonctionne seul — le mode climatique n'a pas besoin d'être activé.",
-          "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut."
+          "cloudy_position": "Position (0-100%) pour déplacer les protections lorsque la suppression nuageuse se déclenche (conditions nuageuses / faible luminosité). 0% = fermé (stores baissés / store banne rétracté), 100% = ouvert (stores levés / store banne déployé). Laissez vide pour utiliser la position par défaut.",
+          "is_sunny_sensor": "Capteur binaire, input_boolean, interrupteur ou planning optionnel qui rapporte de manière fiable si le soleil frappe la fenêtre. Lorsque ACTIVÉ, le soleil est supposé présent ; lorsque DÉSACTIVÉ, le soleil est supposé absent et la suppression des nuages se déclenche indépendamment de l'état météorologique. En cas d'indisponibilité ou d'état inconnu, l'intégration revient à la logique de l'entité météo / conditions météorologiques ci-dessous. Utilisez ceci si vous calculez le soleil-sur-fenêtre en amont (par exemple, irradiance filtrée par azimut) et que vous souhaitez fournir à Adaptive Cover Pro un booléen épuré."
         }
       },
       "temperature_climate": {
@@ -1412,6 +1416,10 @@
         "weather_state": {
           "description": "États des conditions météorologiques considérés comme ensoleillés pour le suivi solaire.",
           "name": "États météorologiques ensoleillés"
+        },
+        "is_sunny_sensor": {
+          "name": "Capteur binaire « Ensoleillé »",
+          "description": "Entité binaire qui rapporte de manière fiable le soleil-sur-fenêtre. ACTIVÉ = ensoleillé, DÉSACTIVÉ = suppression des nuages se déclenche. Indisponible revient à l'état météorologique. Nul = aucun."
         }
       },
       "name": "Définir les paramètres de lumière et de nuages"

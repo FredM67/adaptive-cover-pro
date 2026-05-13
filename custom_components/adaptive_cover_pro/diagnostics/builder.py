@@ -519,6 +519,7 @@ class DiagnosticsBuilder:
             CONF_FORCE_OVERRIDE_SENSORS,
             CONF_INTERP,
             CONF_INVERSE_STATE,
+            CONF_IS_SUNNY_SENSOR,
             CONF_MAX_ELEVATION,
             CONF_MAX_POSITION,
             CONF_MIN_ELEVATION,
@@ -563,5 +564,8 @@ class DiagnosticsBuilder:
                 "enabled_toggle": ctx.enabled_toggle,
                 "cloud_suppression_enabled": options.get(CONF_CLOUD_SUPPRESSION, False),
                 "cloudy_position": options.get(CONF_CLOUDY_POSITION),
+                "is_sunny_source": (
+                    options.get(CONF_IS_SUNNY_SENSOR) or "weather_state"
+                ),
             }
         }
