@@ -236,3 +236,12 @@ class PipelineResult:
     # Used by hold-mode handlers (e.g. MotionTimeoutHandler with hold_position) to
     # record the decision in diagnostics while leaving the cover physically untouched.
     skip_command: bool = False
+
+    # Physical position the cover is currently held at during manual override.
+    # Set by ManualOverrideHandler to snapshot.current_cover_position so that
+    # the "Target Position" sensor shows where the cover actually sits rather
+    # than the solar-handler value the override is shadowing.
+    # None when override is inactive, when current position is unknown, or for
+    # all other handlers.  Consumers must use explicit `is not None` checks
+    # because 0% (fully closed) is a valid held position.
+    held_position: int | None = None

@@ -242,6 +242,9 @@ class _ManualOverrideEndSensor(_ACPRestorableDiagnosticSensor):
 
 
 def _cover_position_value(s: _ACPSensor) -> Any:
+    held = s.data.states.get("held_position")
+    if held is not None:
+        return held
     return s.data.states["state"]
 
 

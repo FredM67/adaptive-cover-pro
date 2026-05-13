@@ -207,6 +207,8 @@ class DiagnosticsBuilder:
         Derives the explanation from the pipeline result's ``reason`` string
         so there is a single source of truth.  Post-processing transforms
         (interpolation, inverse state) are appended when they changed the value.
+        When manual override is active and the cover's physical position diverges
+        from the solar calculation, the divergence is surfaced explicitly.
         """
         result = ctx.pipeline_result
         if result is None:
@@ -222,6 +224,19 @@ class DiagnosticsBuilder:
 
         # Base explanation is the pipeline reason (already human-readable)
         parts: list[str] = [result.reason]
+
+        # Surface the divergence between the physical held position and the solar calc
+        # only when they differ — avoids noise when the cover happens to be at the
+        # solar position already.
+        if (
+            result.control_method == ControlMethod.MANUAL
+            and result.held_position is not None
+            and result.held_position != result.raw_calculated_position
+        ):
+            parts.append(
+                f"manual override active — holding cover at {result.held_position}%"
+                f" (solar would be {result.raw_calculated_position}%)"
+            )
 
         # Append post-processing transforms if they changed the value
         final = ctx.final_state

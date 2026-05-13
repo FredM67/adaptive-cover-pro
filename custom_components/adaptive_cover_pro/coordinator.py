@@ -1312,6 +1312,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 "manual_override": self.manager.binary_cover_manual,
                 "manual_list": self.manager.manual_controlled,
                 "glare_active": glare_active,
+                "held_position": self._pipeline_result.held_position,
             },
             attributes={
                 "default": options.get(CONF_DEFAULT_HEIGHT),
