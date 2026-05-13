@@ -302,6 +302,12 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # the release transition and bypass time/position delta gates.
         self._prev_force_override_active: bool = False
 
+        # Per-sensor on/off state from last cycle.  Mirrors
+        # _prev_force_override_active so a custom-position sensor that flips
+        # off can also force a return to the calculated position regardless of
+        # which lower-priority handler now wins.  Keyed by sensor entity_id.
+        self._prev_custom_position_sensors_active: dict[str, bool] = {}
+
         # Diagnostics builder (extracted from coordinator)
         self._diagnostics_builder = DiagnosticsBuilder()
 
@@ -1215,6 +1221,12 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # the release transition in async_handle_state_change().
         prev_force_override = self._prev_force_override_active
 
+        # Capture last cycle's per-sensor active map so we can detect a custom
+        # position sensor flipping off (release edge of #365).
+        prev_custom_position_sensors_active = dict(
+            self._prev_custom_position_sensors_active
+        )
+
         # Build unified state snapshot for this update cycle
         _sun_azimuth = state_attr(self.hass, "sun.sun", "azimuth")
         _sun_elevation = state_attr(self.hass, "sun.sun", "elevation")
@@ -1259,9 +1271,33 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # captured in the snapshot we just built).
         self._prev_force_override_active = self.is_force_override_active
 
+        # Same for custom-position sensors: stamp this cycle's on/off map so
+        # next cycle can detect the on → off transition for the release edge.
+        current_custom_position_sensors_active = {
+            s.entity_id: s.is_on
+            for s in self._read_custom_position_sensor_states(options)
+        }
+        self._prev_custom_position_sensors_active = (
+            current_custom_position_sensors_active
+        )
+
+        # Set of sensors that transitioned on → off this cycle.  When the
+        # triggering entity is one of these, force=True bypasses time/position
+        # delta gates so covers return to the calculated position promptly.
+        custom_position_released_entities = {
+            eid
+            for eid, was_on in prev_custom_position_sensors_active.items()
+            if was_on and not current_custom_position_sensors_active.get(eid, False)
+        }
+
         # Handle types of changes
         if self.state_change:
-            await self.async_handle_state_change(state, options, prev_force_override)
+            await self.async_handle_state_change(
+                state,
+                options,
+                prev_force_override,
+                custom_position_released_entities,
+            )
         elif auto_expired:
             # One or more manual overrides just timed out.  Proactively send
             # the fresh pipeline position so covers don't linger at the
@@ -1516,7 +1552,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         return sent
 
     async def async_handle_state_change(
-        self, state: int, options, prev_force_override: bool = False
+        self,
+        state: int,
+        options,
+        prev_force_override: bool = False,
+        custom_position_released_entities: set[str] | None = None,
     ):
         """Send position commands to all covers when a tracked entity changes.
 
@@ -1530,12 +1570,33 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         now inactive), force=True is also passed so the time delta check cannot
         block the return to the calculated position.  The force override's own
         position change should not count against the time threshold.
+
+        ``custom_position_released_entities`` holds the set of custom-position
+        sensors that flipped on → off this cycle.  When the triggering entity
+        for this refresh is one of them, force=True is also passed so the
+        return to the calculated position is not throttled (#365).
         """
         sun_just_appeared = self._check_sun_validity_transition()
         is_safety = self._pipeline_is_safety_handler
         force_override_released = (
             prev_force_override and not self.is_force_override_active
         )
+
+        # Custom-position sensor release edge: the entity that triggered this
+        # refresh just flipped off and a lower-priority handler (solar/default)
+        # now wins, so _is_custom_position_sensor_trigger() returns False.
+        # Mirrors force_override_released for the same reason: the time-delta
+        # gate would otherwise drop the return-to-calculated command.  Short-
+        # circuit when the set is empty so callers that bypass __init__ (e.g.
+        # gate-matrix fixtures) don't need to wire _last_state_change_entity.
+        trigger_entity: str | None = None
+        custom_position_released = False
+        if custom_position_released_entities:
+            trigger_entity = self._last_state_change_entity
+            custom_position_released = (
+                trigger_entity is not None
+                and trigger_entity in custom_position_released_entities
+            )
 
         # Outside the configured time window, only safety handlers (force
         # override, weather) are allowed to move covers.  All other handlers
@@ -1549,6 +1610,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             and not is_safety
             and not force_override_released
             and not custom_position_sensor_triggered
+            and not custom_position_released
         ):
             self.state_change = False
             self._last_state_change_entity = None
@@ -1556,13 +1618,24 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             return
 
         use_force = (
-            is_safety or force_override_released or custom_position_sensor_triggered
+            is_safety
+            or force_override_released
+            or custom_position_sensor_triggered
+            or custom_position_released
         )
         if force_override_released:
             reason = "force_override_cleared"
             self.logger.debug(
                 "Force override released — bypassing time/position delta gates "
                 "to return to calculated position %s",
+                state,
+            )
+        elif custom_position_released:
+            reason = "custom_position_released"
+            self.logger.debug(
+                "Custom-position sensor %s released — bypassing time/position "
+                "delta gates to return to calculated position %s",
+                trigger_entity,
                 state,
             )
         else:
