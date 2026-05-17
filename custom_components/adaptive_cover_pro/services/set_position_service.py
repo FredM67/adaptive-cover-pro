@@ -20,6 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 SET_POSITION_SCHEMA = vol.Schema(
     {
         vol.Required("position"): vol.All(Coerce(int), Range(min=0, max=100)),
+        vol.Optional("force", default=False): bool,
     },
     extra=vol.PREVENT_EXTRA,
 )
@@ -38,10 +39,16 @@ async def async_handle_set_position(call: ServiceCall) -> None:
     Resolves the target block to one or more coordinators (each with an
     optional entity filter), then delegates each command to
     ``coord.async_apply_user_position`` — the single source of truth for
-    floor clamping and force-context construction.
+    floor clamping, pipeline preemption, and dispatch.
+
+    ``force`` (default ``False``) propagates through: when ``False`` the
+    service respects force_override / weather and engages manual override
+    like a dashboard slider; when ``True`` it bypasses the pipeline check
+    and skips manual-override engagement (legacy programmatic behavior).
     """
     hass = call.hass
     requested: int = call.data["position"]
+    force: bool = call.data.get("force", False)
     targets = _resolve_targets(hass, call)
 
     for coord, entity_filter in targets.items():
@@ -50,5 +57,5 @@ async def async_handle_set_position(call: ServiceCall) -> None:
         )
         for entity_id in entity_ids:
             await coord.async_apply_user_position(
-                entity_id, requested, trigger="set_position"
+                entity_id, requested, trigger="set_position", force=force
             )

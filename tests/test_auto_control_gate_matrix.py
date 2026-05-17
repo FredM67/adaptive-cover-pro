@@ -315,16 +315,20 @@ async def _trigger_switch_auto_control_off_return(coord):
 
 
 async def _trigger_async_apply_user_position(coord):
-    """Trigger: user-initiated position (set_position service / proxy slider).
+    """Trigger: ``set_position`` service called with ``force=True``.
 
-    ``async_apply_user_position`` builds a force=True context so the slider
-    move bypasses delta/time/manual_override gates. Not a safety target —
-    the move should not persist across window boundaries.
+    ``async_apply_user_position(force=True)`` builds a force=True context so
+    the slider move bypasses delta/time/manual_override gates. Not a safety
+    target — the move should not persist across window boundaries. The new
+    ``force=False`` default contract (pipeline preemption + manual-override
+    engagement) is covered in ``test_coordinator_apply_user_position.py``.
     """
     coord.config_entry = MagicMock()
     coord.config_entry.options = {}
     coord._read_custom_position_sensor_states = MagicMock(return_value=[])
-    await coord.async_apply_user_position("cover.test", 42, trigger="set_position")
+    await coord.async_apply_user_position(
+        "cover.test", 42, trigger="set_position", force=True
+    )
 
 
 CONTROL_GATE_MATRIX: list[MatrixCase] = [

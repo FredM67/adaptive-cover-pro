@@ -1667,6 +1667,10 @@
         "position": {
           "name": "Position",
           "description": "Position cible de la protection (0–100%). Limitée jusqu'au plancher minimum actif si l'un est configuré et que son capteur est activé."
+        },
+        "force": {
+          "name": "Forcer",
+          "description": "Lorsque cette option est activée, contourne la vérification de la pipeline de priorité et ignore l'engagement de dérogation manuelle. Par défaut false — les appels de service respectent force_override / weather et engagent la dérogation manuelle comme un curseur du tableau de bord."
         }
       },
       "name": "Définir la position (avec plancher appliqué)",

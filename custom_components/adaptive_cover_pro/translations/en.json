@@ -1664,11 +1664,15 @@
     },
     "set_position": {
       "name": "Set position (floor-enforced)",
-      "description": "Moves the cover to the requested position, clamping to the highest active custom-position minimum-mode floor. Use this instead of cover.set_cover_position when you need ACP's min-mode floors respected from automations. Tilt is not affected.",
+      "description": "Moves the cover to the requested position, clamping to the highest active custom-position minimum-mode floor. By default the call engages manual override and respects the priority pipeline (force_override / weather still win); set force=true to bypass the pipeline check and skip manual-override engagement. Tilt is not affected.",
       "fields": {
         "position": {
           "name": "Position",
           "description": "Target cover position (0–100%). Clamped up to the active minimum-mode floor if one is configured and its sensor is on."
+        },
+        "force": {
+          "name": "Force",
+          "description": "When true, bypass the priority pipeline check and skip manual-override engagement. Default false — service calls respect force_override / weather and engage manual override like a dashboard slider."
         }
       }
     }
