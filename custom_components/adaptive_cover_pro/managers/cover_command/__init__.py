@@ -969,6 +969,20 @@ class CoverCommandService:
             position,
         )
 
+        # Cover-type policy hook: dual-axis covers (venetian) pre-send tilt
+        # on opening transitions so the actuator's slats are at the target
+        # angle before the carriage starts moving (issue #33). Default
+        # policies are no-ops.
+        if context.policy is not None:
+            await context.policy.before_position_command(
+                self,
+                entity_id,
+                service=service,
+                position=position,
+                context=context,
+                reason=reason,
+            )
+
         ctx = Context()
         self._position_context_tracker.record(ctx.id)
         try:

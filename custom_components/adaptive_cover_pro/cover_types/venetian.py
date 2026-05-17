@@ -415,6 +415,53 @@ class VenetianPolicy(CoverTypePolicy):
             suppression=self.is_in_tilt_suppression,
         )
 
+    async def before_position_command(
+        self,
+        cmd_svc,  # noqa: ARG002
+        entity_id: str,
+        *,
+        service: str,
+        position: int,
+        context,
+        reason: str,
+    ) -> None:
+        """Send tilt FIRST on opening transitions, before set_cover_position fires.
+
+        KNX/Shelly venetian actuators briefly reassert their cached tilt
+        against partially-closed slats during open travel — a visible "slats
+        close then open" flicker. Sending the new tilt before the carriage
+        starts moving lets the open absorb any back-rotation into the
+        already-targeted angle (issue #33).
+
+        Closing transitions keep the existing position-then-tilt order in
+        ``after_position_command`` (slats must close after the carriage has
+        finished travelling). The post-settle tilt resend in
+        ``run_sequence`` short-circuits on the target-unchanged dedup added
+        to ``_send_tilt_command``, so total service-call count for an
+        opening transition remains 2 (tilt + position).
+        """
+        if service != SERVICE_SET_COVER_POSITION:
+            return
+        seq = self._sequencer
+        if seq is None:
+            return
+        tilt_target = self._resolve_skip_above_tilt(
+            position, getattr(context, "tilt", None)
+        )
+        if tilt_target is None:
+            return
+        current = seq._get_current_position(entity_id)
+        if current is None or position <= current:
+            return
+        await seq._send_tilt_command(
+            entity_id,
+            tilt_target=tilt_target,
+            position_target=position,
+            reason=reason,
+            force=True,
+            verify=False,
+        )
+
     async def after_position_command(
         self,
         cmd_svc,

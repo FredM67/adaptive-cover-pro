@@ -220,6 +220,7 @@ class DualAxisSequencer:
         reason: str,
         force: bool = False,
         position_settled: bool = True,
+        verify: bool = True,
     ) -> None:
         """Emit ``set_cover_tilt_position`` and rebase the commanded position.
 
@@ -230,7 +231,31 @@ class DualAxisSequencer:
         #33) with fallback to the stored target when current tilt is
         unavailable — without this, a stale stored target (e.g. set before
         the motor auto-tilted on close) skips legitimate moves.
+
+        A target-unchanged dedup runs first: if the stored target already
+        matches and the caller didn't pass ``force=True``, no service call
+        fires. That keeps ``run_sequence``'s post-settle tilt from re-sending
+        a tilt that ``before_position_command`` already sent for the same
+        opening transition (issue #33 tilt-first path).
+
+        ``verify=False`` is the fire-and-forget mode used by
+        ``before_position_command``: the service call dispatches and the
+        target is recorded, but the post-tilt sleep, verify, and rebase are
+        all skipped. Verifying the pre-position tilt is pointless because
+        the actuator hasn't published yet AND the position command is about
+        to move the carriage; verification would race both signals.
         """
+        if not force and tilt_target == self._tilt_targets.get(entity_id):
+            self._record_event(
+                "tilt_command_skipped",
+                reason=_TILT_SKIP_TARGET_UNCHANGED,
+                entity_id=entity_id,
+                tilt_position=tilt_target,
+                position_target=position_target,
+                trigger=reason,
+            )
+            return
+
         if not force and self._get_min_change is not None:
             anchor, anchor_source = self._resolve_tilt_anchor(entity_id)
             if anchor is not None and not check_position_delta(
@@ -319,6 +344,9 @@ class DualAxisSequencer:
             position_target=position_target,
             trigger=reason,
         )
+
+        if not verify:
+            return
 
         # Wait for the motor's mechanical back-drive on the vertical axis to
         # settle before reading current_position for the rebase. Without this
