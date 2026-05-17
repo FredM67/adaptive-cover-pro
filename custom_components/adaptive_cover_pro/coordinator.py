@@ -2098,6 +2098,43 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 )
         return result
 
+    async def async_apply_user_position(
+        self,
+        entity_id: str,
+        requested: int,
+        *,
+        trigger: str,
+        options: dict | None = None,
+    ) -> tuple[str, str]:
+        """Apply a user-initiated position to a single cover.
+
+        Single delegation point for any user-facing command (the
+        ``set_position`` service, the opt-in proxy cover entity, future
+        external triggers). Owns the min-mode floor clamp, builds a
+        force-context, and forwards to ``CoverCommandService.apply_position``.
+        """
+        opts = options if options is not None else self.config_entry.options
+        states = self._read_custom_position_sensor_states(opts)
+        floors = [s.position for s in states if s.is_on and s.min_mode]
+        effective_floor = max(floors) if floors else 0
+        clamped = max(int(requested), effective_floor)
+        if clamped != requested:
+            _LOGGER.info(
+                "%s: requested %d clamped to %d (active min-mode floor)",
+                trigger,
+                requested,
+                clamped,
+            )
+        else:
+            _LOGGER.debug(
+                "%s: requested %d, floor %d — no clamping needed",
+                trigger,
+                requested,
+                effective_floor,
+            )
+        ctx = self._build_position_context(entity_id, opts, force=True)
+        return await self._cmd_svc.apply_position(entity_id, clamped, trigger, ctx)
+
     def build_diagnostic_data(self) -> dict:
         """Build diagnostic data from current coordinator state."""
         result = self._pipeline_result

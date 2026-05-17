@@ -83,6 +83,15 @@ def _make_coord(
     coord._cmd_svc = MagicMock()
     coord._cmd_svc.apply_position = AsyncMock(return_value=apply_position_result)
 
+    # Bind the real coordinator helper so the service exercises it.
+    from custom_components.adaptive_cover_pro.coordinator import (  # noqa: PLC0415
+        AdaptiveDataUpdateCoordinator,
+    )
+
+    coord.async_apply_user_position = (
+        AdaptiveDataUpdateCoordinator.async_apply_user_position.__get__(coord)
+    )
+
     return coord
 
 
