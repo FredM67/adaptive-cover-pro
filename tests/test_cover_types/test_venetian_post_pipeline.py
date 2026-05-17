@@ -219,3 +219,45 @@ class TestPostPipelineResolveNoSunStrip:
             **kwargs,
         )
         assert policy._last_tilt is None
+
+
+class TestPostPipelineResolveClearsLastTilt:
+    """Issue #33: a suppressed cycle must reset ``_last_tilt`` so the next
+    ``maybe_update_tilt_only`` cycle doesn't replay the prior solar tilt.
+
+    Without this, a solar cycle (which sets ``_last_tilt = N``) followed by a
+    non-SOLAR / no-direct-sun cycle leaves ``_last_tilt`` armed, and the
+    tilt-only refresh keeps firing the stale solar tilt against an actuator
+    that should be neutral. The user sees HA reporting e.g. 100/55 forever.
+    """
+
+    def test_suppressed_call_clears_prior_solar_last_tilt(self):
+        """Non-SOLAR control method must clear a primed ``_last_tilt``."""
+        policy = _make_policy()
+        policy._last_tilt = 70  # simulate prior solar cycle's resolved tilt
+        out = policy.post_pipeline_resolve(
+            _make_result(ControlMethod.WEATHER), **_non_solar_kwargs()
+        )
+        assert policy._last_tilt is None
+        assert out.tilt is None
+
+    def test_solar_with_no_direct_sun_clears_prior_last_tilt(self):
+        """SOLAR with ``direct_sun_valid=False`` must clear a primed ``_last_tilt``.
+
+        This is the climate-handler low-light branch — pipeline emits SOLAR
+        but the cover engine reports the sun isn't on the window.
+        """
+        policy = _make_policy()
+        policy._last_tilt = 55
+        kwargs = _solar_kwargs()
+        kwargs["cover"] = _make_cover(direct_sun_valid=False)
+        out = policy.post_pipeline_resolve(_make_result(ControlMethod.SOLAR), **kwargs)
+        assert policy._last_tilt is None
+        assert out.tilt is None
+
+    def test_none_result_does_not_clobber_last_tilt(self):
+        """The ``result is None`` early-return must not touch ``_last_tilt``."""
+        policy = _make_policy()
+        policy._last_tilt = 42
+        policy.post_pipeline_resolve(None, **_non_solar_kwargs())
+        assert policy._last_tilt == 42

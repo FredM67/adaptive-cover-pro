@@ -260,6 +260,7 @@ class VenetianPolicy(CoverTypePolicy):
             return result
 
         if self._tilt_suppressed(result, cover):
+            self._clear_last_tilt()
             return replace(result, tilt=None)
         venetian_calc = VenetianCoverCalculation(
             config=config,
@@ -346,6 +347,17 @@ class VenetianPolicy(CoverTypePolicy):
         if self._sequencer is None:
             return False
         return self._sequencer.is_in_suppression_with_cap(entity_id, delta)
+
+    def _clear_last_tilt(self) -> None:
+        """Forget the last resolved tilt so tilt-only cycles don't replay it.
+
+        Called on every suppressed branch of ``post_pipeline_resolve``
+        (non-SOLAR control method, or SOLAR with no direct sun). Without this
+        reset, ``maybe_update_tilt_only`` keeps re-firing the prior solar
+        tilt against an actuator that the user thinks should be neutral —
+        producing the chronic position/tilt state divergence in issue #33.
+        """
+        self._last_tilt = None
 
     def _resolve_skip_above_tilt(
         self, position: int | None, fallback_tilt: int | None
