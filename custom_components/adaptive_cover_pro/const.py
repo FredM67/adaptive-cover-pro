@@ -505,6 +505,15 @@ VENETIAN_POST_TILT_REBASE_DELAY_SECONDS = 1.5  # wait before post-tilt rebase
 # target is cleared so the next update_tilt_only cycle retries the command.
 VENETIAN_TILT_VERIFY_TOLERANCE = 5  # percent — tilt-verification tolerance
 
+# Verify-with-retry budget. _verify_and_record_tilt reads current_tilt_position
+# up to MAX_SAMPLES times, POLL_SECONDS apart, accepting on the first
+# in-tolerance sample. KNX/Shelly actuators publish post-tilt state via state
+# updates that can lag 1–3 s past VENETIAN_POST_TILT_REBASE_DELAY_SECONDS; a
+# single-shot read misreads that lag as drift and triggers a phantom retry
+# next cycle (issue #33).
+VENETIAN_TILT_VERIFY_MAX_SAMPLES = 4  # total reads (1 immediate + 3 retries)
+VENETIAN_TILT_VERIFY_POLL_SECONDS = 1.0  # sleep between retry reads
+
 # Hold delay between position settle and the tilt command. Some actuators
 # perform a firmware tilt-reassert after the carriage reports closed/open
 # (e.g. FGR223): firing the tilt command immediately races that reassert.
