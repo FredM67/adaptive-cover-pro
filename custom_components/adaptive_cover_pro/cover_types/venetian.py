@@ -260,6 +260,7 @@ class VenetianPolicy(CoverTypePolicy):
             return result
 
         if self._tilt_suppressed(result, cover):
+            self._clear_last_tilt()
             return replace(result, tilt=None)
         venetian_calc = VenetianCoverCalculation(
             config=config,
@@ -347,6 +348,17 @@ class VenetianPolicy(CoverTypePolicy):
             return False
         return self._sequencer.is_in_suppression_with_cap(entity_id, delta)
 
+    def _clear_last_tilt(self) -> None:
+        """Forget the last resolved tilt so tilt-only cycles don't replay it.
+
+        Called on every suppressed branch of ``post_pipeline_resolve``
+        (non-SOLAR control method, or SOLAR with no direct sun). Without this
+        reset, ``maybe_update_tilt_only`` keeps re-firing the prior solar
+        tilt against an actuator that the user thinks should be neutral —
+        producing the chronic position/tilt state divergence in issue #33.
+        """
+        self._last_tilt = None
+
     def _resolve_skip_above_tilt(
         self, position: int | None, fallback_tilt: int | None
     ) -> int | None:
@@ -401,6 +413,53 @@ class VenetianPolicy(CoverTypePolicy):
             attribute="current_tilt_position",
             label="tilt",
             suppression=self.is_in_tilt_suppression,
+        )
+
+    async def before_position_command(
+        self,
+        cmd_svc,  # noqa: ARG002
+        entity_id: str,
+        *,
+        service: str,
+        position: int,
+        context,
+        reason: str,
+    ) -> None:
+        """Send tilt FIRST on opening transitions, before set_cover_position fires.
+
+        KNX/Shelly venetian actuators briefly reassert their cached tilt
+        against partially-closed slats during open travel — a visible "slats
+        close then open" flicker. Sending the new tilt before the carriage
+        starts moving lets the open absorb any back-rotation into the
+        already-targeted angle (issue #33).
+
+        Closing transitions keep the existing position-then-tilt order in
+        ``after_position_command`` (slats must close after the carriage has
+        finished travelling). The post-settle tilt resend in
+        ``run_sequence`` short-circuits on the target-unchanged dedup added
+        to ``_send_tilt_command``, so total service-call count for an
+        opening transition remains 2 (tilt + position).
+        """
+        if service != SERVICE_SET_COVER_POSITION:
+            return
+        seq = self._sequencer
+        if seq is None:
+            return
+        tilt_target = self._resolve_skip_above_tilt(
+            position, getattr(context, "tilt", None)
+        )
+        if tilt_target is None:
+            return
+        current = seq._get_current_position(entity_id)
+        if current is None or position <= current:
+            return
+        await seq._send_tilt_command(
+            entity_id,
+            tilt_target=tilt_target,
+            position_target=position,
+            reason=reason,
+            force=True,
+            verify=False,
         )
 
     async def after_position_command(

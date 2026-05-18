@@ -31,14 +31,22 @@ from custom_components.adaptive_cover_pro.managers.dual_axis_sequencer import (
 def _zero_post_tilt_delay(monkeypatch):
     """Skip real-motor delays in unit tests.
 
-    Zeroes the post-tilt rebase delay (1.5 s) so the test suite doesn't spend
-    real time waiting on asyncio.sleep.  The post-settle hold is now a
-    per-instance parameter (``post_settle_hold_seconds``) defaulting to 0 in
-    ``_build_sequencer`` — no monkeypatching needed for that delay.
+    Zeroes the post-tilt rebase delay (1.5 s) and the verify-retry poll
+    interval (1.0 s) so the test suite doesn't spend real time waiting on
+    asyncio.sleep. The post-settle hold is a per-instance parameter
+    (``post_settle_hold_seconds``) defaulting to 0 in ``_build_sequencer``
+    — no monkeypatching needed for that delay. The retry sample COUNT
+    (``VENETIAN_TILT_VERIFY_MAX_SAMPLES``) is left at its production value
+    because it is the behaviour under test.
     """
     monkeypatch.setattr(
         "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer."
         "VENETIAN_POST_TILT_REBASE_DELAY_SECONDS",
+        0,
+    )
+    monkeypatch.setattr(
+        "custom_components.adaptive_cover_pro.managers.dual_axis_sequencer."
+        "VENETIAN_TILT_VERIFY_POLL_SECONDS",
         0,
     )
 
@@ -831,6 +839,218 @@ class TestTiltVerification:
 
 
 @pytest.mark.asyncio
+class TestSendTiltCommandVerifyFlag:
+    """``verify=False`` lets ``before_position_command`` fire-and-forget.
+
+    Before sending a position command on an opening transition (issue #33),
+    the policy pre-sends the tilt so slats are at the target angle before
+    the carriage moves. Verifying that pre-tilt is wrong: the actuator
+    hasn't published the new tilt yet, and the position command is about to
+    move the carriage anyway. With ``verify=False``, the service call fires,
+    the target is recorded into ``_tilt_targets`` (so the post-settle resend
+    dedups), and no sleep/verify/rebase runs.
+    """
+
+    async def test_verify_false_skips_drift_event_and_preserves_target(self):
+        """No drift event is emitted; stored target survives even when actuator reads stale."""
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: 0,  # would normally drift
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x",
+            tilt_target=80,
+            position_target=60,
+            reason="solar",
+            verify=False,
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+        verify_events = [
+            e
+            for e in buf.snapshot()
+            if e["event"] in ("tilt_command_verified", "tilt_command_drift")
+        ]
+        assert verify_events == []
+
+    async def test_verify_false_does_not_rebase_position(self):
+        """``_rebase_commanded_position`` must not fire when verify=False."""
+        recorded: list[tuple[str, int]] = []
+
+        def _record(eid: str, pos: int) -> None:
+            recorded.append((eid, pos))
+
+        _, seq = _build_sequencer(
+            current_positions=[55],  # would rebase 60 → 55 under default verify=True
+            set_commanded_position=_record,
+            get_current_tilt_position=lambda _eid: 80,  # in-tolerance: would verify ok
+        )
+        await seq._send_tilt_command(
+            "cover.x",
+            tilt_target=80,
+            position_target=60,
+            reason="solar",
+            verify=False,
+        )
+        assert recorded == []
+
+    async def test_verify_true_default_still_runs_verify(self):
+        """Default behaviour (verify=True) must remain unchanged."""
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: 78,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        verified = [e for e in buf.snapshot() if e["event"] == "tilt_command_verified"]
+        assert len(verified) == 1
+
+
+@pytest.mark.asyncio
+class TestSendTiltCommandDedup:
+    """``_send_tilt_command`` short-circuits when the stored target already matches.
+
+    Issue #33 follow-on: when ``before_position_command`` sends tilt-first on
+    an opening transition, the subsequent ``run_sequence`` reaches its own
+    ``_send_tilt_command`` step with the same target already stored.  Without
+    a top-level dedup, the second send fires a redundant
+    ``set_cover_tilt_position`` service call. The dedup keeps the total
+    venetian-open service-call count at 2 (position + tilt) instead of 3.
+    """
+
+    async def test_second_send_with_same_target_skips_service_call(self):
+        hass, seq = _build_sequencer()
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 1
+
+    async def test_second_send_with_same_target_records_skipped_event(self):
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(event_buffer=buf)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        buf2 = EventBuffer(maxlen=16)
+        seq._event_buffer = buf2
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        skipped = [e for e in buf2.snapshot() if e["event"] == "tilt_command_skipped"]
+        assert len(skipped) == 1
+        assert skipped[0]["reason"] == "target_unchanged"
+
+    async def test_force_bypasses_dedup(self):
+        hass, seq = _build_sequencer()
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        await seq._send_tilt_command(
+            "cover.x",
+            tilt_target=80,
+            position_target=60,
+            reason="solar",
+            force=True,
+        )
+        assert hass.services.async_call.call_count == 2
+
+    async def test_different_target_does_not_dedup(self):
+        hass, seq = _build_sequencer()
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=40, position_target=60, reason="solar"
+        )
+        assert hass.services.async_call.call_count == 2
+
+
+@pytest.mark.asyncio
+class TestTiltVerifyWithRetry:
+    """Issue #33: verify must tolerate actuator publish lag.
+
+    KNX/Shelly venetian actuators publish ``current_tilt_position`` via state
+    updates that can lag the service call by 1–3 s past the existing
+    ``VENETIAN_POST_TILT_REBASE_DELAY_SECONDS`` (1.5 s) wait. A single-shot
+    verify reads the pre-update value, declares drift, and clears
+    ``_tilt_targets`` — which then re-arms the next ``update_tilt_only`` cycle
+    to fire a second (and third) tilt command for the same logical target.
+    The verify must poll up to ``VENETIAN_TILT_VERIFY_MAX_SAMPLES`` times,
+    ``VENETIAN_TILT_VERIFY_POLL_SECONDS`` apart, and only declare drift when
+    every sample is out of tolerance.
+    """
+
+    async def test_verify_accepts_on_late_sample_and_keeps_target(self):
+        """Stale read first, then a matching read → target preserved, no drift event."""
+        tilt_readings = iter([0, 0, 80])
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: next(tilt_readings, 80),
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+        drift_events = [e for e in buf.snapshot() if e["event"] == "tilt_command_drift"]
+        verified_events = [
+            e for e in buf.snapshot() if e["event"] == "tilt_command_verified"
+        ]
+        assert drift_events == []
+        assert len(verified_events) == 1
+
+    async def test_verify_clears_target_when_all_samples_drift(self):
+        """Constantly stale read → target cleared, drift event records final sample."""
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=lambda _eid: 0,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") is None
+        drift_events = [e for e in buf.snapshot() if e["event"] == "tilt_command_drift"]
+        assert len(drift_events) == 1
+        assert drift_events[0]["actual_tilt_position"] == 0
+        assert drift_events[0]["delta"] == 80
+
+    async def test_verify_stops_polling_after_first_in_tolerance_sample(self):
+        """In-tolerance first read must short-circuit — no extra polls."""
+        tilt_mock = MagicMock(side_effect=[78])
+        _, seq = _build_sequencer(get_current_tilt_position=tilt_mock)
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert tilt_mock.call_count == 1
+        assert seq.last_tilt_target("cover.x") == 80
+
+    async def test_verify_skipped_when_get_current_tilt_position_unwired(self):
+        """No tilt-read callback → preserve target, emit no verify/drift events."""
+        buf = EventBuffer(maxlen=16)
+        _, seq = _build_sequencer(
+            get_current_tilt_position=None,
+            event_buffer=buf,
+        )
+        await seq._send_tilt_command(
+            "cover.x", tilt_target=80, position_target=60, reason="solar"
+        )
+        assert seq.last_tilt_target("cover.x") == 80
+        verify_events = [
+            e
+            for e in buf.snapshot()
+            if e["event"] in ("tilt_command_verified", "tilt_command_drift")
+        ]
+        assert verify_events == []
+
+
+@pytest.mark.asyncio
 class TestTiltDiagnosticEvents:
     """DualAxisSequencer emits EventBuffer entries for every tilt command outcome."""
 
@@ -969,11 +1189,19 @@ class TestTiltInversion:
         assert seq.last_tilt_target("cover.x") == 80
 
     async def test_invert_tilt_callable_evaluated_per_call(self):
-        """Callable must be evaluated on each send so runtime option changes take effect."""
+        """Callable must be evaluated on each send so runtime option changes take effect.
+
+        ``force=True`` bypasses the target-unchanged dedup so both sends
+        actually fire the service call (the dedup is unrelated to inversion).
+        """
         inverted = [True]
         hass, seq = _build_sequencer(invert_tilt=lambda: inverted[0])
         await seq._send_tilt_command(
-            "cover.x", tilt_target=80, position_target=60, reason="solar"
+            "cover.x",
+            tilt_target=80,
+            position_target=60,
+            reason="solar",
+            force=True,
         )
         first_wire = hass.services.async_call.call_args_list[-1].args[2][
             "tilt_position"
@@ -982,7 +1210,11 @@ class TestTiltInversion:
 
         inverted[0] = False
         await seq._send_tilt_command(
-            "cover.x", tilt_target=80, position_target=60, reason="solar"
+            "cover.x",
+            tilt_target=80,
+            position_target=60,
+            reason="solar",
+            force=True,
         )
         second_wire = hass.services.async_call.call_args_list[-1].args[2][
             "tilt_position"

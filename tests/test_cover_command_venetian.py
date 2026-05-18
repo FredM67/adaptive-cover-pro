@@ -133,10 +133,17 @@ def _state_with_position(pos: int):
 
 
 @pytest.mark.asyncio
-async def test_apply_position_emits_position_then_tilt(svc, hass, attached_policy):
-    """Both services fire on a venetian apply_position with tilt set."""
+async def test_apply_position_emits_tilt_then_position_on_open(
+    svc, hass, attached_policy
+):
+    """On opening transitions, tilt fires BEFORE position (issue #33 tilt-first).
+
+    Total service-call count stays at 2: the post-settle tilt resend from
+    ``run_sequence`` short-circuits on the target-unchanged dedup added to
+    ``_send_tilt_command``.
+    """
     entity_id = "cover.venetian_kitchen"
-    hass.states.get.return_value = _state_with_position(0)
+    hass.states.get.return_value = _state_with_position(0)  # opening 0 → 60
 
     with _patch_caps_dual_axis():
         outcome, _ = await svc.apply_position(
@@ -146,9 +153,9 @@ async def test_apply_position_emits_position_then_tilt(svc, hass, attached_polic
     assert outcome == "sent"
     assert hass.services.async_call.call_count == 2
     services_called = [call.args[1] for call in hass.services.async_call.call_args_list]
-    assert services_called == ["set_cover_position", "set_cover_tilt_position"]
-    last_data = hass.services.async_call.call_args_list[-1].args[2]
-    assert last_data["tilt_position"] == 80
+    assert services_called == ["set_cover_tilt_position", "set_cover_position"]
+    tilt_data = hass.services.async_call.call_args_list[0].args[2]
+    assert tilt_data["tilt_position"] == 80
 
 
 @pytest.mark.asyncio
@@ -179,7 +186,7 @@ async def test_apply_position_sends_neutral_tilt_when_position_above_threshold(
     from custom_components.adaptive_cover_pro.const import POSITION_OPEN
 
     entity_id = "cover.venetian_retracted"
-    hass.states.get.return_value = _state_with_position(90)
+    hass.states.get.return_value = _state_with_position(90)  # opening 90 → 96
 
     with _patch_caps_dual_axis():
         outcome, _ = await svc.apply_position(
@@ -188,10 +195,12 @@ async def test_apply_position_sends_neutral_tilt_when_position_above_threshold(
 
     assert outcome == "sent"
     assert hass.services.async_call.call_count == 2
-    assert hass.services.async_call.call_args_list[0].args[1] == "set_cover_position"
-    tilt_call = hass.services.async_call.call_args_list[1]
+    # Opening transition: tilt-first (issue #33). The retract path overrides
+    # context.tilt with POSITION_OPEN regardless of which command fires first.
+    tilt_call = hass.services.async_call.call_args_list[0]
     assert tilt_call.args[1] == "set_cover_tilt_position"
     assert tilt_call.args[2]["tilt_position"] == POSITION_OPEN
+    assert hass.services.async_call.call_args_list[1].args[1] == "set_cover_position"
 
 
 @pytest.mark.asyncio

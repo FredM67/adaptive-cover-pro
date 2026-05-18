@@ -646,3 +646,135 @@ def test_secondary_axis_check_carries_expected_tilt() -> None:
     assert check.label == "tilt"
     assert check.suppression.__func__ is VenetianPolicy.is_in_tilt_suppression
     assert check.suppression.__self__ is policy
+
+
+@pytest.mark.asyncio
+class TestBeforePositionCommandTiltFirstOnOpen:
+    """Issue #33: ``before_position_command`` sends tilt FIRST on opening
+    transitions so the actuator's slats reach the target angle before the
+    carriage starts moving.
+
+    Without this, KNX/Shelly actuators briefly reassert their cached tilt
+    against partially-closed slats during travel — visible as a "slats close
+    then open" flicker. On closing transitions the existing
+    position-then-tilt order is correct (slats must close after the carriage
+    has finished travelling), so the tilt-first branch is opening-only.
+
+    The dedup added in ``_send_tilt_command`` keeps total service-call count
+    at 2 (position + tilt) by short-circuiting the post-settle tilt resend
+    that ``after_position_command`` → ``run_sequence`` would otherwise fire.
+    """
+
+    def _make_policy_with_send_mock(
+        self, *, current_position: int | None
+    ) -> VenetianPolicy:
+        policy = _make_policy(tilt_skip_above=95)
+        policy._sequencer._send_tilt_command = AsyncMock()
+        policy._sequencer._get_current_position = MagicMock(
+            return_value=current_position
+        )
+        return policy
+
+    async def test_open_transition_sends_tilt_with_force(self) -> None:
+        """current=20 → target=80 (opening) must send tilt with force=True."""
+        policy = self._make_policy_with_send_mock(current_position=20)
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service=SERVICE_SET_COVER_POSITION,
+            position=80,
+            context=_ctx(policy, tilt=POSITION_OPEN),
+            reason="solar",
+        )
+
+        policy._sequencer._send_tilt_command.assert_awaited_once()
+        kwargs = policy._sequencer._send_tilt_command.await_args.kwargs
+        assert kwargs["tilt_target"] == POSITION_OPEN
+        assert kwargs["position_target"] == 80
+        assert kwargs["force"] is True
+
+    async def test_closing_transition_does_not_send_tilt(self) -> None:
+        """current=80 → target=20 (closing) must NOT pre-send tilt."""
+        policy = self._make_policy_with_send_mock(current_position=80)
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service=SERVICE_SET_COVER_POSITION,
+            position=20,
+            context=_ctx(policy, tilt=40),
+            reason="solar",
+        )
+
+        policy._sequencer._send_tilt_command.assert_not_awaited()
+
+    async def test_unknown_current_position_does_not_send_tilt(self) -> None:
+        """When current position is unreadable, fall back to the existing order."""
+        policy = self._make_policy_with_send_mock(current_position=None)
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service=SERVICE_SET_COVER_POSITION,
+            position=80,
+            context=_ctx(policy, tilt=POSITION_OPEN),
+            reason="solar",
+        )
+
+        policy._sequencer._send_tilt_command.assert_not_awaited()
+
+    async def test_non_position_service_does_not_send_tilt(self) -> None:
+        """The hook only acts on set_cover_position, not on open/close/stop."""
+        policy = self._make_policy_with_send_mock(current_position=20)
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service="open_cover",
+            position=80,
+            context=_ctx(policy, tilt=POSITION_OPEN),
+            reason="solar",
+        )
+
+        policy._sequencer._send_tilt_command.assert_not_awaited()
+
+    async def test_no_tilt_in_context_does_not_send_tilt(self) -> None:
+        """Without a tilt target in context, there's nothing to pre-send."""
+        policy = self._make_policy_with_send_mock(current_position=20)
+        ctx = PositionContext(
+            auto_control=True,
+            manual_override=False,
+            sun_just_appeared=False,
+            min_change=1,
+            time_threshold=0,
+            special_positions=[0, 100],
+            force=True,
+            tilt=None,
+            policy=policy,
+        )
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service=SERVICE_SET_COVER_POSITION,
+            position=80,
+            context=ctx,
+            reason="solar",
+        )
+
+        policy._sequencer._send_tilt_command.assert_not_awaited()
+
+    async def test_no_sequencer_is_safe(self) -> None:
+        """A detached policy (no sequencer) must not crash."""
+        policy = VenetianPolicy()  # not attached
+        assert policy._sequencer is None
+
+        await policy.before_position_command(
+            cmd_svc=MagicMock(),
+            entity_id="cover.venetian_x",
+            service=SERVICE_SET_COVER_POSITION,
+            position=80,
+            context=_ctx(policy, tilt=POSITION_OPEN),
+            reason="solar",
+        )

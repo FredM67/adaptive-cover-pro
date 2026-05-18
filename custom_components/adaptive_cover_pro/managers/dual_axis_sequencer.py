@@ -36,6 +36,8 @@ from ..const import (
     VENETIAN_POST_TILT_REBASE_DELAY_SECONDS,
     VENETIAN_REBASE_MAX_DRIFT_PERCENT,
     VENETIAN_TILT_SUPPRESSION_SECONDS,
+    VENETIAN_TILT_VERIFY_MAX_SAMPLES,
+    VENETIAN_TILT_VERIFY_POLL_SECONDS,
     VENETIAN_TILT_VERIFY_TOLERANCE,
 )
 from .cover_command.gates import check_position_delta
@@ -218,6 +220,7 @@ class DualAxisSequencer:
         reason: str,
         force: bool = False,
         position_settled: bool = True,
+        verify: bool = True,
     ) -> None:
         """Emit ``set_cover_tilt_position`` and rebase the commanded position.
 
@@ -228,7 +231,31 @@ class DualAxisSequencer:
         #33) with fallback to the stored target when current tilt is
         unavailable — without this, a stale stored target (e.g. set before
         the motor auto-tilted on close) skips legitimate moves.
+
+        A target-unchanged dedup runs first: if the stored target already
+        matches and the caller didn't pass ``force=True``, no service call
+        fires. That keeps ``run_sequence``'s post-settle tilt from re-sending
+        a tilt that ``before_position_command`` already sent for the same
+        opening transition (issue #33 tilt-first path).
+
+        ``verify=False`` is the fire-and-forget mode used by
+        ``before_position_command``: the service call dispatches and the
+        target is recorded, but the post-tilt sleep, verify, and rebase are
+        all skipped. Verifying the pre-position tilt is pointless because
+        the actuator hasn't published yet AND the position command is about
+        to move the carriage; verification would race both signals.
         """
+        if not force and tilt_target == self._tilt_targets.get(entity_id):
+            self._record_event(
+                "tilt_command_skipped",
+                reason=_TILT_SKIP_TARGET_UNCHANGED,
+                entity_id=entity_id,
+                tilt_position=tilt_target,
+                position_target=position_target,
+                trigger=reason,
+            )
+            return
+
         if not force and self._get_min_change is not None:
             anchor, anchor_source = self._resolve_tilt_anchor(entity_id)
             if anchor is not None and not check_position_delta(
@@ -318,6 +345,9 @@ class DualAxisSequencer:
             trigger=reason,
         )
 
+        if not verify:
+            return
+
         # Wait for the motor's mechanical back-drive on the vertical axis to
         # settle before reading current_position for the rebase. Without this
         # delay the read races the asynchronous back-drive and captures the
@@ -328,7 +358,7 @@ class DualAxisSequencer:
         # may back-rotate the slats during position movement, leaving the cover
         # at tilt=0 even though we sent tilt=N. If we detect drift, clear the
         # recorded target so the next update_tilt_only cycle retries.
-        self._verify_and_record_tilt(entity_id, tilt_target)
+        await self._verify_and_record_tilt(entity_id, tilt_target)
 
         if position_settled:
             self._rebase_commanded_position(entity_id, position_target)
@@ -492,46 +522,57 @@ class DualAxisSequencer:
             {"ts": dt.datetime.now(dt.UTC).isoformat(), "event": event_name, **fields}
         )
 
-    def _verify_and_record_tilt(self, entity_id: str, tilt_target: int) -> None:
-        """Read actual tilt position and emit a verified/drift diagnostic event.
+    async def _verify_and_record_tilt(self, entity_id: str, tilt_target: int) -> None:
+        """Poll actual tilt up to N samples; accept on the first in-tolerance read.
 
-        If the actual tilt differs from the target beyond ``VENETIAN_TILT_VERIFY_TOLERANCE``,
-        clears the recorded target so the next ``update_tilt_only`` cycle retries.
+        Attempt 0 reads immediately (the caller has already slept
+        ``VENETIAN_POST_TILT_REBASE_DELAY_SECONDS``); attempts 1..N-1 sleep
+        ``VENETIAN_TILT_VERIFY_POLL_SECONDS`` before reading. Only when every
+        sample is out of tolerance do we emit ``tilt_command_drift`` and
+        clear the recorded target. Real-actuator publish lag (KNX, Shelly)
+        can land the slats correctly but report the pre-update value for
+        1–3 s afterwards — a single-shot read misreads that lag as drift
+        and triggers a phantom retry next cycle (issue #33).
         """
         if self._get_current_tilt_position is None:
             return
-        actual_wire = self._get_current_tilt_position(entity_id)
-        if actual_wire is None:
-            return
-        # Convert wire reading back to logical space so comparison is consistent
-        # with the logical tilt_target regardless of inversion setting.
-        actual = self._to_wire(actual_wire)
-        delta = abs(actual - tilt_target)
-        if delta <= VENETIAN_TILT_VERIFY_TOLERANCE:
-            self._record_event(
-                "tilt_command_verified",
-                entity_id=entity_id,
-                tilt_target=tilt_target,
-                actual_tilt_position=actual,
-                delta=delta,
-                tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
-            )
-        else:
-            self._logger.warning(
-                "Venetian tilt drift detected for %s: sent %s%% but actual is %s%% "
-                "(delta=%s%% > tolerance=%s%%) — clearing recorded target for retry",
-                entity_id,
-                tilt_target,
-                actual,
-                delta,
-                VENETIAN_TILT_VERIFY_TOLERANCE,
-            )
-            self._record_event(
-                "tilt_command_drift",
-                entity_id=entity_id,
-                tilt_target=tilt_target,
-                actual_tilt_position=actual,
-                delta=delta,
-                tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
-            )
-            self._tilt_targets.pop(entity_id, None)
+        actual: int | None = None
+        delta: int | None = None
+        for attempt in range(VENETIAN_TILT_VERIFY_MAX_SAMPLES):
+            if attempt > 0:
+                await asyncio.sleep(VENETIAN_TILT_VERIFY_POLL_SECONDS)
+            actual_wire = self._get_current_tilt_position(entity_id)
+            if actual_wire is None:
+                return
+            actual = self._to_wire(actual_wire)
+            delta = abs(actual - tilt_target)
+            if delta <= VENETIAN_TILT_VERIFY_TOLERANCE:
+                self._record_event(
+                    "tilt_command_verified",
+                    entity_id=entity_id,
+                    tilt_target=tilt_target,
+                    actual_tilt_position=actual,
+                    delta=delta,
+                    tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
+                )
+                return
+        self._logger.warning(
+            "Venetian tilt drift detected for %s after %d samples: "
+            "sent %s%% but actual is %s%% (delta=%s%% > tolerance=%s%%) "
+            "— clearing recorded target for retry",
+            entity_id,
+            VENETIAN_TILT_VERIFY_MAX_SAMPLES,
+            tilt_target,
+            actual,
+            delta,
+            VENETIAN_TILT_VERIFY_TOLERANCE,
+        )
+        self._record_event(
+            "tilt_command_drift",
+            entity_id=entity_id,
+            tilt_target=tilt_target,
+            actual_tilt_position=actual,
+            delta=delta,
+            tolerance=VENETIAN_TILT_VERIFY_TOLERANCE,
+        )
+        self._tilt_targets.pop(entity_id, None)

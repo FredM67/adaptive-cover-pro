@@ -213,6 +213,24 @@ class CoverTypePolicy(ABC):
         """
         return
 
+    async def before_position_command(
+        self,
+        cmd_svc,  # noqa: ARG002
+        entity_id: str,  # noqa: ARG002
+        *,
+        service: str,  # noqa: ARG002
+        position: int,  # noqa: ARG002
+        context,  # noqa: ARG002
+        reason: str,  # noqa: ARG002
+    ) -> None:
+        """Run any pre-command work before the position service fires.
+
+        Default: no-op. ``VenetianPolicy`` overrides this to send tilt-first
+        on opening transitions (issue #33) so the actuator's slats reach the
+        target angle before the carriage starts moving.
+        """
+        return
+
     async def after_position_command(
         self,
         cmd_svc,
