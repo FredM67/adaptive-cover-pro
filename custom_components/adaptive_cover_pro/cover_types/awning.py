@@ -74,6 +74,7 @@ class AwningPolicy(CoverTypePolicy):
     # ``position_for_intent`` falls out of the base implementation without any
     # subclass override.
     axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS_OPEN_BLOCKS_SUN,)
+    supports_return_to_default_switch = True
 
     def disallowed_geometry_fields(
         self,

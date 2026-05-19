@@ -81,6 +81,7 @@ class BlindPolicy(CoverTypePolicy):
     cover_type = "cover_blind"
     axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS,)
     supports_glare_zones = True
+    supports_return_to_default_switch = True
 
     def disallowed_geometry_fields(
         self,

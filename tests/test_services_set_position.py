@@ -13,6 +13,7 @@ import voluptuous as vol
 
 from custom_components.adaptive_cover_pro.const import (
     CONF_SENSOR_TYPE,
+    DEFAULT_CUSTOM_POSITION_PRIORITY,
     DOMAIN,
     SensorType,
 )
@@ -260,7 +261,7 @@ async def test_min_mode_slot_off_no_clamping() -> None:
         entity_id="binary_sensor.slot1",
         is_on=False,
         position=60,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -298,7 +299,7 @@ async def test_min_mode_slot_on_clamps_up() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=50,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -336,7 +337,7 @@ async def test_request_equals_floor_no_extra_clamping() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=50,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -369,7 +370,7 @@ async def test_request_above_floor_no_clamping() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=50,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -407,7 +408,7 @@ async def test_two_floors_request_below_highest_clamped() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=40,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -415,7 +416,7 @@ async def test_two_floors_request_below_highest_clamped() -> None:
         entity_id="binary_sensor.slot2",
         is_on=True,
         position=65,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -448,7 +449,7 @@ async def test_two_floors_request_above_highest_not_clamped() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=40,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -456,7 +457,7 @@ async def test_two_floors_request_above_highest_not_clamped() -> None:
         entity_id="binary_sensor.slot2",
         is_on=True,
         position=65,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -551,7 +552,7 @@ async def test_clamp_emits_info_log(caplog) -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=50,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=True,
         use_my=False,
     )
@@ -675,7 +676,7 @@ async def test_non_min_mode_slot_on_does_not_clamp() -> None:
         entity_id="binary_sensor.slot1",
         is_on=True,
         position=80,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=False,
         use_my=False,
     )

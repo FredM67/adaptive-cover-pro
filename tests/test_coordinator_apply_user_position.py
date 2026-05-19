@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.adaptive_cover_pro.const import DEFAULT_CUSTOM_POSITION_PRIORITY
 from custom_components.adaptive_cover_pro.pipeline.handlers.manual_override import (
     ManualOverrideHandler,
 )
@@ -28,7 +29,7 @@ def _slot(pos: int, *, is_on: bool, min_mode: bool) -> CustomPositionSensorState
         entity_id=f"binary_sensor.slot_{pos}",
         is_on=is_on,
         position=pos,
-        priority=77,
+        priority=DEFAULT_CUSTOM_POSITION_PRIORITY,
         min_mode=min_mode,
         use_my=False,
     )

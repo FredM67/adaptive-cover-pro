@@ -340,6 +340,48 @@ class TestReadAxisValue:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Per-cover-type feature flags — replace string-list gates outside cover_types/
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("cover_type", ALL_COVER_TYPES)
+def test_is_in_tilt_suppression_uniform_signature(cover_type: str) -> None:
+    """Every policy must accept ``is_in_tilt_suppression(entity_id, delta)``.
+
+    Pins the Liskov-safe signature reconciliation. Calling with both
+    positional and keyword forms must work for every registered policy so
+    the method can be passed as a ``SecondaryAxisCheck.suppression``
+    callback without per-type adapters.
+    """
+    policy = get_policy(cover_type)
+    # Positional form.
+    assert policy.is_in_tilt_suppression("cover.x", 0.0) is False
+    # Keyword form.
+    assert policy.is_in_tilt_suppression("cover.x", delta=10.0) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cover_type", "expected"),
+    [
+        ("cover_blind", True),
+        ("cover_awning", True),
+        ("cover_tilt", False),
+        ("cover_venetian", False),
+    ],
+)
+def test_supports_return_to_default_switch(cover_type: str, expected: bool) -> None:
+    """The Return-to-default switch is exposed for position-axis covers only.
+
+    Pins the ClassVar that replaced the legacy ``switch.py`` string-list gate.
+    Adding a fifth cover type must add a row here, not branch on the type
+    string in ``switch.py``.
+    """
+    assert get_policy(cover_type).supports_return_to_default_switch is expected
+
+
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 _PRODUCTION_ROOT = _REPO_ROOT / "custom_components" / "adaptive_cover_pro"
 

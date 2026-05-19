@@ -376,12 +376,15 @@ class VenetianPolicy(CoverTypePolicy):
         """Expose the sequencer for diagnostics / tests."""
         return self._sequencer
 
-    def is_in_tilt_suppression(self, entity_id: str, delta: float) -> bool:
+    def is_in_tilt_suppression(self, entity_id: str, delta: float = 0.0) -> bool:
         """Suppress back-rotate drift only when ``delta`` is plausibly motor drift.
 
         Delegates to the sequencer's delta-aware gate. Large deltas inside the
         window are user moves, not motor drift, and fall through to the
-        manual-override numeric path (issue #33 follow-on).
+        manual-override numeric path (issue #33 follow-on). The ``delta``
+        default matches the base signature so the method is interchangeable
+        with other policies when passed as a ``SecondaryAxisCheck.suppression``
+        callback.
         """
         if self._sequencer is None:
             return False
