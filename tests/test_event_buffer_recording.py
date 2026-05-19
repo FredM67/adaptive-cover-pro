@@ -111,11 +111,36 @@ def _make_transit_coordinator(
     cmd_svc.record_progress = MagicMock(side_effect=_record_prog)
     cmd_svc.check_target_reached = MagicMock(return_value=False)
     cmd_svc.get_cover_capabilities = MagicMock(return_value={"has_set_position": True})
+    cmd_svc.set_waiting = MagicMock()
+    cmd_svc.waiting_entities = MagicMock(return_value=[])
 
     def _read_pos(eid, caps, state_obj):
         return new_pos if state_obj is coord.state_change_data.new_state else old_pos
 
     cmd_svc.read_position_with_capabilities = MagicMock(side_effect=_read_pos)
+
+    # Phase F: process_entity_state_change is now a thin shim that calls
+    # cmd_svc.classify_state_change.  Wire a real StateClassifier onto the
+    # mock service so its public method drives the same body the test
+    # previously exercised through the inline coordinator.
+    from custom_components.adaptive_cover_pro.managers.cover_command.state_classifier import (
+        StateClassifier,
+    )
+
+    cmd_svc._logger = MagicMock()
+    classifier = StateClassifier(
+        cmd_svc, event_buffer=buf, debug_log=lambda *_a, **_kw: None
+    )
+    cmd_svc.classify_state_change = (
+        lambda event, *, ignore_intermediate_states, target_just_reached, grace_mgr: (
+            classifier.classify(
+                event,
+                ignore_intermediate_states=ignore_intermediate_states,
+                target_just_reached=target_just_reached,
+                grace_mgr=grace_mgr,
+            )
+        )
+    )
     coord._cmd_svc = cmd_svc
 
     coord._is_in_grace_period = (
