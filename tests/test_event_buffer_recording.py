@@ -292,6 +292,9 @@ class TestSunFOVEvents:
         from custom_components.adaptive_cover_pro.coordinator import (
             AdaptiveDataUpdateCoordinator,
         )
+        from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+            WindowTransitionTracker,
+        )
 
         buf = EventBuffer(maxlen=50)
         coord = object.__new__(AdaptiveDataUpdateCoordinator)
@@ -301,7 +304,15 @@ class TestSunFOVEvents:
         cover_data = MagicMock()
         cover_data.direct_sun_valid = direct_sun_valid
         coord._cover_data = cover_data
-        coord._last_sun_validity_state = prev_state
+        # Phase E: sun-validity state lives on the WindowTransitionTracker.
+        tracker = WindowTransitionTracker(
+            hass=MagicMock(),
+            logger=coord.logger,
+            event_buffer=buf,
+            effective_default_fn=lambda _opts: (0, False),
+        )
+        tracker._last_sun_validity_state = prev_state
+        coord._window_tracker = tracker
         return coord
 
     def test_sun_entered_fov_records_event(self) -> None:
@@ -382,6 +393,23 @@ class TestEndTimeDefaultSentEvent:
         time_mgr = MagicMock()
         time_mgr.check_transition = _invoke_close
         coord._time_mgr = time_mgr
+        coord.manager = MagicMock()
+
+        # Phase E: _check_time_window_transition awaits the sunset-window
+        # tracker after running the closed-window callback.  Seed a tracker
+        # with prev_sunset_active=True so it no-ops without redispatching.
+        from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+            WindowTransitionTracker,
+        )
+
+        tracker = WindowTransitionTracker(
+            hass=MagicMock(),
+            logger=coord.logger,
+            event_buffer=buf,
+            effective_default_fn=coord._compute_current_effective_default,
+        )
+        tracker._prev_sunset_active = True
+        coord._window_tracker = tracker
 
         return coord
 
@@ -432,6 +460,9 @@ class TestSunsetWindowOpenedEvent:
         from custom_components.adaptive_cover_pro.managers.cover_command import (
             PositionContext,
         )
+        from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+            WindowTransitionTracker,
+        )
 
         buf = EventBuffer(maxlen=50)
         coord = object.__new__(AdaptiveDataUpdateCoordinator)
@@ -441,7 +472,6 @@ class TestSunsetWindowOpenedEvent:
         coord.automatic_control = True
         coord._track_end_time = True
         coord._inverse_state = False
-        coord._prev_sunset_active = False
 
         entities = [MagicMock()]
         coord.entities = entities
@@ -471,6 +501,15 @@ class TestSunsetWindowOpenedEvent:
             )
         )
         coord._compute_current_effective_default = MagicMock(return_value=(0, True))
+        # Phase E: sunset-window state lives on the WindowTransitionTracker.
+        tracker = WindowTransitionTracker(
+            hass=MagicMock(),
+            logger=coord.logger,
+            event_buffer=buf,
+            effective_default_fn=coord._compute_current_effective_default,
+        )
+        tracker._prev_sunset_active = False
+        coord._window_tracker = tracker
         return coord
 
     @pytest.mark.asyncio
@@ -507,7 +546,7 @@ class TestSunsetWindowOpenedEvent:
         )
 
         coord = self._make_coord()
-        coord._prev_sunset_active = True  # already open — no transition
+        coord._window_tracker._prev_sunset_active = True  # already open — no transition
         await AdaptiveDataUpdateCoordinator._check_sunset_window_transition(coord)
         assert "sunset_window_opened" not in _event_types(coord._event_buffer)
 

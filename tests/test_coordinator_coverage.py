@@ -110,8 +110,24 @@ def test_manual_toggle_getter_setter():
 
 
 # ---------------------------------------------------------------------------
-# _check_sun_validity_transition
+# _check_sun_validity_transition — Phase E delegated to WindowTransitionTracker
 # ---------------------------------------------------------------------------
+
+
+def _attach_window_tracker(coord, *, prev_state: bool | None) -> None:
+    """Wire a fresh WindowTransitionTracker onto ``coord`` with seeded state."""
+    from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+        WindowTransitionTracker,
+    )
+
+    tracker = WindowTransitionTracker(
+        hass=MagicMock(),
+        logger=coord.logger,
+        event_buffer=coord._event_buffer,
+        effective_default_fn=lambda _opts: (0, False),
+    )
+    tracker._last_sun_validity_state = prev_state
+    coord._window_tracker = tracker
 
 
 @pytest.mark.unit
@@ -119,7 +135,7 @@ def test_sun_validity_transition_returns_false_when_no_cover_data():
     """_check_sun_validity_transition returns False when _cover_data is None."""
     coord = _make_coordinator()
     coord._cover_data = None
-    coord._last_sun_validity_state = None
+    _attach_window_tracker(coord, prev_state=None)
 
     result = coord._check_sun_validity_transition()
     assert result is False
@@ -127,17 +143,17 @@ def test_sun_validity_transition_returns_false_when_no_cover_data():
 
 @pytest.mark.unit
 def test_sun_validity_transition_initializes_on_first_call():
-    """First call initializes _last_sun_validity_state, returns False."""
+    """First call seeds the tracker state and returns False."""
     coord = _make_coordinator()
     cover_data = MagicMock()
     cover_data.direct_sun_valid = True
     coord._cover_data = cover_data
-    coord._last_sun_validity_state = None
+    _attach_window_tracker(coord, prev_state=None)
 
     result = coord._check_sun_validity_transition()
 
     assert result is False
-    assert coord._last_sun_validity_state is True
+    assert coord._window_tracker._last_sun_validity_state is True
 
 
 @pytest.mark.unit
@@ -147,7 +163,7 @@ def test_sun_validity_transition_detects_sun_appeared():
     cover_data = MagicMock()
     cover_data.direct_sun_valid = True
     coord._cover_data = cover_data
-    coord._last_sun_validity_state = False  # was False, now True
+    _attach_window_tracker(coord, prev_state=False)
 
     result = coord._check_sun_validity_transition()
 
@@ -162,7 +178,7 @@ def test_sun_validity_transition_detects_sun_left():
     cover_data = MagicMock()
     cover_data.direct_sun_valid = False
     coord._cover_data = cover_data
-    coord._last_sun_validity_state = True  # was True, now False
+    _attach_window_tracker(coord, prev_state=True)
 
     result = coord._check_sun_validity_transition()
 
@@ -410,6 +426,30 @@ async def test_window_close_skips_reposition_when_auto_control_off():
     coord._toggles = ToggleManager()
     coord.automatic_control = False
     coord._track_end_time = True
+    # Window-close path now awaits the sunset-window tracker; seed one that
+    # short-circuits via track_end_time=False (no dispatch, no state change).
+    config_entry = MagicMock()
+    config_entry.options = {}
+    coord.config_entry = config_entry
+    coord.entities = []
+    coord._inverse_state = False
+    from custom_components.adaptive_cover_pro.diagnostics.event_buffer import (
+        EventBuffer,
+    )
+    from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+        WindowTransitionTracker,
+    )
+
+    coord._event_buffer = EventBuffer(maxlen=10)
+    coord.manager = MagicMock()
+    coord.async_refresh = AsyncMock()
+    coord._build_position_context = MagicMock()
+    coord._window_tracker = WindowTransitionTracker(
+        hass=MagicMock(),
+        logger=coord.logger,
+        event_buffer=coord._event_buffer,
+        effective_default_fn=lambda _opts: (0, False),
+    )
 
     cmd_svc = MagicMock()
     cmd_svc.apply_position = AsyncMock()
@@ -478,6 +518,23 @@ async def test_window_close_sends_reposition_when_auto_control_on():
     cover_data.sun_data = MagicMock()
     coord.get_blind_data = MagicMock(return_value=cover_data)
     coord._build_position_context = MagicMock(return_value=MagicMock(force=True))
+    coord.manager = MagicMock()
+
+    # Window-tracker no-ops (track_end_time stays True at the coord level for
+    # _on_window_closed, but the tracker is seeded with prev_sunset_active=True
+    # so the post-close sunset-window check skips redispatch).
+    from custom_components.adaptive_cover_pro.state.window_transition_tracker import (
+        WindowTransitionTracker,
+    )
+
+    tracker = WindowTransitionTracker(
+        hass=MagicMock(),
+        logger=coord.logger,
+        event_buffer=coord._event_buffer,
+        effective_default_fn=lambda _opts: (0, False),
+    )
+    tracker._prev_sunset_active = True
+    coord._window_tracker = tracker
 
     with patch(
         "custom_components.adaptive_cover_pro.coordinator.compute_effective_default",

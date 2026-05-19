@@ -105,6 +105,7 @@ from .state.climate_provider import ClimateProvider, ClimateReadings
 from .state.cover_provider import CoverProvider
 from .state.snapshot import CoverStateSnapshot, SunSnapshot
 from .state.sun_provider import SunProvider
+from .state.window_transition_tracker import WindowTransitionTracker
 
 _MANIFEST_VERSION: str = json.loads(
     (pathlib.Path(__file__).parent / "manifest.json").read_text()
@@ -341,12 +342,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             hass=self.hass, logger=self.logger, event_buffer=self._event_buffer
         )
 
-        # Track sun validity transitions (for responsive sun in-front detection)
-        self._last_sun_validity_state: bool | None = None
-
-        # Track sunset-window transitions so covers reposition when the
-        # astronomical sunset window opens after the user's end_time (issue #266).
-        self._prev_sunset_active: bool | None = None
+        # Window-transition tracker — owns sun-visibility and astronomical
+        # sunset-window transition state (extracted from coordinator in Phase E).
+        self._window_tracker = WindowTransitionTracker(
+            hass=self.hass,
+            logger=self.logger,
+            event_buffer=self._event_buffer,
+            effective_default_fn=self._compute_current_effective_default,
+        )
 
         # Time of the last successful _async_update_data() completion.
         # HA's DataUpdateCoordinator only exposes last_update_success (bool);
@@ -2448,114 +2451,30 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         )
 
     async def _check_sunset_window_transition(self) -> None:
-        """Dispatch sunset_pos when the astronomical sunset window opens after end_time.
+        """Delegate astronomical-sunset-window transition handling to the tracker.
 
-        Handles the case where end_time fires before sunset+offset: _on_window_closed
-        sends the daytime default (is_sunset_active=False at that moment). When the
-        sunset window later opens, this detects the False→True transition and sends
-        the sunset position (issue #266).
-
-        Mirrors the _last_sun_validity_state pattern: _prev_sunset_active=None on
-        startup prevents spurious dispatch when HA restarts mid-sunset.
+        See :meth:`WindowTransitionTracker.check_sunset_window` for the
+        full contract (issue #266).
         """
-        if not self._track_end_time:
-            return
-        if not self.automatic_control:
-            self.logger.debug(
-                "Sunset window opened but automatic control is OFF — skipping reposition"
-            )
-            return
         options = self.config_entry.options
-        sunset_pos_cfg = options.get(CONF_SUNSET_POS)
-        if sunset_pos_cfg is None:
-            return
-
-        _effective_pos, is_sunset = self._compute_current_effective_default(options)
-
-        if self._prev_sunset_active is None:
-            self._prev_sunset_active = is_sunset
-            return
-
-        just_opened = (not self._prev_sunset_active) and is_sunset
-        self._prev_sunset_active = is_sunset
-
-        if not just_opened:
-            return
-
-        pos_to_send = (
-            inverse_state(int(sunset_pos_cfg))
-            if self._inverse_state
-            else int(sunset_pos_cfg)
+        await self._window_tracker.check_sunset_window(
+            track_end_time=self._track_end_time,
+            automatic_control=self.automatic_control,
+            sunset_pos_cfg=options.get(CONF_SUNSET_POS),
+            options=options,
+            inverse_state_enabled=self._inverse_state,
+            entities=self.entities,
+            is_cover_manual=self.manager.is_cover_manual,
+            build_position_context=lambda c, o: self._build_position_context(
+                c, o, force=False
+            ),
+            apply_position=self._cmd_svc.apply_position,
+            refresh=self.async_refresh,
         )
-        self.logger.info(
-            "Sunset window opened after end_time — dispatching sunset position %s%% "
-            "to %s cover(s) (issue #266)",
-            pos_to_send,
-            len(self.entities),
-        )
-        self._event_buffer.record(
-            {
-                "ts": dt.datetime.now(dt.UTC).isoformat(),
-                "event": "sunset_window_opened",
-                "position": pos_to_send,
-                "cover_count": len(self.entities),
-            }
-        )
-        for cover_entity in self.entities:
-            if self.manager.is_cover_manual(cover_entity):
-                continue
-            ctx = self._build_position_context(cover_entity, options, force=False)
-            await self._cmd_svc.apply_position(
-                cover_entity, pos_to_send, "sunset_window_opened", context=ctx
-            )
-        await self.async_refresh()
 
     def _check_sun_validity_transition(self) -> bool:
-        """Check if sun validity state has changed from False to True.
-
-        Returns True if sun just came into field of view, indicating
-        covers should immediately reposition regardless of delta checks.
-        """
-        # Need cover data to check sun validity
-        if self._cover_data is None:
-            return False
-
-        current_sun_valid = self._cover_data.direct_sun_valid
-
-        # Initialize tracking on first call
-        if self._last_sun_validity_state is None:
-            self._last_sun_validity_state = current_sun_valid
-            return False
-
-        # Detect transitions
-        sun_just_appeared = (not self._last_sun_validity_state) and current_sun_valid
-        sun_just_left = self._last_sun_validity_state and (not current_sun_valid)
-
-        # Update tracking
-        self._last_sun_validity_state = current_sun_valid
-
-        if sun_just_appeared:
-            self.logger.info(
-                "Sun visibility transition detected: OFF → ON (sun came into field of view)"
-            )
-            self._event_buffer.record(
-                {
-                    "ts": dt.datetime.now(dt.UTC).isoformat(),
-                    "event": "sun_entered_fov",
-                }
-            )
-        elif sun_just_left:
-            self.logger.debug(
-                "Sun visibility transition detected: ON → OFF (sun left field of view)"
-            )
-            self._event_buffer.record(
-                {
-                    "ts": dt.datetime.now(dt.UTC).isoformat(),
-                    "event": "sun_left_fov",
-                }
-            )
-
-        return sun_just_appeared
+        """Delegate sun-visibility transition detection to the tracker."""
+        return self._window_tracker.sun_just_appeared(self._cover_data)
 
     async def async_shutdown(self) -> None:
         """Clean up resources on shutdown.
