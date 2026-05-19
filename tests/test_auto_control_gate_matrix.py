@@ -325,7 +325,8 @@ async def _trigger_async_apply_user_position(coord):
     """
     coord.config_entry = MagicMock()
     coord.config_entry.options = {}
-    coord._read_custom_position_sensor_states = MagicMock(return_value=[])
+    coord._snapshot_builder = MagicMock()
+    coord._snapshot_builder.read_custom_position_sensors = MagicMock(return_value=[])
     await coord.async_apply_user_position(
         "cover.test", 42, trigger="set_position", force=True
     )

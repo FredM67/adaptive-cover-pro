@@ -25,6 +25,27 @@ def _make_coordinator():
     return coord
 
 
+def _make_snapshot_builder(coord):
+    """Build a :class:`PipelineSnapshotBuilder` bound to ``coord.hass`` / toggles.
+
+    Phase D moved the custom-position sensor reads off the coordinator and
+    into this builder.  Existing tests that drove the old private method
+    construct the builder here and call its public surface.
+    """
+    from custom_components.adaptive_cover_pro.pipeline.snapshot_builder import (
+        PipelineSnapshotBuilder,
+    )
+
+    return PipelineSnapshotBuilder(
+        hass=coord.hass,
+        logger=coord.logger,
+        climate_provider=MagicMock(),
+        toggles=coord._toggles,
+        policy=MagicMock(),
+        config_service=MagicMock(),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Toggle property getters and setters
 # ---------------------------------------------------------------------------
@@ -245,7 +266,7 @@ def test_read_custom_position_sensor_states_reads_entity_state():
         CONF_CUSTOM_POSITION_PRIORITY_1: 77,
     }
 
-    result = coord._read_custom_position_sensor_states(options)
+    result = _make_snapshot_builder(coord).read_custom_position_sensors(options)
 
     assert len(result) == 1
     state = result[0]
@@ -286,7 +307,7 @@ def test_read_custom_position_sensor_states_with_priority_fallback():
         CONF_CUSTOM_POSITION_PRIORITY_1: None,  # None → use default
     }
 
-    result = coord._read_custom_position_sensor_states(options)
+    result = _make_snapshot_builder(coord).read_custom_position_sensors(options)
 
     assert len(result) == 1
     state = result[0]
@@ -584,7 +605,7 @@ def test_read_custom_position_sensor_states_tilt_threaded():
         tilt_key: 65,
     }
 
-    result = coord._read_custom_position_sensor_states(options)
+    result = _make_snapshot_builder(coord).read_custom_position_sensors(options)
 
     assert len(result) == 1
     assert result[0].tilt == 65
@@ -617,7 +638,7 @@ def test_read_custom_position_sensor_states_tilt_none_when_absent():
         # no tilt
     }
 
-    result = coord._read_custom_position_sensor_states(options)
+    result = _make_snapshot_builder(coord).read_custom_position_sensors(options)
 
     assert len(result) == 1
     assert result[0].tilt is None

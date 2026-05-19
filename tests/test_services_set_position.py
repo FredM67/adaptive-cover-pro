@@ -69,8 +69,12 @@ def _make_coord(
     coord.config_entry = MagicMock()
     coord.config_entry.options = options or {}
 
-    # _read_custom_position_sensor_states
-    coord._read_custom_position_sensor_states.return_value = custom_states or []
+    # Snapshot builder — async_apply_user_position routes its custom-position
+    # read through this collaborator after Phase D.
+    coord._snapshot_builder = MagicMock()
+    coord._snapshot_builder.read_custom_position_sensors.return_value = (
+        custom_states or []
+    )
 
     # _build_position_context
     ctx = MagicMock()

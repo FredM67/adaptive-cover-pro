@@ -38,7 +38,8 @@ def _make_coord(custom_states):
     coord.entities = ["cover.living_room"]
     coord.config_entry = MagicMock()
     coord.config_entry.options = {}
-    coord._read_custom_position_sensor_states.return_value = custom_states
+    coord._snapshot_builder = MagicMock()
+    coord._snapshot_builder.read_custom_position_sensors.return_value = custom_states
     ctx = MagicMock(name="position_context")
     coord._build_position_context.return_value = ctx
     coord._cmd_svc = MagicMock()
