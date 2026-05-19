@@ -416,3 +416,105 @@ def test_no_hardcoded_caps_get_strings_in_production() -> None:
         "Hardcoded caps.get('has_*') strings found — replace with "
         "caps_get(caps, CAP_HAS_*):\n  " + "\n  ".join(offenders)
     )
+
+
+# ---------------------------------------------------------------------------
+# Cover-type-literal comparison guard
+# ---------------------------------------------------------------------------
+# Production code outside ``cover_types/`` must dispatch through
+# ``get_policy(sensor_type).<flag>`` rather than comparing the sensor type to
+# a ``SensorType.<NAME>`` enum or hardcoded ``"cover_<name>"`` string. Adding
+# a fifth cover type must not require parallel edits at every call site that
+# branched on the previous four — the policy ClassVars exist for exactly that.
+
+# Compares ``something == SensorType.X`` or ``SensorType.X == something``
+# (and ``!=``). Variable-to-variable compares (``== current_type``) don't
+# match because the right-hand side must be a literal ``SensorType.<NAME>``.
+_BANNED_SENSORTYPE_COMPARE_RE = re.compile(
+    r"SensorType\.[A-Z_]+\s*(==|!=)|(==|!=)\s*SensorType\.[A-Z_]+"
+)
+# Compares ``cover_type == "cover_blind"`` and friends — the pre-policy
+# string-comparison form that ``caps_get`` and ``get_policy`` replaced.
+_BANNED_COVER_TYPE_LITERAL_RE = re.compile(
+    r'cover_type\s*(==|!=)\s*["\']cover_[a-z_]+["\']'
+)
+# Files inside cover_types/ are the boundary the guard enforces — the policy
+# layer is allowed (and required) to know about its own concrete types.
+_TYPE_BOUNDARY = _PRODUCTION_ROOT / "cover_types"
+
+
+@pytest.mark.unit
+def test_no_cover_type_literals_outside_cover_types() -> None:
+    """Fail if any production module outside cover_types/ compares to a SensorType literal.
+
+    The "fifth cover type" punch list grows every time code branches on
+    ``SensorType.X`` directly. Add a ClassVar on ``CoverTypePolicy`` (see
+    ``exposes_dual_axis_sensor`` and ``custom_position_includes_tilt`` for
+    worked examples) and call it through ``get_policy(sensor_type)``
+    instead — see CODING_GUIDELINES.md "Cover Type Abstraction".
+    """
+    offenders: list[str] = []
+    for path in _PRODUCTION_ROOT.rglob("*.py"):
+        # cover_types/ legitimately knows about concrete types — the guard
+        # enforces the boundary, not internal policy code.
+        if _TYPE_BOUNDARY in path.parents:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if not (
+                _BANNED_SENSORTYPE_COMPARE_RE.search(line)
+                or _BANNED_COVER_TYPE_LITERAL_RE.search(line)
+            ):
+                continue
+            stripped = line.strip()
+            # Skip lines that are clearly comment/docstring — same heuristic
+            # as the sibling caps.get scan above.
+            if stripped.startswith(("#", '"', "'")):
+                continue
+            rel = path.relative_to(_REPO_ROOT)
+            offenders.append(f"{rel}:{lineno}: {stripped}")
+    assert not offenders, (
+        "Cover-type-literal comparisons found outside cover_types/ — "
+        "dispatch through get_policy(sensor_type).<flag> instead:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cover_type", "expected"),
+    [
+        ("cover_blind", False),
+        ("cover_awning", False),
+        ("cover_tilt", False),
+        ("cover_venetian", True),
+    ],
+)
+def test_exposes_dual_axis_sensor(cover_type: str, expected: bool) -> None:
+    """The dual-axis Target Tilt sensor is enabled only for venetian today.
+
+    Pins the ClassVar that replaced the literal ``SensorType.VENETIAN ==``
+    lambda gate on ``sensor.py``. Adding a fifth cover type must add a row
+    here, not edit sensor.py.
+    """
+    assert get_policy(cover_type).exposes_dual_axis_sensor is expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cover_type", "expected"),
+    [
+        ("cover_blind", False),
+        ("cover_awning", False),
+        ("cover_tilt", False),
+        ("cover_venetian", True),
+    ],
+)
+def test_custom_position_includes_tilt(cover_type: str, expected: bool) -> None:
+    """The custom-position UI surfaces tilt sliders only for venetian today.
+
+    Pins the ClassVar that replaced the ``is_venetian`` schema branch in
+    ``config_flow._build_custom_position_schema_dict``. Adding a fifth cover
+    type must add a row here, not edit config_flow.py.
+    """
+    assert get_policy(cover_type).custom_position_includes_tilt is expected

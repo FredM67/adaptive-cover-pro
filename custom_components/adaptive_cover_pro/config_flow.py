@@ -487,11 +487,16 @@ def _priority_slider() -> selector.NumberSelector:
 def _build_custom_position_schema_dict(sensor_type: str | None = None) -> dict:
     """Compose the full custom-position schema by iterating CUSTOM_POSITION_SLOTS.
 
-    When sensor_type is ``SensorType.VENETIAN``, per-slot tilt sliders and
-    global default/sunset tilt sliders are added.  All other cover types omit
-    them since tilt is not applicable.
+    Per-slot tilt sliders and global default/sunset tilt sliders are added
+    for cover types whose policy declares ``custom_position_includes_tilt``
+    (venetian today). All other cover types omit them since tilt is not
+    applicable. A fifth cover type opts in by flipping that ClassVar — not by
+    editing this function.
     """
-    is_venetian = sensor_type == SensorType.VENETIAN
+    include_tilt = (
+        sensor_type in POLICY_REGISTRY
+        and get_policy(sensor_type).custom_position_includes_tilt
+    )
     schema: dict = {}
     for slot_keys in CUSTOM_POSITION_SLOTS.values():
         schema[vol.Optional(slot_keys["sensor"])] = _binary_on_selector()
@@ -503,9 +508,9 @@ def _build_custom_position_schema_dict(sensor_type: str | None = None) -> dict:
         schema[vol.Optional(slot_keys["use_my"], default=False)] = (
             selector.BooleanSelector()
         )
-        if is_venetian:
+        if include_tilt:
             schema[vol.Optional(slot_keys["tilt"])] = _position_slider()
-    if is_venetian:
+    if include_tilt:
         schema[vol.Optional(CONF_DEFAULT_TILT)] = _position_slider()
         schema[vol.Optional(CONF_SUNSET_TILT)] = _position_slider()
     return schema

@@ -103,6 +103,8 @@ class VenetianPolicy(CoverTypePolicy):
     # the position axis. The tilt axis is filled in by ``post_pipeline_resolve``
     # and dispatched separately by the ``DualAxisSequencer``.
     axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS, TILT_AXIS)
+    exposes_dual_axis_sensor: ClassVar[bool] = True
+    custom_position_includes_tilt: ClassVar[bool] = True
 
     def __init__(self) -> None:
         """Initialise without a sequencer; ``attach()`` wires one up later."""

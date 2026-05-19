@@ -154,6 +154,20 @@ class CoverTypePolicy(ABC):
     # ``switch.py`` that hardcoded ``("cover_blind", "cover_awning")``.
     supports_return_to_default_switch: ClassVar[bool] = False
 
+    # Whether the diagnostic surface exposes a dual-axis target sensor (the
+    # "Target Tilt" sensor in ``sensor.py``). Only meaningful for cover types
+    # that drive both position and tilt on a single HA entity — venetian today.
+    # Replaces the literal ``SensorType.VENETIAN ==`` lambda gate that used to
+    # live on ``sensor.py:807``.
+    exposes_dual_axis_sensor: ClassVar[bool] = False
+
+    # Whether the custom-position config-flow UI surfaces per-slot tilt sliders
+    # and the global default/sunset tilt sliders. Only meaningful for cover
+    # types whose policy can act on tilt independently — venetian today.
+    # Replaces the ``is_venetian = sensor_type == SensorType.VENETIAN`` branch
+    # in ``config_flow._build_custom_position_schema_dict``.
+    custom_position_includes_tilt: ClassVar[bool] = False
+
     @abstractmethod
     def build_calc_engine(
         self,
