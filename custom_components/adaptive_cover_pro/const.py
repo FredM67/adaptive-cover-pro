@@ -478,7 +478,7 @@ MAX_POSITION_RETRIES = 3  # maximum re-send attempts before giving up
 # 21. Venetian Dual-Axis Sequencing
 # =============================================================================
 # Venetian covers move both vertical position AND tilt. The dual-axis sequencer
-# (managers/dual_axis_sequencer.py) issues the position command, waits for the
+# (cover_types/venetian/sequencer.py) issues the position command, waits for the
 # carriage to settle, then issues the tilt command. Constants in this section
 # govern that handshake and the venetian-specific mode/clamp options.
 
@@ -505,6 +505,12 @@ VENETIAN_REBASE_MAX_DRIFT_PERCENT = 15
 # geometry bounds mechanical back-rotation; a delta above this is a user move,
 # so the manual-override path runs even inside the suppression window.
 VENETIAN_BACKROTATE_MAX_DELTA_PERCENT = 30
+
+# Grace tail after stamp_position_command: even when cover.state has already
+# settled to "open"/"closed", bypass the backrotate cap for this many seconds.
+# Real actuators publish their tilt-walk burst AFTER the carriage reports open,
+# so the cap must stay suspended until the HA state machine has fully drained.
+VENETIAN_POST_SETTLE_CAP_GRACE_SECONDS = 5.0
 
 # After set_cover_tilt_position returns, real motors keep back-driving the
 # vertical axis briefly. Wait this many seconds before reading current_position
