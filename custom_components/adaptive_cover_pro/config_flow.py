@@ -671,6 +671,18 @@ WEATHER_OVERRIDE_SCHEMA = vol.Schema(
     }
 )
 
+# Keys in WEATHER_OVERRIDE_SCHEMA with default=vol.UNDEFINED. Voluptuous omits
+# them from user_input when cleared, so both flow handlers must call
+# optional_entities() with this list before dict.update() -- otherwise the prior
+# value survives a clear (issue #323).
+_WEATHER_OVERRIDE_OPTIONAL_KEYS: list[str] = [
+    CONF_WEATHER_WIND_SPEED_SENSOR,
+    CONF_WEATHER_WIND_DIRECTION_SENSOR,
+    CONF_WEATHER_RAIN_SENSOR,
+    CONF_WEATHER_IS_RAINING_SENSOR,
+    CONF_WEATHER_IS_WINDY_SENSOR,
+]
+
 # --- Light & Cloud (works without climate mode) ---
 LIGHT_CLOUD_SCHEMA = vol.Schema(
     {
@@ -747,6 +759,19 @@ LIGHT_CLOUD_SCHEMA = vol.Schema(
     }
 )
 
+# Keys in LIGHT_CLOUD_SCHEMA with default=vol.UNDEFINED (entity fields use
+# explicit UNDEFINED; CONF_CLOUDY_POSITION uses bare vol.Optional which also
+# produces default=vol.UNDEFINED). Both flow handlers must call
+# optional_entities() with this list before dict.update() -- see #323 and #392.
+_LIGHT_CLOUD_OPTIONAL_KEYS: list[str] = [
+    CONF_CLOUDY_POSITION,
+    CONF_WEATHER_ENTITY,
+    CONF_IS_SUNNY_SENSOR,
+    CONF_LUX_ENTITY,
+    CONF_IRRADIANCE_ENTITY,
+    CONF_CLOUD_COVERAGE_ENTITY,
+]
+
 # --- Temperature Climate Mode ---
 TEMPERATURE_CLIMATE_SCHEMA = vol.Schema(
     {
@@ -793,13 +818,14 @@ TEMPERATURE_CLIMATE_SCHEMA = vol.Schema(
     }
 )
 
-# Combined schema for backward compatibility (used by SYNC_CATEGORIES)
-CLIMATE_SCHEMA = vol.Schema(
-    {
-        **dict(LIGHT_CLOUD_SCHEMA.schema.items()),
-        **dict(TEMPERATURE_CLIMATE_SCHEMA.schema.items()),
-    }
-)
+# Keys in TEMPERATURE_CLIMATE_SCHEMA with default=vol.UNDEFINED (CONF_TEMP_ENTITY
+# is a bare vol.Optional). Both flow handlers must call optional_entities() with
+# this list before dict.update() -- see #323.
+_TEMPERATURE_CLIMATE_OPTIONAL_KEYS: list[str] = [
+    CONF_TEMP_ENTITY,
+    CONF_OUTSIDETEMP_ENTITY,
+    CONF_PRESENCE_ENTITY,
+]
 
 WEATHER_OPTIONS = vol.Schema(
     {
@@ -2528,16 +2554,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     ):
         """Configure weather-based safety overrides."""
         if user_input is not None:
-            self.optional_entities(
-                [
-                    CONF_WEATHER_WIND_SPEED_SENSOR,
-                    CONF_WEATHER_WIND_DIRECTION_SENSOR,
-                    CONF_WEATHER_RAIN_SENSOR,
-                    CONF_WEATHER_IS_RAINING_SENSOR,
-                    CONF_WEATHER_IS_WINDY_SENSOR,
-                ],
-                user_input,
-            )
+            self.optional_entities(_WEATHER_OVERRIDE_OPTIONAL_KEYS, user_input)
             self.config.update(user_input)
             return await self.async_step_light_cloud()
         return self.async_show_form(
@@ -2551,16 +2568,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_light_cloud(self, user_input: dict[str, Any] | None = None):
         """Configure light sensors, weather conditions, and cloud suppression."""
         if user_input is not None:
-            self.optional_entities(
-                [
-                    CONF_WEATHER_ENTITY,
-                    CONF_LUX_ENTITY,
-                    CONF_IRRADIANCE_ENTITY,
-                    CONF_CLOUD_COVERAGE_ENTITY,
-                    CONF_IS_SUNNY_SENSOR,
-                ],
-                user_input,
-            )
+            self.optional_entities(_LIGHT_CLOUD_OPTIONAL_KEYS, user_input)
             self.config.update(user_input)
             return await self.async_step_temperature_climate()
         return self.async_show_form(
@@ -2576,12 +2584,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
     ):
         """Configure temperature-based climate mode."""
         if user_input is not None:
-            entities = [
-                CONF_TEMP_ENTITY,
-                CONF_OUTSIDETEMP_ENTITY,
-                CONF_PRESENCE_ENTITY,
-            ]
-            self.optional_entities(entities, user_input)
+            self.optional_entities(_TEMPERATURE_CLIMATE_OPTIONAL_KEYS, user_input)
             if user_input.get(CONF_CLIMATE_MODE) and not user_input.get(
                 CONF_TEMP_ENTITY
             ):
@@ -2600,41 +2603,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             data_schema=TEMPERATURE_CLIMATE_SCHEMA,
             description_placeholders={
                 "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Climate-Mode"
-            },
-        )
-
-    async def async_step_climate(self, user_input: dict[str, Any] | None = None):
-        """Manage climate options (combined, for backward compat with options flow)."""
-        if user_input is not None:
-            entities = [
-                CONF_TEMP_ENTITY,
-                CONF_OUTSIDETEMP_ENTITY,
-                CONF_WEATHER_ENTITY,
-                CONF_PRESENCE_ENTITY,
-                CONF_LUX_ENTITY,
-                CONF_IRRADIANCE_ENTITY,
-            ]
-            self.optional_entities(entities, user_input)
-            if user_input.get(CONF_CLIMATE_MODE) and not user_input.get(
-                CONF_TEMP_ENTITY
-            ):
-                return self.async_show_form(
-                    step_id="climate",
-                    data_schema=CLIMATE_SCHEMA,
-                    errors={CONF_TEMP_ENTITY: "Required when climate mode is enabled"},
-                    description_placeholders={
-                        "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Climate"
-                    },
-                )
-            self.config.update(user_input)
-            if self.config.get(CONF_WEATHER_ENTITY):
-                return await self.async_step_weather()
-            return await self.async_step_summary()
-        return self.async_show_form(
-            step_id="climate",
-            data_schema=CLIMATE_SCHEMA,
-            description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Climate"
             },
         )
 
@@ -3169,16 +3137,7 @@ class OptionsFlowHandler(OptionsFlow):
     ):
         """Manage weather-based safety overrides."""
         if user_input is not None:
-            self.optional_entities(
-                [
-                    CONF_WEATHER_WIND_SPEED_SENSOR,
-                    CONF_WEATHER_WIND_DIRECTION_SENSOR,
-                    CONF_WEATHER_RAIN_SENSOR,
-                    CONF_WEATHER_IS_RAINING_SENSOR,
-                    CONF_WEATHER_IS_WINDY_SENSOR,
-                ],
-                user_input,
-            )
+            self.optional_entities(_WEATHER_OVERRIDE_OPTIONAL_KEYS, user_input)
             self.options.update(user_input)
             return await self.async_step_init()
         return self.async_show_form(
@@ -3415,16 +3374,7 @@ class OptionsFlowHandler(OptionsFlow):
     async def async_step_light_cloud(self, user_input: dict[str, Any] | None = None):
         """Manage light sensors, weather conditions, and cloud suppression."""
         if user_input is not None:
-            self.optional_entities(
-                [
-                    CONF_WEATHER_ENTITY,
-                    CONF_LUX_ENTITY,
-                    CONF_IRRADIANCE_ENTITY,
-                    CONF_CLOUD_COVERAGE_ENTITY,
-                    CONF_IS_SUNNY_SENSOR,
-                ],
-                user_input,
-            )
+            self.optional_entities(_LIGHT_CLOUD_OPTIONAL_KEYS, user_input)
             self.options.update(user_input)
             return await self.async_step_init()
         return self.async_show_form(
@@ -3442,12 +3392,7 @@ class OptionsFlowHandler(OptionsFlow):
     ):
         """Manage temperature-based climate mode."""
         if user_input is not None:
-            entities = [
-                CONF_TEMP_ENTITY,
-                CONF_OUTSIDETEMP_ENTITY,
-                CONF_PRESENCE_ENTITY,
-            ]
-            self.optional_entities(entities, user_input)
+            self.optional_entities(_TEMPERATURE_CLIMATE_OPTIONAL_KEYS, user_input)
             if user_input.get(CONF_CLIMATE_MODE) and not user_input.get(
                 CONF_TEMP_ENTITY
             ):
@@ -3470,43 +3415,6 @@ class OptionsFlowHandler(OptionsFlow):
             ),
             description_placeholders={
                 "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Climate-Mode"
-            },
-        )
-
-    async def async_step_climate(self, user_input: dict[str, Any] | None = None):
-        """Manage climate options (legacy combined step, kept for backward compat)."""
-        if user_input is not None:
-            entities = [
-                CONF_TEMP_ENTITY,
-                CONF_OUTSIDETEMP_ENTITY,
-                CONF_WEATHER_ENTITY,
-                CONF_PRESENCE_ENTITY,
-                CONF_LUX_ENTITY,
-                CONF_IRRADIANCE_ENTITY,
-            ]
-            self.optional_entities(entities, user_input)
-            if user_input.get(CONF_CLIMATE_MODE) and not user_input.get(
-                CONF_TEMP_ENTITY
-            ):
-                return self.async_show_form(
-                    step_id="climate",
-                    data_schema=self.add_suggested_values_to_schema(
-                        CLIMATE_SCHEMA, user_input or self.options
-                    ),
-                    errors={CONF_TEMP_ENTITY: "Required when climate mode is enabled"},
-                    description_placeholders={
-                        "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Climate"
-                    },
-                )
-            self.options.update(user_input)
-            return await self.async_step_init()
-        return self.async_show_form(
-            step_id="climate",
-            data_schema=self.add_suggested_values_to_schema(
-                CLIMATE_SCHEMA, user_input or self.options
-            ),
-            description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Climate"
             },
         )
 
