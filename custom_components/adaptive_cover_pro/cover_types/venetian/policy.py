@@ -106,6 +106,14 @@ class VenetianPolicy(CoverTypePolicy):
     exposes_dual_axis_sensor: ClassVar[bool] = True
     custom_position_includes_tilt: ClassVar[bool] = True
 
+    def wiki_anchor(self) -> str:
+        """Dual-axis venetian wiki page."""
+        return "Venetian-Blinds"
+
+    def display_label(self) -> str:
+        """User-facing label for dual-axis venetians."""
+        return "Venetian Blind (Dual-Axis)"
+
     def __init__(self) -> None:
         """Initialise without a sequencer; ``attach()`` wires one up later."""
         self._sequencer: DualAxisSequencer | None = None

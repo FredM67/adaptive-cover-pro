@@ -405,3 +405,25 @@ class CoverTypePolicy(ABC):
         cover-type-specific geometry block in ``_build_config_summary``.
         """
         return []
+
+    def wiki_anchor(self) -> str:
+        """Return the wiki page anchor for this cover type's geometry docs.
+
+        ``config_flow._geometry_wiki_link`` composes the full URL by
+        appending this fragment to the wiki base. Default is the generic
+        cover-types overview — every concrete policy overrides to its own
+        page. Replaces the legacy ``_GEOMETRY_WIKI_URL`` dict in
+        ``config_flow.py`` that mapped ``SensorType`` literals to URLs.
+        """
+        return "Cover-Types"
+
+    def display_label(self) -> str:
+        """Return the human-readable label for this cover type.
+
+        Used by ``config_flow._build_config_summary`` and any other UI
+        surface that names the cover type. Default falls back to the
+        ``cover_type`` slug for stub policies; every concrete policy
+        overrides to its user-facing name. Replaces the legacy
+        ``type_labels`` dict in ``config_flow.py``.
+        """
+        return self.cover_type.removeprefix("cover_").replace("_", " ").title()

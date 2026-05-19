@@ -83,6 +83,14 @@ class BlindPolicy(CoverTypePolicy):
     supports_glare_zones = True
     supports_return_to_default_switch = True
 
+    def wiki_anchor(self) -> str:
+        """Vertical-blind geometry page."""
+        return "Configuration-Vertical"
+
+    def display_label(self) -> str:
+        """User-facing label for vertical blinds."""
+        return "Vertical Blind"
+
     def disallowed_geometry_fields(
         self,
         *,

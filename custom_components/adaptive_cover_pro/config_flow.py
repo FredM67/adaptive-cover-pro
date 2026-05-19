@@ -152,20 +152,22 @@ SENSOR_TYPE_MENU = [
 
 _STANDALONE_SENTINEL = "__standalone__"
 
-_GEOMETRY_WIKI_URL: dict[str, str] = {
-    SensorType.BLIND: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Vertical",
-    SensorType.AWNING: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Horizontal",
-    SensorType.TILT: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Tilt",
-    SensorType.VENETIAN: "https://github.com/jrhubott/adaptive-cover-pro/wiki/Venetian-Blinds",
-}
+_WIKI_BASE_URL = "https://github.com/jrhubott/adaptive-cover-pro/wiki"
 
 
 def _geometry_wiki_link(sensor_type: str | None) -> str:
-    url = _GEOMETRY_WIKI_URL.get(
-        sensor_type,
-        "https://github.com/jrhubott/adaptive-cover-pro/wiki/Cover-Types",
+    """Build the per-type wiki "Learn more" link from the policy's anchor.
+
+    A fifth cover type opts in by overriding ``CoverTypePolicy.wiki_anchor()``
+    on its subclass — no edit here is required.
+    """
+    # Avoid POLICY_REGISTRY lookup before its module-level import below.
+    from .cover_types import POLICY_REGISTRY as _registry, get_policy as _get
+
+    anchor = (
+        _get(sensor_type).wiki_anchor() if sensor_type in _registry else "Cover-Types"
     )
-    return f"[Learn more]({url})"
+    return f"[Learn more]({_WIKI_BASE_URL}/{anchor})"
 
 
 CONFIG_SCHEMA = vol.Schema(
@@ -1111,13 +1113,11 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
       4. Decision Priority — compact chain showing active/inactive handlers
     """
     # ---- Gather all values up front ----------------------------------------
-    type_labels = {
-        SensorType.BLIND: "Vertical Blind",
-        SensorType.AWNING: "Horizontal Awning",
-        SensorType.TILT: "Venetian / Tilt Blind",
-        SensorType.VENETIAN: "Venetian Blind (Dual-Axis)",
-    }
-    type_label = type_labels.get(sensor_type, "Cover") if sensor_type else "Cover"
+    type_label = (
+        get_policy(sensor_type).display_label()
+        if sensor_type in POLICY_REGISTRY
+        else "Cover"
+    )
 
     entities: list[str] = config.get(CONF_ENTITIES) or []
     default_pos = config.get(CONF_DEFAULT_HEIGHT, 0)

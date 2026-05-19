@@ -518,3 +518,42 @@ def test_custom_position_includes_tilt(cover_type: str, expected: bool) -> None:
     type must add a row here, not edit config_flow.py.
     """
     assert get_policy(cover_type).custom_position_includes_tilt is expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cover_type", "anchor"),
+    [
+        ("cover_blind", "Configuration-Vertical"),
+        ("cover_awning", "Configuration-Horizontal"),
+        ("cover_tilt", "Configuration-Tilt"),
+        ("cover_venetian", "Venetian-Blinds"),
+    ],
+)
+def test_wiki_anchor(cover_type: str, anchor: str) -> None:
+    """Each policy points ``_geometry_wiki_link`` at its own wiki page.
+
+    Pins the per-policy override that replaced the
+    ``_GEOMETRY_WIKI_URL`` dict on ``config_flow.py``.
+    """
+    assert get_policy(cover_type).wiki_anchor() == anchor
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cover_type", "label"),
+    [
+        ("cover_blind", "Vertical Blind"),
+        ("cover_awning", "Horizontal Awning"),
+        ("cover_tilt", "Venetian / Tilt Blind"),
+        ("cover_venetian", "Venetian Blind (Dual-Axis)"),
+    ],
+)
+def test_display_label(cover_type: str, label: str) -> None:
+    """Each policy carries its own user-facing label for ``_build_config_summary``.
+
+    Pins the per-policy override that replaced the ``type_labels`` dict on
+    ``config_flow.py``. The exact strings remain byte-identical to the
+    pre-refactor labels so existing UI tests / screenshots still match.
+    """
+    assert get_policy(cover_type).display_label() == label
