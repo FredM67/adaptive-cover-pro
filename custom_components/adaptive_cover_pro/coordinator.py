@@ -592,7 +592,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         is_now_active = self._weather_mgr.is_any_condition_active
 
         if is_now_active:
-            if not self._weather_mgr._override_active:
+            if not self._weather_mgr.is_weather_override_active:
                 self.logger.info(
                     "Weather conditions active (%s) — retracting covers", entity_id
                 )
@@ -2312,7 +2312,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             final_state=self.state,
             config_options=dict(self.config_entry.options),
             motion_detected=self.is_motion_detected,
-            motion_timeout_active=self._motion_mgr._motion_timeout_active,
+            motion_timeout_active=self._motion_mgr.is_motion_timeout_active,
             motion_hold_active=(
                 self._pipeline_result is not None
                 and self._pipeline_result.skip_command

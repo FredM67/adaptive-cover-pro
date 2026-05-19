@@ -551,7 +551,7 @@ def _motion_status_value(s: _ACPDiagnosticSensor) -> str:
     if not s.config_entry.options.get(CONF_MOTION_SENSORS):
         return "not_configured"
     mgr = s.coordinator._motion_mgr  # noqa: SLF001
-    if mgr._motion_timeout_active:  # noqa: SLF001
+    if mgr.is_motion_timeout_active:
         pr = getattr(s.coordinator, "_pipeline_result", None)
         if pr is not None and pr.skip_command and pr.control_method.value == "motion":
             return "holding"
@@ -560,8 +560,7 @@ def _motion_status_value(s: _ACPDiagnosticSensor) -> str:
         return "waiting_for_data"
     if s.coordinator.is_motion_detected:
         return "motion_detected"
-    task = mgr._motion_timeout_task  # noqa: SLF001
-    if task is not None and not task.done():
+    if mgr.has_pending_timeout:
         return "timeout_pending"
     return "waiting_for_data"
 
@@ -575,9 +574,7 @@ def _motion_status_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
     }  # noqa: SLF001
 
     if mgr.last_motion_time is not None:
-        task = mgr._motion_timeout_task  # noqa: SLF001
-        timeout_pending = task is not None and not task.done()
-        if timeout_pending or mgr._motion_timeout_active:  # noqa: SLF001
+        if mgr.has_pending_timeout or mgr.is_motion_timeout_active:
             end_ts = mgr.last_motion_time + mgr._timeout_seconds  # noqa: SLF001
             attrs["motion_timeout_end_time"] = dt_util.utc_from_timestamp(
                 end_ts
