@@ -109,11 +109,12 @@ class CoverCommandService:
                 cover_command_sent and cover_command_skipped events are appended.
 
         """
-        # Local import: ``cover_types`` re-exports ``VenetianPolicy`` which
-        # imports ``DualAxisSequencer`` from this manager package, so a
-        # module-level import here would close the loop and ImportError on
-        # first load. The policy is only consulted at construction time and
-        # afterwards through ``self._policy``.
+        # Local import: ``cover_types.venetian.sequencer`` imports
+        # ``managers.cover_command.gates`` (a sibling module) for the tilt
+        # min-delta check, so a module-level ``from ...cover_types import
+        # get_policy`` here can still close a partial-init loop on first
+        # load. The policy is only consulted at construction time and
+        # afterwards through ``self._policy``, so the local import is cheap.
         from ...cover_types import get_policy
 
         self._hass = hass
