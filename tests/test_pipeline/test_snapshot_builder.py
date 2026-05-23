@@ -250,6 +250,43 @@ def test_read_custom_position_sensors_sensor_name_none_when_no_friendly_name_att
 
 
 @pytest.mark.unit
+def test_read_custom_position_sensors_skips_slots_with_enabled_false():
+    """Disabled slots are omitted from the snapshot entirely.
+
+    A slot with sensor + position configured but `enabled=False` must not
+    appear in the snapshot, so its CustomPositionHandler can never claim
+    position even if the bound sensor goes on.
+    """
+    on_state = MagicMock()
+    on_state.state = "on"
+    builder, _, _ = _make_builder(states={"binary_sensor.guest": on_state})
+
+    first_slot_keys = next(iter(CUSTOM_POSITION_SLOTS.values()))
+    opts = {
+        first_slot_keys["sensor"]: "binary_sensor.guest",
+        first_slot_keys["position"]: 42,
+        first_slot_keys["enabled"]: False,
+    }
+    assert builder.read_custom_position_sensors(opts) == []
+
+
+@pytest.mark.unit
+def test_read_custom_position_sensors_defaults_enabled_true_when_key_absent():
+    """A slot configured before the enabled key existed behaves as enabled."""
+    on_state = MagicMock()
+    on_state.state = "on"
+    builder, _, _ = _make_builder(states={"binary_sensor.guest": on_state})
+
+    first_slot_keys = next(iter(CUSTOM_POSITION_SLOTS.values()))
+    opts = {
+        first_slot_keys["sensor"]: "binary_sensor.guest",
+        first_slot_keys["position"]: 42,
+        # no `enabled` key — pre-feature options
+    }
+    assert len(builder.read_custom_position_sensors(opts)) == 1
+
+
+@pytest.mark.unit
 def test_build_recomputes_effective_default_when_omitted():
     builder, _, _ = _make_builder()
     cover_data = MagicMock()

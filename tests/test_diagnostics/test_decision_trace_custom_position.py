@@ -153,3 +153,87 @@ def test_custom_position_active_slot_name_absent_when_none() -> None:
     attrs = sensor.extra_state_attributes or {}
 
     assert "custom_position_active_slot_name" not in attrs
+
+
+# ---------------------------------------------------------------------------
+# custom_position_slots snapshot
+# ---------------------------------------------------------------------------
+
+
+def _make_sensor_with_options(options: dict, states: dict | None = None):
+    """Build a sensor whose config entry has the given options + hass.states map."""
+    hass = _make_hass()
+    if states:
+        hass.states.get.side_effect = lambda eid, _states=states: _states.get(eid)
+
+    coord = MagicMock()
+    coord.data = None
+    coord._pipeline_result = None
+    coord.logger = MagicMock()
+    coord.hass = hass
+    coord.check_adaptive_time = True
+
+    entry = MagicMock()
+    entry.entry_id = "snapshot_entry"
+    entry.data = {"name": "Test", CONF_SENSOR_TYPE: SensorType.BLIND}
+    entry.options = options
+
+    from custom_components.adaptive_cover_pro.sensor import (
+        AdaptiveCoverDecisionTraceSensor,
+    )
+
+    return AdaptiveCoverDecisionTraceSensor(
+        "snapshot_entry", hass, entry, "Test", coord
+    )
+
+
+def test_custom_position_slots_snapshot_lists_configured_slots() -> None:
+    """Each configured slot appears in custom_position_slots with its full config."""
+    bound = MagicMock()
+    bound.attributes = {"friendly_name": "Table extension"}
+    options = {
+        "custom_position_sensor_1": "binary_sensor.table",
+        "custom_position_1": 60,
+        "custom_position_priority_1": 80,
+        "custom_position_min_mode_1": True,
+    }
+    sensor = _make_sensor_with_options(options, states={"binary_sensor.table": bound})
+    attrs = sensor.extra_state_attributes or {}
+
+    slots = attrs.get("custom_position_slots")
+    assert isinstance(slots, list)
+    # Snapshot must include all 4 slots so the card can render an even row.
+    assert len(slots) == 4
+
+    slot1 = next(s for s in slots if s["slot"] == 1)
+    assert slot1["enabled"] is True  # default when key absent
+    assert slot1["position"] == 60
+    assert slot1["priority"] == 80
+    assert slot1["min_mode"] is True
+    assert slot1["sensor_name"] == "Table extension"
+
+
+def test_custom_position_slots_snapshot_reflects_enabled_false() -> None:
+    """A slot with custom_position_enabled_N=False reads enabled=False."""
+    options = {
+        "custom_position_sensor_2": "binary_sensor.x",
+        "custom_position_2": 40,
+        "custom_position_enabled_2": False,
+    }
+    sensor = _make_sensor_with_options(options)
+    attrs = sensor.extra_state_attributes or {}
+
+    slot2 = next(s for s in attrs["custom_position_slots"] if s["slot"] == 2)
+    assert slot2["enabled"] is False
+
+
+def test_custom_position_slots_snapshot_unconfigured_slot_is_inactive() -> None:
+    """Unconfigured slots still appear, marked enabled=False with null sensor."""
+    sensor = _make_sensor_with_options({})  # no slots configured
+    attrs = sensor.extra_state_attributes or {}
+
+    for s in attrs["custom_position_slots"]:
+        assert s["enabled"] is False
+        assert s["position"] is None
+        assert s["sensor"] is None
+        assert s["sensor_name"] is None

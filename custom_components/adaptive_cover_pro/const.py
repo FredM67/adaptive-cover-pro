@@ -305,7 +305,7 @@ CUSTOM_POSITION_SLOT_NUMBERS: tuple[int, ...] = (1, 2, 3, 4)  # supported indice
 
 
 def _custom_position_slot_keys(n: int) -> dict[str, str]:
-    """Return the six wire-format option keys for slot *n*."""
+    """Return the seven wire-format option keys for slot *n*."""
     return {
         "sensor": f"custom_position_sensor_{n}",
         "position": f"custom_position_{n}",
@@ -313,7 +313,16 @@ def _custom_position_slot_keys(n: int) -> dict[str, str]:
         "min_mode": f"custom_position_min_mode_{n}",
         "use_my": f"custom_position_use_my_{n}",
         "tilt": f"custom_position_tilt_{n}",
+        # `enabled` is opt-out: existing entries lack the key and behave as
+        # enabled. Set to False to silence a slot without clearing its
+        # configuration — used by the companion card's slot toggle UI.
+        "enabled": f"custom_position_enabled_{n}",
     }
+
+
+# Default for an absent custom_position_enabled_<N> option — backwards-compatible
+# with entries configured before the enabled key existed.
+DEFAULT_CUSTOM_POSITION_ENABLED = True
 
 
 # {slot_number: {sub_key: wire_key}}

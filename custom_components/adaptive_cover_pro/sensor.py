@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import ATTR_FRIENDLY_NAME, PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -35,6 +35,8 @@ from .const import (
     CONF_WEATHER_SEVERE_SENSORS,
     CONF_WEATHER_WIND_SPEED_SENSOR,
     CUSTOM_POSITION_SLOTS,
+    DEFAULT_CUSTOM_POSITION_ENABLED,
+    DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEGREES_IN_CIRCLE,
     DOMAIN,
 )
@@ -767,6 +769,59 @@ def _configured_handlers(opts: Mapping[str, Any]) -> list[str]:
     return enabled
 
 
+def _build_custom_position_slots_snapshot(
+    options: Mapping[str, Any], hass: Any
+) -> list[dict[str, Any]]:
+    """Build a per-slot snapshot for the companion card's slot UI.
+
+    Always returns one row per slot (1-4) so the consumer can render a stable
+    grid. Rows for unconfigured slots have ``enabled=False`` with the other
+    fields nulled out — the card uses ``sensor is not None`` to tell
+    "configured but disabled" apart from "never configured".
+    """
+    snapshot: list[dict[str, Any]] = []
+    for slot, slot_keys in CUSTOM_POSITION_SLOTS.items():
+        sensor = options.get(slot_keys["sensor"])
+        position = options.get(slot_keys["position"])
+        configured = bool(sensor) and position is not None
+        sensor_name: str | None = None
+        if configured:
+            state = hass.states.get(sensor) if sensor else None
+            if state is not None:
+                sensor_name = state.attributes.get(ATTR_FRIENDLY_NAME)
+        snapshot.append(
+            {
+                "slot": slot,
+                "enabled": (
+                    bool(
+                        options.get(
+                            slot_keys["enabled"], DEFAULT_CUSTOM_POSITION_ENABLED
+                        )
+                    )
+                    if configured
+                    else False
+                ),
+                "sensor": sensor if configured else None,
+                "sensor_name": sensor_name,
+                "position": int(position) if configured else None,
+                "priority": (
+                    int(
+                        options.get(slot_keys["priority"])
+                        or DEFAULT_CUSTOM_POSITION_PRIORITY
+                    )
+                    if configured
+                    else None
+                ),
+                "min_mode": (
+                    bool(options.get(slot_keys["min_mode"], False))
+                    if configured
+                    else None
+                ),
+            }
+        )
+    return snapshot
+
+
 def _decision_trace_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
     attrs: dict[str, Any] = {}
     result = s.coordinator._pipeline_result  # noqa: SLF001
@@ -804,6 +859,9 @@ def _decision_trace_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
 
     attrs["in_time_window"] = s.coordinator.check_adaptive_time
     attrs["enabled_handlers"] = _configured_handlers(s.config_entry.options)
+    attrs["custom_position_slots"] = _build_custom_position_slots_snapshot(
+        s.config_entry.options, s.coordinator.hass
+    )
 
     diagnostics = s.coordinator.data.diagnostics if s.coordinator.data else {}
     if diagnostics:

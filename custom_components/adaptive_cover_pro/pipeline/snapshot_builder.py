@@ -64,6 +64,7 @@ from ..const import (
     CONF_WEATHER_STATE,
     CONF_WINTER_CLOSE_INSULATION,
     CUSTOM_POSITION_SLOTS,
+    DEFAULT_CUSTOM_POSITION_ENABLED,
     DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEFAULT_MOTION_TIMEOUT_MODE,
 )
@@ -176,7 +177,10 @@ class PipelineSnapshotBuilder:
         for slot_keys in CUSTOM_POSITION_SLOTS.values():
             sensor = options.get(slot_keys["sensor"])
             position = options.get(slot_keys["position"])
-            if sensor and position is not None:
+            enabled = bool(
+                options.get(slot_keys["enabled"], DEFAULT_CUSTOM_POSITION_ENABLED)
+            )
+            if sensor and position is not None and enabled:
                 state = self._hass.states.get(sensor)
                 is_on = bool(state and state.state == "on")
                 sensor_name = (
