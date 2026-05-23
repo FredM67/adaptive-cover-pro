@@ -1400,3 +1400,215 @@ async def test_options_flow_venetian_geometry_saves_mode(hass: HomeAssistant) ->
 
     if result["type"] == "create_entry":
         assert result["data"].get(CONF_VENETIAN_MODE) == VENETIAN_MODE_TILT_ONLY
+
+
+# ---------------------------------------------------------------------------
+# Default-name derivation (device name vs. entity name vs. user-typed)
+# ---------------------------------------------------------------------------
+
+
+def _register_cover_with_device(
+    hass: HomeAssistant,
+    *,
+    device_name: str | None,
+    entity_original_name: str | None = None,
+    unique_id: str = "0x0001",
+    object_id: str = "patio_stairs_shade",
+) -> str:
+    """Register a cover entity (optionally linked to a named device) and return its entity_id."""
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    anchor = MockConfigEntry(
+        domain="zha",
+        data={},
+        entry_id=f"anchor_{unique_id}",
+        title="anchor",
+    )
+    anchor.add_to_hass(hass)
+
+    device_id: str | None = None
+    if device_name is not None:
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get_or_create(
+            config_entry_id=anchor.entry_id,
+            identifiers={("zha", unique_id)},
+            name=device_name,
+        )
+        device_id = device.id
+
+    entity_reg = er.async_get(hass)
+    entry = entity_reg.async_get_or_create(
+        "cover",
+        "zha",
+        unique_id,
+        suggested_object_id=object_id,
+        device_id=device_id,
+        original_name=entity_original_name,
+        config_entry=anchor,
+    )
+    return entry.entity_id
+
+
+@pytest.mark.integration
+async def test_create_flow_title_uses_device_name_when_attached(
+    hass: HomeAssistant,
+) -> None:
+    """If user leaves name blank and the first cover has an attached named device,
+    the entry title is the device name verbatim (no type prefix, no 'Adaptive' word).
+    """
+    entity_id = _register_cover_with_device(
+        hass, device_name="Patio Stairs Shade", entity_original_name="Patio Stairs"
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    if result["type"] == "menu":
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "create_new"}
+        )
+    # Submit create_new with an empty name — triggers auto-naming downstream
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "", CONF_MODE: SensorType.BLIND}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "quick_setup"}
+    )
+    assert result["step_id"] == "cover_entities"
+
+    # Pass 1: submit the cover entity. The flow looks up the device and stores the
+    # device name as the default; because _get_devices_from_entities also finds the
+    # device, the form re-renders with a device picker.
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ENTITIES: [entity_id]}
+    )
+    assert result["step_id"] == "cover_entities"
+
+    # Pass 2: pick standalone (we only care about the title, not device linking).
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_ENTITIES: [entity_id], CONF_DEVICE_ID: "__standalone__"},
+    )
+    # Walk the remaining quick-setup steps
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _VERTICAL_GEOMETRY
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _SUN_TRACKING
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _POSITION
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] == "create_entry"
+    entry = result["result"]
+    assert entry.title == "Patio Stairs Shade"
+    assert entry.data["name"] == "Patio Stairs Shade"
+    # Marker must not be persisted to data/options
+    assert "_title_is_device_name" not in entry.data
+    assert "_title_is_device_name" not in entry.options
+
+
+@pytest.mark.integration
+async def test_create_flow_title_falls_back_to_adaptive_prefix_without_device(
+    hass: HomeAssistant,
+) -> None:
+    """If the selected cover has no attached device, fall back to existing 'Adaptive {name}'
+    title with the cover-type prefix attached.
+    """
+    entity_id = _register_cover_with_device(
+        hass,
+        device_name=None,
+        entity_original_name="Living Room Blind",
+        unique_id="0x0002",
+        object_id="living_room_blind",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    if result["type"] == "menu":
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "create_new"}
+        )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "", CONF_MODE: SensorType.BLIND}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "quick_setup"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ENTITIES: [entity_id]}
+    )
+    # No device → step proceeds straight to geometry
+    assert result["step_id"] == "geometry"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _VERTICAL_GEOMETRY
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _SUN_TRACKING
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _POSITION
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] == "create_entry"
+    entry = result["result"]
+    assert entry.title == "Vertical Adaptive Living Room Blind"
+    assert entry.data["name"] == "Adaptive Living Room Blind"
+
+
+@pytest.mark.integration
+async def test_create_flow_user_typed_name_overrides_device_name(
+    hass: HomeAssistant,
+) -> None:
+    """If the user types a name in create_new, it is respected and the type prefix
+    is applied as usual — device-derived naming does NOT kick in.
+    """
+    entity_id = _register_cover_with_device(
+        hass,
+        device_name="Patio Stairs Shade",
+        entity_original_name="Patio Stairs",
+        unique_id="0x0003",
+        object_id="patio_stairs_shade_user",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    if result["type"] == "menu":
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "create_new"}
+        )
+    # User explicitly provides a name
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "My Cover", CONF_MODE: SensorType.BLIND}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "quick_setup"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ENTITIES: [entity_id]}
+    )
+    # Device exists → form re-renders with device picker
+    assert result["step_id"] == "cover_entities"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_ENTITIES: [entity_id], CONF_DEVICE_ID: "__standalone__"},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _VERTICAL_GEOMETRY
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _SUN_TRACKING
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _POSITION
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] == "create_entry"
+    entry = result["result"]
+    # User name wins — device name is ignored
+    assert entry.title == "Vertical My Cover"
+    assert entry.data["name"] == "My Cover"

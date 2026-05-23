@@ -1769,6 +1769,25 @@ async def _get_devices_from_entities(
     return devices
 
 
+async def _get_device_name_for_entity(
+    hass: HomeAssistant, entity_id: str
+) -> str | None:
+    """Return the parent device's display name for entity_id, or None.
+
+    Returns name_by_user or name only — never the device_id UUID — so callers
+    can safely use the result as a default user-facing name.
+    """
+    entity_reg = er.async_get(hass)
+    entity_entry = entity_reg.async_get(entity_id)
+    if not entity_entry or not entity_entry.device_id:
+        return None
+    device_reg = dr.async_get(hass)
+    device_entry = device_reg.async_get(entity_entry.device_id)
+    if not device_entry:
+        return None
+    return device_entry.name_by_user or device_entry.name or None
+
+
 _SHARED_OPTIONS_EXCLUDED = frozenset({CONF_ENTITIES, CONF_AZIMUTH, CONF_DEVICE_ID})
 
 # Maps each syncable category (matching options menu names) to its config keys.
@@ -2309,12 +2328,19 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 entity_reg = er.async_get(self.hass)
                 entity_entry = entity_reg.async_get(first_entity_id)
                 if entity_entry and not self.config.get("name"):
-                    entity_name = (
-                        entity_entry.original_name
-                        or entity_entry.name
-                        or first_entity_id.split(".")[-1].replace("_", " ").title()
+                    device_name = await _get_device_name_for_entity(
+                        self.hass, first_entity_id
                     )
-                    self.config["name"] = f"Adaptive {entity_name}"
+                    if device_name:
+                        self.config["name"] = device_name
+                        self.config["_title_is_device_name"] = True
+                    else:
+                        entity_name = (
+                            entity_entry.original_name
+                            or entity_entry.name
+                            or first_entity_id.split(".")[-1].replace("_", " ").title()
+                        )
+                        self.config["name"] = f"Adaptive {entity_name}"
 
             entity_ids = self.config.get(CONF_ENTITIES, [])
             devices = await _get_devices_from_entities(self.hass, entity_ids)
@@ -2687,8 +2713,12 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             "cover_tilt": "Tilt",
             "cover_venetian": "Venetian",
         }
+        if self.config.pop("_title_is_device_name", False):
+            title = self.config["name"]
+        else:
+            title = f"{type_mapping[self.type_blind]} {self.config['name']}"
         return self.async_create_entry(
-            title=f"{type_mapping[self.type_blind]} {self.config['name']}",
+            title=title,
             data={
                 "name": self.config["name"],
                 CONF_SENSOR_TYPE: self.type_blind,
