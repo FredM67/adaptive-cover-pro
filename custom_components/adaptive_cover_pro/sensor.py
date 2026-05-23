@@ -43,6 +43,7 @@ from .const import (
 from .coordinator import AdaptiveDataUpdateCoordinator
 from .entity_base import AdaptiveCoverDiagnosticSensorBase, AdaptiveCoverSensorBase
 from .enums import ControlMethod
+from .forecast import build_forecast_for_coord
 from .unit_system import length_display_unit, to_display_length
 
 
@@ -769,6 +770,43 @@ def _configured_handlers(opts: Mapping[str, Any]) -> list[str]:
     return enabled
 
 
+def _safe_forecast(coord: AdaptiveDataUpdateCoordinator):
+    """Compute the forecast or return None on any setup-time failure.
+
+    The coordinator may not yet have a sun provider / config service hooked up
+    during the brief first-refresh window; falling through gracefully here
+    keeps the sensor available rather than throwing.
+    """
+    try:
+        return build_forecast_for_coord(coord)
+    except Exception:  # noqa: BLE001 — defensive degradation, not silencing a bug
+        return None
+
+
+def _position_forecast_value(s: _ACPDiagnosticSensor) -> dt.datetime | None:
+    """Return the timestamp of the next forecast event (sunrise, FOV enter, ...).
+
+    None when no events are scheduled or the forecast cannot be computed.
+    Used by the timestamp-typed Position Forecast sensor; the full series
+    lives in extra_state_attributes.
+    """
+    forecast = _safe_forecast(s.coordinator)
+    if forecast is None:
+        return None
+    now = dt_util.now()
+    upcoming = [e for e in forecast.events if e.t >= now]
+    return upcoming[0].t if upcoming else None
+
+
+def _position_forecast_attrs(
+    s: _ACPDiagnosticSensor,
+) -> Mapping[str, Any] | None:
+    forecast = _safe_forecast(s.coordinator)
+    if forecast is None:
+        return None
+    return forecast.to_attrs()
+
+
 def _build_custom_position_slots_snapshot(
     options: Mapping[str, Any], hass: Any
 ) -> list[dict[str, Any]]:
@@ -997,6 +1035,15 @@ _DIAGNOSTIC_SPECS: tuple[_SensorSpec, ...] = (
         options=tuple(m.value for m in ControlMethod) + ("unknown",),
         value_fn=_decision_trace_value,
         attrs_fn=_decision_trace_attrs,
+    ),
+    _SensorSpec(
+        suffix="position_forecast",
+        display_name="Position Forecast",
+        icon="mdi:chart-line",
+        translation_key="position_forecast",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=_position_forecast_value,
+        attrs_fn=_position_forecast_attrs,
     ),
     _SensorSpec(
         suffix="last_skipped_action",

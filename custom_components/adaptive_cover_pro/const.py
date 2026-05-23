@@ -153,6 +153,9 @@ CONF_ENABLE_MAX_POSITION = "enable_max_position"
 CONF_ENABLE_MIN_POSITION = "enable_min_position"
 # Fallback position when no override applies, % (range 0-100).
 CONF_DEFAULT_HEIGHT = "default_percentage"
+# Effective default position when no `default_percentage` is configured.
+# 0 % = closed; matches the historical fallback in coordinator.get_blind_data.
+DEFAULT_DEFAULT_HEIGHT = 0
 CONF_INVERSE_STATE = "inverse_state"  # True if cover reports 0=open, 100=closed
 CONF_INVERSE_TILT = "inverse_tilt"  # True if tilt reports 0=open, 100=closed
 
