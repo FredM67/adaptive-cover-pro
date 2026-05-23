@@ -197,6 +197,59 @@ def test_read_custom_position_sensors_unconfigured_returns_empty():
 
 
 @pytest.mark.unit
+def test_read_custom_position_sensors_carries_friendly_name():
+    """sensor_name is populated from the bound sensor's friendly_name attribute.
+
+    Surfaces the human label of the sensor that triggered a slot so that
+    downstream diagnostics (decision_trace, companion card badge) can show
+    "Custom · Table extension" instead of just "Custom #1".
+    """
+    on_state = MagicMock()
+    on_state.state = "on"
+    on_state.attributes = {"friendly_name": "Table extension"}
+    builder, _, _ = _make_builder(states={"binary_sensor.guest": on_state})
+
+    first_slot_keys = next(iter(CUSTOM_POSITION_SLOTS.values()))
+    opts = {
+        first_slot_keys["sensor"]: "binary_sensor.guest",
+        first_slot_keys["position"]: 42,
+    }
+    out = builder.read_custom_position_sensors(opts)
+    assert out[0].sensor_name == "Table extension"
+
+
+@pytest.mark.unit
+def test_read_custom_position_sensors_sensor_name_none_when_state_missing():
+    """sensor_name is None when the bound sensor isn't in hass.states."""
+    builder, _, _ = _make_builder()  # no states map → hass.states.get returns None
+
+    first_slot_keys = next(iter(CUSTOM_POSITION_SLOTS.values()))
+    opts = {
+        first_slot_keys["sensor"]: "binary_sensor.guest",
+        first_slot_keys["position"]: 42,
+    }
+    out = builder.read_custom_position_sensors(opts)
+    assert out[0].sensor_name is None
+
+
+@pytest.mark.unit
+def test_read_custom_position_sensors_sensor_name_none_when_no_friendly_name_attr():
+    """sensor_name is None when the bound sensor has no friendly_name attribute."""
+    on_state = MagicMock()
+    on_state.state = "on"
+    on_state.attributes = {}  # no friendly_name key
+    builder, _, _ = _make_builder(states={"binary_sensor.guest": on_state})
+
+    first_slot_keys = next(iter(CUSTOM_POSITION_SLOTS.values()))
+    opts = {
+        first_slot_keys["sensor"]: "binary_sensor.guest",
+        first_slot_keys["position"]: 42,
+    }
+    out = builder.read_custom_position_sensors(opts)
+    assert out[0].sensor_name is None
+
+
+@pytest.mark.unit
 def test_build_recomputes_effective_default_when_omitted():
     builder, _, _ = _make_builder()
     cover_data = MagicMock()

@@ -793,6 +793,10 @@ def _decision_trace_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
             attrs["custom_position_active_slot"] = result.custom_position_active_slot
         if result.custom_position_minimum_mode is not None:
             attrs["custom_position_minimum_mode"] = result.custom_position_minimum_mode
+        if result.custom_position_active_slot_name is not None:
+            attrs["custom_position_active_slot_name"] = (
+                result.custom_position_active_slot_name
+            )
         if result.control_method == ControlMethod.WEATHER:
             weather_mgr = s.coordinator._weather_mgr  # noqa: SLF001
             attrs["weather_active_conditions"] = weather_mgr.active_conditions

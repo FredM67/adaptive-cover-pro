@@ -60,6 +60,7 @@ def _make_custom_result(
     *,
     custom_position_active_slot: int | None = None,
     custom_position_minimum_mode: bool | None = None,
+    custom_position_active_slot_name: str | None = None,
 ) -> PipelineResult:
     """Build a CUSTOM_POSITION PipelineResult with the given diagnostic fields."""
     return PipelineResult(
@@ -68,6 +69,7 @@ def _make_custom_result(
         reason="custom position #1 active [bypasses automatic control]",
         custom_position_active_slot=custom_position_active_slot,
         custom_position_minimum_mode=custom_position_minimum_mode,
+        custom_position_active_slot_name=custom_position_active_slot_name,
     )
 
 
@@ -120,3 +122,34 @@ def test_custom_position_fields_absent_when_non_custom_wins() -> None:
 
     assert "custom_position_active_slot" not in attrs
     assert "custom_position_minimum_mode" not in attrs
+    assert "custom_position_active_slot_name" not in attrs
+
+
+def test_custom_position_active_slot_name_present_when_set() -> None:
+    """Custom wins with sensor friendly_name 'Table extension' → attr emitted verbatim.
+
+    Surfaces the human label so the companion card can render
+    "Custom · Table extension" instead of just "Custom #1".
+    """
+    result = _make_custom_result(
+        custom_position_active_slot=1,
+        custom_position_minimum_mode=True,
+        custom_position_active_slot_name="Table extension",
+    )
+    sensor = _make_sensor(result)
+    attrs = sensor.extra_state_attributes or {}
+
+    assert attrs.get("custom_position_active_slot_name") == "Table extension"
+
+
+def test_custom_position_active_slot_name_absent_when_none() -> None:
+    """Custom wins but no friendly_name resolved → attr not emitted (avoids noise)."""
+    result = _make_custom_result(
+        custom_position_active_slot=2,
+        custom_position_minimum_mode=False,
+        custom_position_active_slot_name=None,
+    )
+    sensor = _make_sensor(result)
+    attrs = sensor.extra_state_attributes or {}
+
+    assert "custom_position_active_slot_name" not in attrs
