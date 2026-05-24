@@ -432,16 +432,16 @@ async def test_start_forecast_scheduler_kicks_off_initial_background_task(monkey
 
     coord.config_entry.async_create_background_task = MagicMock(side_effect=_capture_bg)
 
-    # Capture the time-interval registration.
+    # Capture the wall-clock time-change registration.
     track_calls: list = []
 
-    def _fake_track_time_interval(_hass, _cb, _interval):
-        track_calls.append((_hass, _cb, _interval))
+    def _fake_track_time_change(_hass, _cb, **kwargs):
+        track_calls.append((_hass, _cb, kwargs))
         return MagicMock(name="unsub")
 
     monkeypatch.setattr(
-        "homeassistant.helpers.event.async_track_time_interval",
-        _fake_track_time_interval,
+        "homeassistant.helpers.event.async_track_time_change",
+        _fake_track_time_change,
     )
 
     coord_mod.AdaptiveDataUpdateCoordinator._start_forecast_scheduler(coord)
@@ -449,16 +449,17 @@ async def test_start_forecast_scheduler_kicks_off_initial_background_task(monkey
     # One initial background task fired via the config-entry helper (NOT
     # hass.async_create_background_task — see coordinator.py for why).
     assert coord.config_entry.async_create_background_task.call_count == 1
-    # One time-interval timer registered.
+    # One wall-clock timer registered.
     assert len(track_calls) == 1
-    # Interval matches the constant (5 minutes).
+    # Schedule fires at :00, :05, :10, …, :55 — the cron-style equivalent
+    # of */5 so every entry's forecast updates in lockstep.
     from custom_components.adaptive_cover_pro.const import (
         FORECAST_RECOMPUTE_INTERVAL_MIN,
     )
-    from datetime import timedelta
 
-    _, _, interval = track_calls[0]
-    assert interval == timedelta(minutes=FORECAST_RECOMPUTE_INTERVAL_MIN)
+    _, _, kwargs = track_calls[0]
+    assert list(kwargs["minute"]) == list(range(0, 60, FORECAST_RECOMPUTE_INTERVAL_MIN))
+    assert kwargs["second"] == 0
     # Unsub handle stored.
     assert coord._forecast_unsub is not None
 
@@ -485,7 +486,7 @@ async def test_start_forecast_scheduler_is_idempotent(monkeypatch):
 
     track_mock = MagicMock(return_value=MagicMock(name="new_unsub"))
     monkeypatch.setattr(
-        "homeassistant.helpers.event.async_track_time_interval", track_mock
+        "homeassistant.helpers.event.async_track_time_change", track_mock
     )
 
     coord_mod.AdaptiveDataUpdateCoordinator._start_forecast_scheduler(coord)
@@ -514,13 +515,13 @@ async def test_forecast_scheduler_tick_fires_background_task(monkeypatch):
 
     captured_cb: list = []
 
-    def _fake_track_time_interval(_hass, cb, _interval):
+    def _fake_track_time_change(_hass, cb, **_kwargs):
         captured_cb.append(cb)
         return MagicMock(name="unsub")
 
     monkeypatch.setattr(
-        "homeassistant.helpers.event.async_track_time_interval",
-        _fake_track_time_interval,
+        "homeassistant.helpers.event.async_track_time_change",
+        _fake_track_time_change,
     )
 
     coord_mod.AdaptiveDataUpdateCoordinator._start_forecast_scheduler(coord)
@@ -564,13 +565,13 @@ async def test_forecast_scheduler_uses_entry_task_helper_not_hass(monkeypatch):
 
     captured_cb: list = []
 
-    def _fake_track_time_interval(_hass, cb, _interval):
+    def _fake_track_time_change(_hass, cb, **_kwargs):
         captured_cb.append(cb)
         return MagicMock(name="unsub")
 
     monkeypatch.setattr(
-        "homeassistant.helpers.event.async_track_time_interval",
-        _fake_track_time_interval,
+        "homeassistant.helpers.event.async_track_time_change",
+        _fake_track_time_change,
     )
 
     coord_mod.AdaptiveDataUpdateCoordinator._start_forecast_scheduler(coord)

@@ -531,8 +531,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         unsubscribe handle if already set.  Imported lazily so the import
         graph at coordinator init time stays minimal.
         """
-        from datetime import timedelta as _td
-        from homeassistant.helpers.event import async_track_time_interval
+        from homeassistant.helpers.event import async_track_time_change
 
         from .const import FORECAST_RECOMPUTE_INTERVAL_MIN
 
@@ -553,10 +552,13 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             name="acp_initial_forecast",
         )
 
-        # Periodic recompute on a slow cadence — the forecast is a 12-hour
-        # outlook, so refreshing more often than every few minutes adds no
-        # information.  The timer fires a background task each tick to keep
-        # the event loop free.
+        # Periodic recompute aligned to wall-clock 5-minute boundaries
+        # (:00, :05, :10, …) so every entry's forecast attribute updates
+        # in lockstep — the dashboard sees one synchronised refresh
+        # instead of staggered per-entry ticks.  The forecast is a
+        # 12-hour outlook, so refreshing more often than every few
+        # minutes adds no information.  The timer fires a background
+        # task each tick to keep the event loop free.
         def _tick(_now: dt.datetime) -> None:
             self.config_entry.async_create_background_task(
                 self.hass,
@@ -564,8 +566,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 name="acp_periodic_forecast",
             )
 
-        self._forecast_unsub = async_track_time_interval(
-            self.hass, _tick, _td(minutes=FORECAST_RECOMPUTE_INTERVAL_MIN)
+        self._forecast_unsub = async_track_time_change(
+            self.hass,
+            _tick,
+            minute=range(0, 60, FORECAST_RECOMPUTE_INTERVAL_MIN),
+            second=0,
         )
 
     async def async_recompute_forecast(self) -> None:
