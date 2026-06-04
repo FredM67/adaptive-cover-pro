@@ -54,7 +54,6 @@ from .const import (
     CONF_DEBUG_MODE,
     CONF_DEFAULT_HEIGHT,
     CONF_DRY_RUN,
-    CONF_ENABLE_SUN_TRACKING,
     CONF_ENTITIES,
     CONF_FORCE_OVERRIDE_POSITION,
     CONF_FORCE_OVERRIDE_SENSORS,
@@ -80,8 +79,6 @@ from .const import (
     CONF_SUNSET_TIME_ENTITY,
     CONF_TRANSIT_TIMEOUT,
     CUSTOM_POSITION_SLOTS,
-    DEFAULT_CUSTOM_POSITION_ENABLED,
-    DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEFAULT_DEBUG_EVENT_BUFFER_SIZE,
     DEFAULT_MANUAL_OVERRIDE_STRATEGY,
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
@@ -110,16 +107,8 @@ from .managers.time_window import TimeWindowManager
 from .managers.toggles import ToggleManager
 from .position_utils import interpolate_position
 from .pipeline.handlers import (
-    ClimateHandler,
-    CloudSuppressionHandler,
-    CustomPositionHandler,
-    DefaultHandler,
-    ForceOverrideHandler,
-    GlareZoneHandler,
     ManualOverrideHandler,
-    MotionTimeoutHandler,
-    SolarHandler,
-    WeatherOverrideHandler,
+    build_handlers,
 )
 from .pipeline.floors import effective_floor, gather_active_floors
 from .pipeline.registry import PipelineRegistry
@@ -1751,62 +1740,19 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.logger.debug("First refresh handled")
 
     def _build_pipeline(self) -> PipelineRegistry:
-        """Build the override pipeline, creating one CustomPositionHandler per slot.
+        """Build the override pipeline from the registry of handler factories.
 
         Called once at coordinator initialisation.  Because the integration
         reloads fully on every options change (see ``_async_update_listener``
-        in ``__init__.py``), this method always sees the current configuration
-        and there is no need to rebuild the pipeline at runtime.
-
-        Custom position slots are created only for entries that have both a
-        sensor and a position configured.  Each carries an independent priority
-        so the PipelineRegistry can sort them into the correct evaluation order
-        alongside all other handlers.
+        in ``__init__.py``), this always sees the current configuration and
+        there is no need to rebuild at runtime. Handler composition lives in
+        ``pipeline.handlers.build_handlers`` (registry-driven), so adding a
+        handler never touches the coordinator.
         """
-        options = self.config_entry.options
-        custom_handlers: list[CustomPositionHandler] = []
-        for slot, slot_keys in CUSTOM_POSITION_SLOTS.items():
-            sensor = options.get(slot_keys["sensor"])
-            position = options.get(slot_keys["position"])
-            enabled = bool(
-                options.get(slot_keys["enabled"], DEFAULT_CUSTOM_POSITION_ENABLED)
-            )
-            if sensor and position is not None and enabled:
-                priority = int(
-                    options.get(slot_keys["priority"])
-                    or DEFAULT_CUSTOM_POSITION_PRIORITY
-                )
-                raw_tilt = options.get(slot_keys["tilt"])
-                tilt = int(raw_tilt) if raw_tilt is not None else None
-                custom_handlers.append(
-                    CustomPositionHandler(
-                        slot=slot,
-                        entity_id=sensor,
-                        position=int(position),
-                        priority=priority,
-                        tilt=tilt,
-                    )
-                )
-
-        sun_tracking_enabled = options.get(CONF_ENABLE_SUN_TRACKING, True)
-        solar_handlers = [SolarHandler()] if sun_tracking_enabled else []
-        handlers = [
-            ForceOverrideHandler(),
-            WeatherOverrideHandler(),
-            ManualOverrideHandler(),
-            *custom_handlers,
-            MotionTimeoutHandler(),
-            CloudSuppressionHandler(),
-            ClimateHandler(),
-            GlareZoneHandler(),
-            *solar_handlers,
-            DefaultHandler(),
-        ]
+        handlers = build_handlers(self.config_entry.options)
         self.logger.debug(
-            "Pipeline built with %d custom position handler(s): %s; sun_tracking_enabled=%s",
-            len(custom_handlers),
-            [(h.name, h.priority) for h in custom_handlers],
-            sun_tracking_enabled,
+            "Pipeline built: %s",
+            [(h.name, h.priority) for h in handlers],
         )
         self._handler_by_name = {h.name: h for h in handlers}
         return PipelineRegistry(
