@@ -25,6 +25,7 @@ from ...const import (
 )
 from ...diagnostics.event_buffer import EventBuffer
 from ...helpers import check_cover_features
+from ..common import EventRecorder
 from .detector import (
     DetectionContext,
     DetectorConfig,
@@ -103,6 +104,7 @@ class AdaptiveCoverManager:
             if event_buffer is not None
             else EventBuffer(maxlen=DEFAULT_DEBUG_EVENT_BUFFER_SIZE)
         )
+        self._events = EventRecorder(self._event_buffer)
         # Issue #33 Phase 5: rolling per-entity log of primary-axis publish-lag
         # suppressions and a per-entity WARN throttle. Both live on the
         # manager (per-instance state, side-effect bookkeeping); the
@@ -227,16 +229,13 @@ class AdaptiveCoverManager:
         reason: str = "",
     ) -> None:
         """Append a manual-override decision event to the shared ring buffer."""
-        self._event_buffer.record(
-            {
-                "ts": dt.datetime.now(dt.UTC).isoformat(),
-                "event": event_name,
-                "entity_id": entity_id,
-                "our_state": our_state,
-                "new_position": new_position,
-                "effective_threshold": effective_threshold,
-                "reason": reason,
-            }
+        self._events.record(
+            event_name,
+            entity_id=entity_id,
+            our_state=our_state,
+            new_position=new_position,
+            effective_threshold=effective_threshold,
+            reason=reason,
         )
 
     def get_event_buffer(self) -> list[dict]:
