@@ -62,6 +62,7 @@ from .const import (
     CONF_DISTANCE,
     CONF_DRY_RUN,
     CONF_ENABLE_BLIND_SPOT,
+    CONF_ENABLE_GLARE_ZONES,
     CONF_ENABLE_MAX_POSITION,
     CONF_ENABLE_MIN_POSITION,
     CONF_ENABLE_MY_POSITION_ENTITIES,
@@ -965,6 +966,48 @@ def _custom_position_tilt_specs() -> list[FieldSpec]:
     return specs
 
 
+def custom_position_schema(*, include_tilt: bool = False) -> vol.Schema:
+    """Build the custom-position section schema (slot-interleaved).
+
+    Reproduces the legacy ``_build_custom_position_schema_dict`` ordering:
+    per-slot sensor/position/priority/min_mode/use_my, with tilt/tilt_only
+    interleaved per slot when *include_tilt* (venetian), then global
+    default/sunset tilt at the end.
+    """
+    schema: dict = {}
+    for slot in CUSTOM_POSITION_SLOTS.values():
+        schema[vol.Optional(slot["sensor"])] = binary_on_selector()
+        schema[vol.Optional(slot["position"])] = position_slider()
+        schema[vol.Optional(slot["priority"])] = priority_slider()
+        schema[vol.Optional(slot["min_mode"], default=False)] = (
+            selector.BooleanSelector()
+        )
+        schema[vol.Optional(slot["use_my"], default=False)] = selector.BooleanSelector()
+        if include_tilt:
+            schema[vol.Optional(slot["tilt"])] = position_slider()
+            schema[vol.Optional(slot["tilt_only"], default=False)] = (
+                selector.BooleanSelector()
+            )
+    if include_tilt:
+        schema[vol.Optional(CONF_DEFAULT_TILT)] = position_slider()
+        schema[vol.Optional(CONF_SUNSET_TILT)] = position_slider()
+    return vol.Schema(schema)
+
+
+# Glare-zones enable toggle — appended to the sun-tracking section for cover
+# types that support glare zones (blind). Config-flow-only (no validator / no
+# range), matching the legacy behaviour.
+_GLARE_TOGGLE_SPECS = _spec(
+    FieldSpec(
+        CONF_ENABLE_GLARE_ZONES,
+        SECTION_GLARE_ZONES,
+        ValidatorKind.NONE,
+        default=False,
+        make_selector=_bool(),
+    ),
+)
+
+
 # --- Dynamic-section fields: spec metadata only (selector via builder) ---
 # Weather override, light/cloud, temperature climate. Their selectors depend on
 # a bound sensor's unit; the section builders (config_dynamic.py) emit the
@@ -1311,6 +1354,7 @@ _ALL_SPEC_GROUPS: tuple[list[FieldSpec], ...] = (
     _POSITION_SPECS,
     _INTERP_SPECS,
     _BLIND_SPOT_SPECS,
+    _GLARE_TOGGLE_SPECS,
     _GLARE_ZONE_SPECS,
     _AUTOMATION_SPECS,
     _LIGHT_CLOUD_SPECS,
@@ -1368,19 +1412,31 @@ def section_keys(section: str) -> tuple[str, ...]:
 
 
 #: Default ordered list of the common sections (geometry / glare_zones inserted
-#: per cover type by the policy).
+#: per cover type by the policy). Order follows the legacy options menu so the
+#: assembled menu stays familiar (gated sections like interp/blind_spot are
+#: filtered by their enable toggle in the menu builder, but kept here so
+#: ``live_option_keys`` covers them for validation).
 COMMON_SECTION_ORDER: tuple[str, ...] = (
     SECTION_SUN_TRACKING,
     SECTION_POSITION,
-    SECTION_AUTOMATION,
-    SECTION_MANUAL_OVERRIDE,
-    SECTION_FORCE_OVERRIDE,
-    SECTION_CUSTOM_POSITION,
-    SECTION_MOTION_OVERRIDE,
-    SECTION_TEMPERATURE_CLIMATE,
-    SECTION_LIGHT_CLOUD,
-    SECTION_WEATHER_OVERRIDE,
     SECTION_INTERP,
     SECTION_BLIND_SPOT,
+    SECTION_AUTOMATION,
+    SECTION_LIGHT_CLOUD,
+    SECTION_TEMPERATURE_CLIMATE,
+    SECTION_FORCE_OVERRIDE,
+    SECTION_WEATHER_OVERRIDE,
+    SECTION_MANUAL_OVERRIDE,
+    SECTION_CUSTOM_POSITION,
+    SECTION_MOTION_OVERRIDE,
     SECTION_DEBUG,
 )
+
+#: Venetian-only custom-position tilt keys (per-slot tilt/tilt_only + global
+#: default/sunset tilt). Declared here so the venetian policy can advertise
+#: them as its custom-position extras.
+CUSTOM_POSITION_TILT_KEYS: tuple[str, ...] = tuple(
+    k
+    for slot in CUSTOM_POSITION_SLOTS.values()
+    for k in (slot["tilt"], slot["tilt_only"])
+) + (CONF_DEFAULT_TILT, CONF_SUNSET_TILT)

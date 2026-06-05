@@ -148,7 +148,7 @@ def geometry_venetian_schema(hass: HomeAssistant | None = None) -> vol.Schema:
 GEOMETRY_VENETIAN_SCHEMA = geometry_venetian_schema()
 
 
-class VenetianPolicy(CoverTypePolicy):
+class VenetianPolicy(CoverTypePolicy, register=True):
     """Dual-axis cover (single HA entity, position + tilt)."""
 
     cover_type = "cover_venetian"
@@ -160,6 +160,14 @@ class VenetianPolicy(CoverTypePolicy):
     axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS, TILT_AXIS)
     exposes_dual_axis_sensor: ClassVar[bool] = True
     custom_position_includes_tilt: ClassVar[bool] = True
+
+    def extra_field_keys(self, section: str) -> tuple[str, ...]:
+        """Venetians add per-slot + global tilt fields to custom position."""
+        from ... import config_fields as cf
+
+        if section == cf.SECTION_CUSTOM_POSITION:
+            return cf.CUSTOM_POSITION_TILT_KEYS
+        return ()
 
     def wiki_anchor(self) -> str:
         """Dual-axis venetian wiki page."""
