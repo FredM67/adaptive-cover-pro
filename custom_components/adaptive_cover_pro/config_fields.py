@@ -746,11 +746,15 @@ _MANUAL_OVERRIDE_SPECS = _spec(
         default=False,
         make_selector=_bool(),
     ),
+    # Legacy quirk: transit_timeout is configurable in the flow but is NOT in
+    # OPTION_RANGES and is NOT a runtime-mutable service field. Its selector
+    # bounds come straight from the MIN/MAX constants. Keep rng=None /
+    # validator=NONE so the derived OPTION_RANGES + FIELD_VALIDATORS match the
+    # historical behaviour exactly.
     FieldSpec(
         CONF_TRANSIT_TIMEOUT,
         SECTION_MANUAL_OVERRIDE,
-        ValidatorKind.RANGE,
-        rng=(MIN_TRANSIT_TIMEOUT, MAX_TRANSIT_TIMEOUT),
+        ValidatorKind.NONE,
         default=DEFAULT_TRANSIT_TIMEOUT_SECONDS,
         make_selector=_number(
             minimum=MIN_TRANSIT_TIMEOUT,

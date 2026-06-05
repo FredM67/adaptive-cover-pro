@@ -894,82 +894,18 @@ _RANGE_VENETIAN_BACKROTATE_PUBLISH_LAG = (
 )  # CONF_VENETIAN_BACKROTATE_PUBLISH_LAG, seconds
 
 
-def _build_option_ranges() -> dict[str, tuple[float, float]]:
-    """Map every numeric option to its ``(min, max)`` range.
-
-    Built lazily in a function so the module-level dict ordering stays sane
-    (constants above are grouped by domain). Consumers should treat the
-    returned dict as immutable.
-    """
-    ranges: dict[str, tuple[float, float]] = {
-        CONF_HEIGHT_WIN: _RANGE_HEIGHT_WIN,
-        CONF_WINDOW_WIDTH: _RANGE_WINDOW_WIDTH,
-        CONF_WINDOW_DEPTH: _RANGE_WINDOW_DEPTH,
-        CONF_SILL_HEIGHT: _RANGE_SILL_HEIGHT,
-        CONF_LENGTH_AWNING: _RANGE_LENGTH_AWNING,
-        CONF_AWNING_ANGLE: _RANGE_AWNING_ANGLE,
-        CONF_TILT_DEPTH: _RANGE_TILT_DEPTH,
-        CONF_TILT_DISTANCE: _RANGE_TILT_DISTANCE,
-        CONF_AZIMUTH: _RANGE_AZIMUTH,
-        CONF_FOV_LEFT: _RANGE_FOV,
-        CONF_FOV_RIGHT: _RANGE_FOV,
-        CONF_MIN_ELEVATION: _RANGE_ELEVATION,
-        CONF_MAX_ELEVATION: _RANGE_ELEVATION,
-        CONF_DISTANCE: _RANGE_DISTANCE,
-        CONF_BLIND_SPOT_LEFT: _RANGE_BLIND_SPOT_LEFT,
-        CONF_BLIND_SPOT_RIGHT: _RANGE_BLIND_SPOT_RIGHT,
-        CONF_BLIND_SPOT_ELEVATION: _RANGE_BLIND_SPOT_ELEVATION,
-        CONF_DEFAULT_HEIGHT: _RANGE_DEFAULT_HEIGHT,
-        CONF_MAX_POSITION: _RANGE_MAX_POSITION,
-        CONF_MIN_POSITION: _RANGE_MIN_POSITION,
-        CONF_MIN_POSITION_SUN_TRACKING: _RANGE_MIN_POSITION,
-        CONF_SUNSET_POS: _RANGE_SUNSET_POS,
-        CONF_MY_POSITION_VALUE: _RANGE_MY_POSITION,
-        CONF_SUNSET_OFFSET: _RANGE_OFFSET_MINUTES,
-        CONF_SUNRISE_OFFSET: _RANGE_OFFSET_MINUTES,
-        CONF_OPEN_CLOSE_THRESHOLD: _RANGE_OPEN_CLOSE_THRESHOLD,
-        CONF_INTERP_START: _RANGE_INTERP_VALUE,
-        CONF_INTERP_END: _RANGE_INTERP_VALUE,
-        CONF_DELTA_POSITION: _RANGE_DELTA_POSITION,
-        CONF_DELTA_TIME: _RANGE_DELTA_TIME,
-        CONF_POSITION_TOLERANCE: _RANGE_POSITION_TOLERANCE,
-        CONF_MANUAL_THRESHOLD: _RANGE_MANUAL_THRESHOLD,
-        CONF_FORCE_OVERRIDE_POSITION: _RANGE_FORCE_POSITION,
-        CONF_MOTION_TIMEOUT: _RANGE_MOTION_TIMEOUT,
-        CONF_TEMP_LOW: _RANGE_TEMPERATURE,
-        CONF_TEMP_HIGH: _RANGE_TEMPERATURE,
-        CONF_OUTSIDE_THRESHOLD: _RANGE_OUTSIDE_THRESHOLD,
-        CONF_WEATHER_WIND_SPEED_THRESHOLD: _RANGE_WEATHER_WIND_SPEED,
-        CONF_WEATHER_WIND_DIRECTION_TOLERANCE: _RANGE_WEATHER_WIND_DIRECTION_TOLERANCE,
-        CONF_WEATHER_RAIN_THRESHOLD: _RANGE_WEATHER_RAIN,
-        CONF_WEATHER_OVERRIDE_POSITION: _RANGE_WEATHER_OVERRIDE_POSITION,
-        CONF_WEATHER_TIMEOUT: _RANGE_WEATHER_TIMEOUT,
-        CONF_MAX_TILT: _RANGE_MAX_TILT,
-        CONF_MIN_TILT: _RANGE_MIN_TILT,
-        CONF_VENETIAN_POST_SETTLE_HOLD: _RANGE_VENETIAN_POST_SETTLE_HOLD,
-        CONF_VENETIAN_TILT_SKIP_ABOVE: _RANGE_VENETIAN_TILT_SKIP_ABOVE,
-        CONF_VENETIAN_BACKROTATE_PUBLISH_LAG: _RANGE_VENETIAN_BACKROTATE_PUBLISH_LAG,
-    }
-    # Custom-position slots: per-slot position (0–100), priority (1–99), tilt (0–100).
-    for slot_keys in CUSTOM_POSITION_SLOTS.values():
-        ranges[slot_keys["position"]] = _RANGE_CUSTOM_POSITION
-        ranges[slot_keys["priority"]] = _RANGE_CUSTOM_PRIORITY
-        ranges[slot_keys["tilt"]] = _RANGE_TILT
-    # Glare-zone slots (4): per-zone x/y/radius/z. Selector bounds in
-    # config_flow._build_glare_zones_schema must mirror these.
-    for i in range(1, 5):
-        ranges[f"glare_zone_{i}_x"] = _RANGE_GLARE_ZONE_X
-        ranges[f"glare_zone_{i}_y"] = _RANGE_GLARE_ZONE_Y
-        ranges[f"glare_zone_{i}_radius"] = _RANGE_GLARE_ZONE_RADIUS
-        ranges[f"glare_zone_{i}_z"] = _RANGE_GLARE_ZONE_Z
-    # Global default and sunset tilt (venetian only).
-    ranges[CONF_DEFAULT_TILT] = _RANGE_TILT
-    ranges[CONF_SUNSET_TILT] = _RANGE_TILT
-    return ranges
-
-
-# Exported single source of truth — built at module import.
-OPTION_RANGES: dict[str, tuple[float, float]] = _build_option_ranges()
+# ``OPTION_RANGES`` is now assembled from the single field registry in
+# ``config_fields`` (each ``FieldSpec`` carries its own ``rng``). It is
+# re-exported here so the many ``from .const import OPTION_RANGES`` call sites
+# stay unchanged. The ``_RANGE_*`` tuples above remain the home of the bounds
+# values — ``config_fields`` references them by name.
+#
+# Import-ordering note: this runs at the bottom of ``const`` import, by which
+# point every ``_RANGE_*``/``CONF_*``/``CUSTOM_POSITION_SLOTS``/``VENETIAN_MODES``
+# name ``config_fields`` needs is already defined above. ``config_fields`` does
+# ``from . import const`` (the partially-initialised module is fine — it only
+# reads names defined before this line).
+from .config_fields import OPTION_RANGES as OPTION_RANGES  # noqa: E402
 
 
 # =============================================================================
