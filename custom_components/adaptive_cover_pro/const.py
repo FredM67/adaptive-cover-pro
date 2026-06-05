@@ -114,6 +114,20 @@ CONF_HEIGHT_AWNING = "height_awning"  # mount height above ground, metres
 CONF_LENGTH_AWNING = "length_awning"  # extension length, metres (0.3-6.0)
 CONF_AWNING_ANGLE = "angle"  # tilt from horizontal, degrees (0-45)
 
+# Oscillating (drop-arm / pivoting) awning geometry. Unlike the fixed-angle
+# awning, the arm sweeps through an arc as it opens, so the fabric angle is a
+# function of the open percentage rather than a configured constant. See #412.
+CONF_ARM_LENGTH = "arm_length"  # pivot-arm length, metres (0.1-3.0)
+CONF_AWNING_MIN_ANGLE = "awning_min_angle"  # arm angle when closed, deg (0-180)
+CONF_AWNING_MAX_ANGLE = "awning_max_angle"  # arm angle when fully open, deg (0-180)
+# Vertical offset of the arm pivot above the window top, metres (0-1). Used with
+# window height and arm length to locate the pivot.
+CONF_AWNING_HOUSING_OFFSET = "awning_housing_offset"
+DEFAULT_ARM_LENGTH = 0.8  # metres
+DEFAULT_AWNING_MIN_ANGLE = 0  # degrees — arm vertical / fully retracted
+DEFAULT_AWNING_MAX_ANGLE = 175  # degrees — reporter's full sweep (#412)
+DEFAULT_AWNING_HOUSING_OFFSET = 0.0  # metres
+
 
 # =============================================================================
 # 5. Tilt / Venetian Slat Geometry
@@ -822,6 +836,11 @@ DEFAULT_GLARE_ZONE_Z = 0.0  # default — protects a floor disk (current behavio
 _RANGE_LENGTH_AWNING = (0.3, 6.0)  # CONF_LENGTH_AWNING, metres
 _RANGE_AWNING_ANGLE = (0, 45)  # CONF_AWNING_ANGLE, degrees
 
+# Geometry — oscillating (drop-arm) awning.
+_RANGE_ARM_LENGTH = (0.1, 3.0)  # CONF_ARM_LENGTH, metres
+_RANGE_AWNING_SWEEP_ANGLE = (0, 180)  # CONF_AWNING_MIN/MAX_ANGLE, degrees
+_RANGE_AWNING_HOUSING_OFFSET = (0.0, 1.0)  # CONF_AWNING_HOUSING_OFFSET, metres
+
 # Geometry — tilt / venetian slats.
 _RANGE_TILT_DEPTH = (0.1, 15.0)  # CONF_TILT_DEPTH, cm
 _RANGE_TILT_DISTANCE = (0.1, 15.0)  # CONF_TILT_DISTANCE, cm
@@ -930,6 +949,7 @@ class CoverType(StrEnum):
     AWNING = "cover_awning"
     TILT = "cover_tilt"
     VENETIAN = "cover_venetian"
+    OSCILLATING_AWNING = "cover_oscillating_awning"
 
     @property
     def display_name(self) -> str:
@@ -944,6 +964,7 @@ class CoverType(StrEnum):
             self.AWNING: "Horizontal",
             self.TILT: "Tilt",
             self.VENETIAN: "Venetian",
+            self.OSCILLATING_AWNING: "Oscillating Awning",
         }[self]
 
 

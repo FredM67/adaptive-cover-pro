@@ -143,6 +143,44 @@ class HorizontalConfig:
 
 
 @dataclass
+class OscillatingConfig:
+    """Configuration specific to oscillating (drop-arm) awnings (#412).
+
+    The arm of length ``arm_length`` sweeps from ``min_angle`` (closed) to
+    ``max_angle`` (fully open); the fabric angle is therefore a function of the
+    open percentage rather than a fixed value. ``housing_offset`` is the pivot
+    height above the window top.
+    """
+
+    arm_length: float = 0.8
+    min_angle: float = 0.0
+    max_angle: float = 175.0
+    housing_offset: float = 0.0
+
+    @classmethod
+    def from_options(cls, options: dict) -> OscillatingConfig:
+        """Build from a config-entry options dict, applying defaults."""
+        from .const import (
+            CONF_ARM_LENGTH,
+            CONF_AWNING_HOUSING_OFFSET,
+            CONF_AWNING_MAX_ANGLE,
+            CONF_AWNING_MIN_ANGLE,
+            DEFAULT_ARM_LENGTH,
+            DEFAULT_AWNING_HOUSING_OFFSET,
+            DEFAULT_AWNING_MAX_ANGLE,
+            DEFAULT_AWNING_MIN_ANGLE,
+        )
+
+        return cls(
+            arm_length=options.get(CONF_ARM_LENGTH) or DEFAULT_ARM_LENGTH,
+            min_angle=options.get(CONF_AWNING_MIN_ANGLE, DEFAULT_AWNING_MIN_ANGLE),
+            max_angle=options.get(CONF_AWNING_MAX_ANGLE, DEFAULT_AWNING_MAX_ANGLE),
+            housing_offset=options.get(CONF_AWNING_HOUSING_OFFSET)
+            or DEFAULT_AWNING_HOUSING_OFFSET,
+        )
+
+
+@dataclass
 class TiltConfig:
     """Configuration specific to tilt/venetian blinds."""
 
