@@ -11,10 +11,11 @@ from __future__ import annotations
 from .base import POLICY_REGISTRY, CoverTypePolicy
 
 # Importing each policy module triggers its ``register=True`` auto-registration
-# in ``POLICY_REGISTRY`` (see ``CoverTypePolicy.__init_subclass__``). A new
-# cover type is added simply by creating its module and importing it here.
-from .awning import AwningPolicy
+# in ``POLICY_REGISTRY`` (see ``CoverTypePolicy.__init_subclass__``). Import
+# order sets the cover-type picker order (blind first, as before). A new cover
+# type is added simply by creating its module and importing it here.
 from .blind import BlindPolicy
+from .awning import AwningPolicy
 from .tilt import TiltPolicy
 from .venetian import VenetianPolicy
 

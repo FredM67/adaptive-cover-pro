@@ -905,7 +905,7 @@ _RANGE_VENETIAN_BACKROTATE_PUBLISH_LAG = (
 # name ``config_fields`` needs is already defined above. ``config_fields`` does
 # ``from . import const`` (the partially-initialised module is fine — it only
 # reads names defined before this line).
-from .config_fields import OPTION_RANGES as OPTION_RANGES  # noqa: E402
+from .config_fields import OPTION_RANGES  # noqa: E402, F401
 
 
 # =============================================================================
