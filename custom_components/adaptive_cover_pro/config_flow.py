@@ -2358,6 +2358,7 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 self.type_blind, prior_mode, user_input, self.config
             )
             if rerender is not None:
+                self.config[CONF_FOV_MODE] = rerender
                 return self._show_sun_tracking_form(mode=rerender)
             if (
                 user_input.get(CONF_MAX_ELEVATION) is not None
@@ -3029,6 +3030,7 @@ class OptionsFlowHandler(OptionsFlow):
                 self.hass, user_input, length_keys=_SUN_TRACKING_LENGTH_KEYS
             )
             if rerender is not None:
+                self.options[CONF_FOV_MODE] = rerender
                 return self._show_sun_tracking_form(canonical, mode=rerender)
             if (
                 user_input.get(CONF_MAX_ELEVATION) is not None
