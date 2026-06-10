@@ -185,6 +185,28 @@ class CoverTypePolicy(ABC):
     # in ``config_flow._build_custom_position_schema_dict``.
     custom_position_includes_tilt: ClassVar[bool] = False
 
+    # Whether the sun-tracking step exposes the two-mode FOV selector (#565):
+    # "Angles" (manual fov_left/right sliders) vs "Measurements" (FOV derived
+    # from window width + reveal depth). Only meaningful for vertical blinds —
+    # awnings/tilt always use the plain fov sliders. BlindPolicy flips this on
+    # and overrides ``fov_mode_schema`` to do the per-mode field shaping.
+    supports_fov_mode: ClassVar[bool] = False
+
+    def fov_mode_schema(
+        self,
+        base: vol.Schema,
+        mode: str | None = None,  # noqa: ARG002
+    ) -> vol.Schema:
+        """Shape the sun-tracking schema's FOV fields for the given mode.
+
+        The default (every cover type except vertical blinds) returns *base*
+        unchanged — no mode selector, plain fov_left/right sliders. BlindPolicy
+        overrides this to insert the mode selector and hide the fov sliders in
+        Measurements mode. Keeping the logic on the policy keeps cover-type
+        branching inside ``cover_types/`` (cover-type-abstraction guideline).
+        """
+        return base
+
     @abstractmethod
     def build_calc_engine(
         self,

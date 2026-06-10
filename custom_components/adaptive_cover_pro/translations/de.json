@@ -91,7 +91,8 @@
           "enable_glare_zones": "Blendungszonen aktivieren",
           "distance_shaded_area": "Beschatteter Bereich",
           "minimize_movements": "Bewegungen minimieren",
-          "max_coverage_steps": "Maximale Abdeckungsschritte"
+          "max_coverage_steps": "Maximale Abdeckungsschritte",
+          "fov_mode": "Sichtfeld definieren nach"
         },
         "data_description": {
           "enable_sun_tracking": "Wenn aktiviert, verfolgen Beschattungen die Sonne innerhalb der konfigurierten Sichtfeld- und Höhengrenzen (Solarpositionierung). Deaktivieren Sie, um die distanzbasierte Solarpositionierung zu überspringen und dabei Blendungszonen (durch ihren eigenen Schalter gesteuert), Klima-, Bewegungs-, manuelle Übersteuerung, benutzerdefinierte Positionen und andere Übersteuerungen zu behalten. Standard: aktiviert.",
@@ -104,7 +105,8 @@
           "enable_glare_zones": "Schützen Sie bestimmte Bodenbereiche vor direkter Sonnenblendung (nur vertikale Beschattungen)",
           "distance_shaded_area": "Wie weit Sie ZULASSEN möchten, dass direktes Sonnenlicht in den Raum eindringt. Wird in der Einheit angezeigt, auf die Home Assistant konfiguriert ist. Dies definiert Ihre akzeptable 'Blendungszone' — der Bereich, in dem Sonnenlicht den Boden erreichen kann. Die Beschattungsposition passt sich an, um diese Grenze zu wahren, während sich die Sonne über den Himmel bewegt. Häufige Konfigurationen: Null (0 m / 0 in) hält direktes Sonnenlicht daran ab, die Glasebene zu passieren (vollständiger Verschluss an heißen Tagen); Kleine Blendungszone (0,3–0,5 m / 12–20 in) hält Sonnenlicht sehr nah am Fenster; Mittlere Blendungszone (0,5–1,0 m / 20–40 in) ermöglicht Sonnenlicht auf Schreibtisch oder Sitzbereich; Große Blendungszone (2,0–3,0 m / 79–118 in) ermöglicht Sonnenlicht tief in den Raum. WICHTIG: GRÖSSERER Wert = MEHR Sonnenlicht zulassen weiter in den Raum = Beschattung bleibt HÖHER/MEHR GEÖFFNET; KLEINERER Wert = WENIGER Sonnenlicht in Raum = Beschattung fällt TIEFER/MEHR GESCHLOSSEN. Messen Sie von der Innenseite Ihres Fensters zu dem Punkt, an dem die Sonnengrenze sein soll.",
           "minimize_movements": "Reduzieren Sie, wie oft sich die Beschattung während der Sonnenverfolgung repositioniert, indem Sie auf wenige feste Abdeckungsstufen einrasten, anstatt der Sonne kontinuierlich zu folgen. Rundet zu MEHR Abdeckung, damit direkte Sonneneinstrahlung durch die Rundung nicht durchkommt. Tauscht etwas Tageslicht gegen weitaus weniger Motorbewegungen. Standard: deaktiviert.",
-          "max_coverage_steps": "Wie viele unterschiedliche Positionen die Beschattung auf dem Weg zur vollständigen Abdeckung nutzen darf, wenn ‚Bewegungen minimieren' aktiviert ist (1–10). 1 = sofort zur vollständigen Abdeckung springen, wenn die Sonne in das Sichtfeld eintritt, und dort bleiben, bis sie es verlässt (die wenigsten Bewegungen). Höhere Werte verfolgen die Sonne schrittweise in dieser Anzahl von Schritten. Standard: 1."
+          "max_coverage_steps": "Wie viele unterschiedliche Positionen die Beschattung auf dem Weg zur vollständigen Abdeckung nutzen darf, wenn ‚Bewegungen minimieren' aktiviert ist (1–10). 1 = sofort zur vollständigen Abdeckung springen, wenn die Sonne in das Sichtfeld eintritt, und dort bleiben, bis sie es verlässt (die wenigsten Bewegungen). Höhere Werte verfolgen die Sonne schrittweise in dieser Anzahl von Schritten. Standard: 1.",
+          "fov_mode": "Wie das linke/rechte Sichtfeld eingestellt wird. **Nach Winkeln** (Standard) behält die manuellen Schieberegler unten bei. **Aus Messungen** blendet die Schieberegler aus und leitet ein symmetrisches Sichtfeld aus der Fensterbreite und der Laibungstiefe ab — die Laibungstiefe wird von der äußeren Wandfläche gemessen, wo die Beschattung angebracht ist. Fensterbreite und Laibungstiefe auf der Seite „Beschattungsgeometrie\" einstellen; das berechnete Sichtfeld wird oben angezeigt."
         }
       },
       "position": {
@@ -630,7 +632,8 @@
           "enable_glare_zones": "Blendungszonen aktivieren",
           "distance_shaded_area": "Beschatteter Bereich",
           "minimize_movements": "Bewegungen minimieren",
-          "max_coverage_steps": "Maximale Abdeckungsschritte"
+          "max_coverage_steps": "Maximale Abdeckungsschritte",
+          "fov_mode": "Sichtfeld definieren nach"
         },
         "data_description": {
           "enable_sun_tracking": "Wenn aktiviert, verfolgen Behänge die Sonne innerhalb der konfigurierten Sichtweite und Höhenlimits (Solarpositionierung). Deaktivieren Sie, um distanzbasierte Solarpositionierung zu überspringen, während Blendungszonen beibehalten werden (kontrolliert durch ihren eigenen Schalter), Klimamodi, Bewegung, manuelle Übersteuerung, benutzerdefinierte Positionen und andere Übersteuerungen aktiv bleiben. Standard: aktiviert.",
@@ -643,7 +646,8 @@
           "enable_glare_zones": "Schützen Sie bestimmte Bodenbereiche vor direkter Sonnenblendung (nur vertikale Behänge)",
           "distance_shaded_area": "Wie weit Sie ZULASSEN möchten, dass direktes Sonnenlicht in den Raum eindringt. Wird in der Einheit angezeigt, auf die Home Assistant konfiguriert ist. Dies definiert Ihre akzeptable 'Blendungszone' — der Bereich, in dem Sonnenlicht den Boden erreichen kann. Die Beschattungsposition passt sich an, um diese Grenze zu wahren, während sich die Sonne über den Himmel bewegt. Häufige Konfigurationen: Null (0 m / 0 in) hält direktes Sonnenlicht daran ab, die Glasebene zu passieren (vollständiger Verschluss an heißen Tagen); Kleine Blendungszone (0,3–0,5 m / 12–20 in) hält Sonnenlicht sehr nah am Fenster; Mittlere Blendungszone (0,5–1,0 m / 20–40 in) ermöglicht Sonnenlicht auf Schreibtisch oder Sitzbereich; Große Blendungszone (2,0–3,0 m / 79–118 in) ermöglicht Sonnenlicht tief in den Raum. WICHTIG: GRÖSSERER Wert = MEHR Sonnenlicht zulassen weiter in den Raum = Beschattung bleibt HÖHER/MEHR GEÖFFNET; KLEINERER Wert = WENIGER Sonnenlicht in Raum = Beschattung fällt TIEFER/MEHR GESCHLOSSEN. Messen Sie von der Innenseite Ihres Fensters zu dem Punkt, an dem die Sonnengrenze sein soll.",
           "minimize_movements": "Reduzieren Sie, wie oft sich die Beschattung während der Sonnenverfolgung repositioniert, indem Sie auf wenige feste Abdeckungsstufen einrasten, anstatt der Sonne kontinuierlich zu folgen. Rundet zu MEHR Abdeckung, damit direkte Sonneneinstrahlung durch die Rundung nicht durchkommt. Tauscht etwas Tageslicht gegen weitaus weniger Motorbewegungen. Standard: deaktiviert.",
-          "max_coverage_steps": "Wie viele unterschiedliche Positionen die Beschattung auf dem Weg zur vollständigen Abdeckung nutzen darf, wenn ‚Bewegungen minimieren' aktiviert ist (1–10). 1 = sofort zur vollständigen Abdeckung springen, wenn die Sonne in das Sichtfeld eintritt, und dort bleiben, bis sie es verlässt (die wenigsten Bewegungen). Höhere Werte verfolgen die Sonne schrittweise in dieser Anzahl von Schritten. Standard: 1."
+          "max_coverage_steps": "Wie viele unterschiedliche Positionen die Beschattung auf dem Weg zur vollständigen Abdeckung nutzen darf, wenn ‚Bewegungen minimieren' aktiviert ist (1–10). 1 = sofort zur vollständigen Abdeckung springen, wenn die Sonne in das Sichtfeld eintritt, und dort bleiben, bis sie es verlässt (die wenigsten Bewegungen). Höhere Werte verfolgen die Sonne schrittweise in dieser Anzahl von Schritten. Standard: 1.",
+          "fov_mode": "Wie das linke/rechte Sichtfeld eingestellt wird. **Nach Winkeln** (Standard) behält die manuellen Schieberegler unten bei. **Aus Messungen** blendet die Schieberegler aus und leitet ein symmetrisches Sichtfeld aus der Fensterbreite und der Laibungstiefe ab — die Laibungstiefe wird von der äußeren Wandfläche gemessen, wo die Beschattung angebracht ist. Fensterbreite und Laibungstiefe auf der Seite „Beschattungsgeometrie\" einstellen; das berechnete Sichtfeld wird oben angezeigt."
         }
       },
       "position": {
@@ -1190,6 +1194,12 @@
       "options": {
         "return_to_default": "Standardposition zurückkehren",
         "hold_position": "Aktuelle Position halten"
+      }
+    },
+    "fov_mode": {
+      "options": {
+        "angles": "Nach Winkeln (Sichtfeld von links/rechts direkt einstellen)",
+        "measurements": "Aus Messungen (Sichtfeld aus Fensterbreite und Laibungstiefe ableiten)"
       }
     }
   },

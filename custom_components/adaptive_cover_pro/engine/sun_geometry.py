@@ -4,12 +4,47 @@ Extracted from AdaptiveGeneralCover to enable standalone testing and reuse.
 """
 
 from datetime import UTC, datetime, timedelta
+from math import atan, degrees
 
 import pandas as pd
 
 from ..config_types import CoverConfig
-from ..const import DEGREES_IN_CIRCLE
+from ..const import CONF_FOV_LEFT, DEFAULT_FOV_LEFT, DEGREES_IN_CIRCLE, OPTION_RANGES
 from ..sun import SunData
+
+
+def fov_from_reveal(width_m: float, depth_m: float) -> int:
+    """Symmetric FOV half-angle (degrees) from reveal width and depth.
+
+    Models the oblique-sun cutoff geometry of a cover mounted inside a reveal:
+    the recess depth ``depth_m`` in front of the cover blocks sun arriving at a
+    grazing azimuth, and the opening ``width_m`` sets how wide that gap is. The
+    half-angle is ``atan((width/2) / depth)`` — the angle at which the sun first
+    clears the reveal edge.
+
+    A flush reveal (``depth_m <= 0``) or a degenerate opening (``width_m <= 0``)
+    blocks nothing, so the FOV is the full hemisphere (the default half-angle).
+    The result is clamped to the configured FOV range and rounded to an integer
+    because ``fov_left``/``fov_right`` are stored as integer degrees.
+    """
+    if depth_m <= 0 or width_m <= 0:
+        return DEFAULT_FOV_LEFT
+    deg = degrees(atan((width_m / 2) / depth_m))
+    lo, hi = OPTION_RANGES[CONF_FOV_LEFT]
+    return int(round(min(max(deg, lo), hi)))
+
+
+def computed_fov_line(width_m: float | None, depth_m: float | None) -> str:
+    """Read-only "Computed FOV ≈ 50°/50° (…)" line for Measurements mode (#565).
+
+    The single formatter shared by the sun-tracking page placeholder and the
+    config-flow summary. Delegates the angle to :func:`fov_from_reveal` so the
+    arctan lives in exactly one place.
+    """
+    w = float(width_m or 0.0)
+    d = float(depth_m or 0.0)
+    deg = fov_from_reveal(w, d)
+    return f"Computed FOV ≈ {deg}°/{deg}° ({w:g} m width, {d:g} m reveal depth)"
 
 
 class SunGeometry:

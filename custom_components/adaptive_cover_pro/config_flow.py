@@ -53,6 +53,7 @@ from .const import (
     CONF_FORCE_OVERRIDE_POSITION,
     CONF_FORCE_OVERRIDE_SENSORS,
     CONF_FOV_LEFT,
+    CONF_FOV_MODE,
     CONF_FOV_RIGHT,
     CONF_HEIGHT_WIN,
     CONF_INTERP,
@@ -145,7 +146,9 @@ from .const import (
     MODE2_OPEN_HORIZONTAL_PERCENT,
     DOMAIN,
     CoverType,
+    FovMode,
 )
+from .engine.sun_geometry import computed_fov_line, fov_from_reveal
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2064,19 +2067,98 @@ def _geometry_unit_keys(
     return (policy.geometry_length_keys(), policy.geometry_slat_keys())
 
 
-def _get_sun_tracking_schema(
-    sensor_type: str | None, hass: HomeAssistant | None = None
-) -> vol.Schema:
-    """Return sun tracking schema, adding glare-zones toggle for cover types that support it."""
-    base = sun_tracking_schema(hass) if hass is not None else SUN_TRACKING_SCHEMA
-    if sensor_type in POLICY_REGISTRY and get_policy(sensor_type).supports_glare_zones:
-        return base.extend(
-            {
-                vol.Optional(
-                    CONF_ENABLE_GLARE_ZONES, default=False
-                ): selector.BooleanSelector(),
-            }
+def _fov_mode_supported(sensor_type: str | None) -> bool:
+    """Whether *sensor_type*'s policy exposes the two-mode FOV selector (#565)."""
+    return sensor_type in POLICY_REGISTRY and get_policy(sensor_type).supports_fov_mode
+
+
+_SUN_TRACKING_WIKI = (
+    "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Sun-Tracking"
+)
+
+
+def _sun_tracking_placeholders(
+    sensor_type: str | None,
+    mode: str | None,
+    source_config: dict[str, Any],
+) -> dict[str, str]:
+    """Build description placeholders for the sun-tracking form.
+
+    Always includes ``learn_more``; in Measurements mode (#565) it adds a
+    read-only ``computed_fov`` line so the user sees the derived FOV.
+    """
+    # ``computed_fov`` is referenced unconditionally in the step description
+    # template, so it must always be present — empty string outside Measurements
+    # mode (HA raises if a referenced placeholder is missing).
+    computed = ""
+    if _fov_mode_supported(sensor_type) and str(mode) == FovMode.MEASUREMENTS:
+        computed = computed_fov_line(
+            source_config.get(CONF_WINDOW_WIDTH),
+            source_config.get(CONF_WINDOW_DEPTH),
         )
+    return {"learn_more": _SUN_TRACKING_WIKI, "computed_fov": computed}
+
+
+def _resolve_fov_mode_submit(
+    sensor_type: str | None,
+    prior_mode: str | None,
+    user_input: dict[str, Any],
+    source_config: dict[str, Any],
+) -> str | None:
+    """Process a sun-tracking submit for the FOV-mode selector (#565).
+
+    Single home for the FOV-mode save logic shared by the create-flow and
+    options-flow ``async_step_sun_tracking`` handlers (no-duplication
+    guideline). Returns the mode to **re-render** the form in (when the user
+    switched modes — HA can't hide fields mid-render), or ``None`` to proceed.
+
+    When proceeding in ``MEASUREMENTS`` mode the derived
+    ``fov_left``/``fov_right`` are written into *user_input* from the entry's
+    current window width + reveal depth, so the engine (which reads the stored
+    fov values unchanged) gets the computed angles. ``window_depth`` is left
+    untouched. In ``ANGLES`` mode the user's typed fov values pass through.
+    """
+    if not _fov_mode_supported(sensor_type) or CONF_FOV_MODE not in user_input:
+        return None
+
+    submitted = str(user_input[CONF_FOV_MODE])
+    resolved_prior = str(prior_mode) if prior_mode is not None else FovMode.ANGLES
+    if submitted != resolved_prior:
+        # Mode changed → re-render so the right fields show/hide.
+        return submitted
+
+    if submitted == FovMode.MEASUREMENTS:
+        width = float(source_config.get(CONF_WINDOW_WIDTH) or 0.0)
+        depth = float(source_config.get(CONF_WINDOW_DEPTH) or 0.0)
+        derived = fov_from_reveal(width, depth)
+        user_input[CONF_FOV_LEFT] = derived
+        user_input[CONF_FOV_RIGHT] = derived
+    return None
+
+
+def _get_sun_tracking_schema(
+    sensor_type: str | None,
+    hass: HomeAssistant | None = None,
+    mode: str | None = None,
+) -> vol.Schema:
+    """Return sun tracking schema for *sensor_type* in the given FOV *mode*.
+
+    Adds the glare-zones toggle for cover types that support it, and routes the
+    FOV-field shaping (mode selector + per-mode slider visibility, #565) through
+    the cover-type policy so no cover-type string branching leaks out here.
+    """
+    base = sun_tracking_schema(hass) if hass is not None else SUN_TRACKING_SCHEMA
+    if sensor_type in POLICY_REGISTRY:
+        policy = get_policy(sensor_type)
+        base = policy.fov_mode_schema(base, mode)
+        if policy.supports_glare_zones:
+            base = base.extend(
+                {
+                    vol.Optional(
+                        CONF_ENABLE_GLARE_ZONES, default=False
+                    ): selector.BooleanSelector(),
+                }
+            )
     return base
 
 
@@ -2269,21 +2351,23 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def async_step_sun_tracking(self, user_input: dict[str, Any] | None = None):
         """Configure sun tracking parameters."""
+        prior_mode = self.config.get(CONF_FOV_MODE)
         if user_input is not None:
             self.optional_entities([CONF_MIN_ELEVATION, CONF_MAX_ELEVATION], user_input)
+            rerender = _resolve_fov_mode_submit(
+                self.type_blind, prior_mode, user_input, self.config
+            )
+            if rerender is not None:
+                return self._show_sun_tracking_form(mode=rerender)
             if (
                 user_input.get(CONF_MAX_ELEVATION) is not None
                 and user_input.get(CONF_MIN_ELEVATION) is not None
                 and user_input[CONF_MAX_ELEVATION] <= user_input[CONF_MIN_ELEVATION]
             ):
-                return self.async_show_form(
-                    step_id="sun_tracking",
-                    data_schema=_get_sun_tracking_schema(self.type_blind, self.hass),
+                return self._show_sun_tracking_form(
+                    mode=user_input.get(CONF_FOV_MODE, prior_mode),
                     errors={
                         CONF_MAX_ELEVATION: "Must be greater than 'Minimal Elevation'"
-                    },
-                    description_placeholders={
-                        "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Sun-Tracking"
                     },
                 )
             canonical = user_input_to_canonical(
@@ -2291,12 +2375,22 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             )
             self.config.update(canonical)
             return await self.async_step_position()
+        return self._show_sun_tracking_form(mode=prior_mode)
+
+    def _show_sun_tracking_form(
+        self,
+        *,
+        mode: str | None = None,
+        errors: dict | None = None,
+    ):
+        """Render the create-flow sun-tracking form for the given FOV *mode*."""
         return self.async_show_form(
             step_id="sun_tracking",
-            data_schema=_get_sun_tracking_schema(self.type_blind, self.hass),
-            description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Sun-Tracking"
-            },
+            data_schema=_get_sun_tracking_schema(self.type_blind, self.hass, mode),
+            errors=errors,
+            description_placeholders=_sun_tracking_placeholders(
+                self.type_blind, mode, self.config
+            ),
         )
 
     async def async_step_position(self, user_input: dict[str, Any] | None = None):
@@ -2920,27 +3014,24 @@ class OptionsFlowHandler(OptionsFlow):
 
     async def async_step_sun_tracking(self, user_input: dict[str, Any] | None = None):
         """Adjust sun tracking parameters."""
+        prior_mode = self.options.get(CONF_FOV_MODE)
         if user_input is not None:
             self.optional_entities([CONF_MIN_ELEVATION, CONF_MAX_ELEVATION], user_input)
+            rerender = _resolve_fov_mode_submit(
+                self.sensor_type, prior_mode, user_input, self.options
+            )
+            if rerender is not None:
+                return self._show_sun_tracking_form(user_input, mode=rerender)
             if (
                 user_input.get(CONF_MAX_ELEVATION) is not None
                 and user_input.get(CONF_MIN_ELEVATION) is not None
                 and user_input[CONF_MAX_ELEVATION] <= user_input[CONF_MIN_ELEVATION]
             ):
-                schema = _get_sun_tracking_schema(self.sensor_type, self.hass)
-                suggested = options_to_display(
-                    self.hass,
-                    user_input or self.options,
-                    length_keys=_SUN_TRACKING_LENGTH_KEYS,
-                )
-                return self.async_show_form(
-                    step_id="sun_tracking",
-                    data_schema=self.add_suggested_values_to_schema(schema, suggested),
+                return self._show_sun_tracking_form(
+                    user_input,
+                    mode=user_input.get(CONF_FOV_MODE, prior_mode),
                     errors={
                         CONF_MAX_ELEVATION: "Must be greater than 'Minimal Elevation'"
-                    },
-                    description_placeholders={
-                        "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Sun-Tracking"
                     },
                 )
             canonical = user_input_to_canonical(
@@ -2948,18 +3039,27 @@ class OptionsFlowHandler(OptionsFlow):
             )
             self.options.update(canonical)
             return await self.async_step_init()
-        schema = _get_sun_tracking_schema(self.sensor_type, self.hass)
+        return self._show_sun_tracking_form(self.options, mode=prior_mode)
+
+    def _show_sun_tracking_form(
+        self,
+        values: dict[str, Any],
+        *,
+        mode: str | None = None,
+        errors: dict | None = None,
+    ):
+        """Render the sun-tracking form for the given FOV *mode* (#565)."""
+        schema = _get_sun_tracking_schema(self.sensor_type, self.hass, mode)
         suggested = options_to_display(
-            self.hass,
-            user_input or self.options,
-            length_keys=_SUN_TRACKING_LENGTH_KEYS,
+            self.hass, values, length_keys=_SUN_TRACKING_LENGTH_KEYS
         )
         return self.async_show_form(
             step_id="sun_tracking",
             data_schema=self.add_suggested_values_to_schema(schema, suggested),
-            description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Sun-Tracking"
-            },
+            errors=errors,
+            description_placeholders=_sun_tracking_placeholders(
+                self.sensor_type, mode, self.options
+            ),
         )
 
     async def async_step_position(self, user_input: dict[str, Any] | None = None):
