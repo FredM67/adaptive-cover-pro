@@ -10,12 +10,15 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import voluptuous as vol
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from custom_components.adaptive_cover_pro.config_flow import (
     OptionsFlowHandler,
     _get_sun_tracking_schema,
 )
 from custom_components.adaptive_cover_pro.const import (
+    CONF_DISTANCE,
     CONF_FOV_LEFT,
     CONF_FOV_MODE,
     CONF_FOV_RIGHT,
@@ -24,10 +27,25 @@ from custom_components.adaptive_cover_pro.const import (
     FovMode,
 )
 from custom_components.adaptive_cover_pro.const import CoverType
+from custom_components.adaptive_cover_pro.unit_system import options_to_display
 
 
 def _keys(schema) -> set[str]:
     return {str(m) for m in schema.schema}
+
+
+def _marker_for(schema, key) -> vol.Marker:
+    for m in schema.schema:
+        if str(m) == key:
+            return m
+    raise AssertionError(f"{key!r} not in schema")
+
+
+def _suggested(result, key):
+    for m in result["data_schema"].schema:
+        if str(m) == key and m.description:
+            return m.description.get("suggested_value")
+    raise AssertionError(f"no suggested_value for {key!r}")
 
 
 # ----------------------------------------------------------------------------
@@ -67,6 +85,26 @@ def test_awning_never_gets_mode_selector():
     # Awnings keep their fov sliders regardless of mode argument.
     assert CONF_FOV_LEFT in keys
     assert CONF_FOV_RIGHT in keys
+
+
+@pytest.mark.parametrize("mode", [FovMode.ANGLES, None])
+def test_blind_fov_fields_are_optional(mode):
+    # #565: the fov sliders must be vol.Optional so HA's frontend client-side
+    # "required field" check never blocks switching to Measurements mode before
+    # the backend can re-render with them hidden. The default is preserved.
+    schema = _get_sun_tracking_schema(CoverType.BLIND, mode=mode)
+    assert isinstance(_marker_for(schema, CONF_FOV_LEFT), vol.Optional)
+    assert isinstance(_marker_for(schema, CONF_FOV_RIGHT), vol.Optional)
+    assert _marker_for(schema, CONF_FOV_LEFT).default() == 90
+    assert _marker_for(schema, CONF_FOV_RIGHT).default() == 90
+
+
+def test_awning_fov_fields_stay_required():
+    # Only blinds relax requiredness (they own the FOV-mode feature). Awnings
+    # have no mode selector, so their fov sliders stay vol.Required.
+    schema = _get_sun_tracking_schema(CoverType.AWNING, mode=None)
+    assert isinstance(_marker_for(schema, CONF_FOV_LEFT), vol.Required)
+    assert isinstance(_marker_for(schema, CONF_FOV_RIGHT), vol.Required)
 
 
 # ----------------------------------------------------------------------------
@@ -186,3 +224,73 @@ async def test_switching_to_measurements_rerenders_form_not_next_step():
     assert result["step_id"] == "sun_tracking"
     # The re-rendered form is in MEASUREMENTS mode (sliders hidden).
     assert CONF_FOV_LEFT not in _keys(result["data_schema"])
+
+
+@pytest.mark.asyncio
+async def test_measurements_mode_submittable_without_fov():
+    # #565: a user in Measurements mode submits the form without any fov
+    # values (the sliders are hidden). The save must succeed and backfill the
+    # derived angles from width/depth — it must not block on "required fov".
+    flow = _options_flow(
+        {
+            CONF_WINDOW_WIDTH: 2.0,
+            CONF_WINDOW_DEPTH: 0.5,
+            CONF_FOV_MODE: FovMode.MEASUREMENTS,
+        }
+    )
+    result = await flow.async_step_sun_tracking(
+        {CONF_FOV_MODE: FovMode.MEASUREMENTS, "distance_shaded_area": 0.5}
+    )
+    assert result["type"] == "menu"  # advanced (saved), not re-rendered
+    assert flow.options[CONF_FOV_LEFT] == 63
+    assert flow.options[CONF_FOV_RIGHT] == 63
+
+
+# ----------------------------------------------------------------------------
+# Imperial round-trip stability across rerenders (#565)
+# ----------------------------------------------------------------------------
+
+
+def _imperial_options_flow(options: dict) -> OptionsFlowHandler:
+    flow = _options_flow(options)
+    flow.hass.config.units = US_CUSTOMARY_SYSTEM
+    flow.hass.states.get.return_value = None
+    return flow
+
+
+@pytest.mark.asyncio
+async def test_imperial_shaded_area_stable_across_mode_switch_rerender():
+    # #565: switching FOV mode re-renders the form. On an imperial hass the
+    # "shaded area" (distance) value must NOT be re-converted metres->inches a
+    # second time — otherwise it compounds (~x39 per rerender) until it
+    # overruns the slider/OPTION_RANGES max and the form becomes unsaveable.
+    flow = _imperial_options_flow(
+        {
+            CONF_WINDOW_WIDTH: 2.0,
+            CONF_WINDOW_DEPTH: 0.5,
+            CONF_DISTANCE: 0.5,  # canonical metres
+            CONF_FOV_MODE: FovMode.ANGLES,
+        }
+    )
+    # The value the form displays for a stored 0.5 m (≈19.7 in).
+    expected_in = options_to_display(
+        flow.hass, {CONF_DISTANCE: 0.5}, length_keys=(CONF_DISTANCE,)
+    )[CONF_DISTANCE]
+
+    # First mode switch (ANGLES -> MEASUREMENTS) re-renders the form. The user
+    # submits the inch value the form currently shows.
+    result1 = await flow.async_step_sun_tracking(
+        {CONF_FOV_MODE: FovMode.MEASUREMENTS, CONF_DISTANCE: expected_in}
+    )
+    assert result1["type"] == "form"
+    assert result1["step_id"] == "sun_tracking"
+    s1 = _suggested(result1, CONF_DISTANCE)
+    assert s1 == pytest.approx(expected_in, abs=0.1)
+
+    # Feed the re-rendered value back through another rerender — it must stay
+    # put, not compound.
+    result2 = await flow.async_step_sun_tracking(
+        {CONF_FOV_MODE: FovMode.MEASUREMENTS, CONF_DISTANCE: s1}
+    )
+    assert result2["step_id"] == "sun_tracking"
+    assert _suggested(result2, CONF_DISTANCE) == pytest.approx(expected_in, abs=0.1)

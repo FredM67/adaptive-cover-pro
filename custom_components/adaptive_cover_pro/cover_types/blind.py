@@ -77,6 +77,20 @@ def geometry_vertical_schema(hass: HomeAssistant | None = None) -> vol.Schema:
 GEOMETRY_VERTICAL_SCHEMA = geometry_vertical_schema()
 
 
+def _as_optional(marker: vol.Marker) -> vol.Optional:
+    """Re-emit *marker* as ``vol.Optional``, preserving its default if any.
+
+    Used so the fov sliders are not ``vol.Required`` (#565): a Required field
+    triggers HA's frontend client-side "all required fields filled" check,
+    which blocks switching to Measurements mode before the backend can
+    re-render with the sliders hidden. The existing ``default`` callable is
+    reused so no ``90`` literal is duplicated here.
+    """
+    if marker.default is vol.UNDEFINED:
+        return vol.Optional(str(marker))
+    return vol.Optional(str(marker), default=marker.default)
+
+
 class BlindPolicy(CoverTypePolicy, register=True):
     """Cover that moves vertically (raise/lower)."""
 
@@ -117,6 +131,10 @@ class BlindPolicy(CoverTypePolicy, register=True):
                     inserted = True
                 if hide_sliders:
                     continue
+                # Optional so the frontend Required check never blocks a mode
+                # switch (#565); default preserved, so ANGLES is unchanged.
+                rebuilt[_as_optional(marker)] = sel
+                continue
             rebuilt[marker] = sel
         if not inserted:
             rebuilt[mode_marker] = mode_selector

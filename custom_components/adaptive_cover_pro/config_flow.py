@@ -3020,23 +3020,28 @@ class OptionsFlowHandler(OptionsFlow):
             rerender = _resolve_fov_mode_submit(
                 self.sensor_type, prior_mode, user_input, self.options
             )
+            # Canonicalize once: ``_show_sun_tracking_form`` re-displays via
+            # ``options_to_display``, so feeding it raw (already display-unit)
+            # input would convert metres->inches a second time and the value
+            # would compound on every rerender (#565). Canonical here keeps the
+            # rerender re-feed symmetric with the initial render and save path.
+            canonical = user_input_to_canonical(
+                self.hass, user_input, length_keys=_SUN_TRACKING_LENGTH_KEYS
+            )
             if rerender is not None:
-                return self._show_sun_tracking_form(user_input, mode=rerender)
+                return self._show_sun_tracking_form(canonical, mode=rerender)
             if (
                 user_input.get(CONF_MAX_ELEVATION) is not None
                 and user_input.get(CONF_MIN_ELEVATION) is not None
                 and user_input[CONF_MAX_ELEVATION] <= user_input[CONF_MIN_ELEVATION]
             ):
                 return self._show_sun_tracking_form(
-                    user_input,
+                    canonical,
                     mode=user_input.get(CONF_FOV_MODE, prior_mode),
                     errors={
                         CONF_MAX_ELEVATION: "Must be greater than 'Minimal Elevation'"
                     },
                 )
-            canonical = user_input_to_canonical(
-                self.hass, user_input, length_keys=_SUN_TRACKING_LENGTH_KEYS
-            )
             self.options.update(canonical)
             return await self.async_step_init()
         return self._show_sun_tracking_form(self.options, mode=prior_mode)
