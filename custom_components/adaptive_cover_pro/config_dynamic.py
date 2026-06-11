@@ -105,16 +105,19 @@ _WEATHER_STATES = [
 ]
 
 
-def _threshold_selector() -> selector.TemplateSelector:
+def _threshold_selector() -> selector.TextSelector:
     """Selector for a threshold that accepts a number *or* a Jinja2 template.
 
-    Issue #577: these fields render once per cycle via
-    ``templates.TemplateResolver``. ``TemplateSelector`` has no
-    ``unit_of_measurement`` — the unit is documented in the field's translation
-    description instead. Defaults supplied to the marker must be strings, since
-    the selector validates values with ``cv.template``.
+    Issue #577: these fields are rendered to a number once per cycle by
+    ``templates.TemplateResolver``. A **multiline** ``TextSelector`` is used
+    (not ``TemplateSelector``): the template code-editor element fails to render
+    when handed a legacy integer value via ``add_suggested_values_to_schema``,
+    and a single-line input would strip newlines from a multi-line template.
+    The textarea renders reliably for both numbers and templates and preserves
+    newlines. The unit lives in the field's translation description, since this
+    selector carries no ``unit_of_measurement``.
     """
-    return selector.TemplateSelector()
+    return selector.TextSelector(selector.TextSelectorConfig(multiline=True))
 
 
 def sun_tracking_schema(hass: HomeAssistant | None = None) -> vol.Schema:

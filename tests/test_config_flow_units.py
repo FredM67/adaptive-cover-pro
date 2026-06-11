@@ -169,35 +169,44 @@ def _selector_obj(schema, key):
 
 @pytest.mark.unit
 class TestTemplatableThresholdSelectors:
-    """The 9 threshold fields use a TemplateSelector (number or Jinja2 template).
+    """The 9 threshold fields use a multiline TextSelector (number or template).
 
-    Issue #577 swapped these from unit-aware NumberSelectors to TemplateSelectors,
-    so they no longer carry a ``unit_of_measurement`` or numeric range — the unit
-    now lives in the field's translation description instead.
+    Issue #577 swapped these from unit-aware NumberSelectors to multiline
+    TextSelectors so they accept a number or a Jinja2 template. They no longer
+    carry a ``unit_of_measurement`` or numeric range — the unit now lives in the
+    field's translation description instead. A multiline textarea is used
+    (rather than the template code-editor) because the editor fails to render a
+    legacy integer value and a single-line box would strip template newlines.
     """
 
-    def test_temperature_thresholds_are_template_selectors(self):
+    @staticmethod
+    def _assert_multiline_text(schema, key):
+        sel = _selector_obj(schema, key)
+        assert isinstance(sel, selector.TextSelector)
+        assert sel.config["multiline"] is True
+
+    def test_temperature_thresholds_are_text_selectors(self):
         schema = temperature_climate_schema(_hass(imperial=False), {})
         for key in (CONF_TEMP_LOW, CONF_TEMP_HIGH, CONF_OUTSIDE_THRESHOLD):
-            assert isinstance(_selector_obj(schema, key), selector.TemplateSelector)
+            self._assert_multiline_text(schema, key)
 
-    def test_weather_thresholds_are_template_selectors(self):
+    def test_weather_thresholds_are_text_selectors(self):
         schema = weather_override_schema(_hass(imperial=False), {})
         for key in (
             CONF_WEATHER_WIND_SPEED_THRESHOLD,
             CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
             CONF_WEATHER_RAIN_THRESHOLD,
         ):
-            assert isinstance(_selector_obj(schema, key), selector.TemplateSelector)
+            self._assert_multiline_text(schema, key)
 
-    def test_light_cloud_thresholds_are_template_selectors(self):
+    def test_light_cloud_thresholds_are_text_selectors(self):
         schema = light_cloud_schema(_hass(imperial=False), {})
         for key in (
             CONF_LUX_THRESHOLD,
             CONF_IRRADIANCE_THRESHOLD,
             CONF_CLOUD_COVERAGE_THRESHOLD,
         ):
-            assert isinstance(_selector_obj(schema, key), selector.TemplateSelector)
+            self._assert_multiline_text(schema, key)
 
 
 # --- Dict-level conversion: imperial round-trip --------------------------- #
