@@ -60,6 +60,11 @@ class DiagnosticContext:
     # Configuration snapshot
     config_options: dict = field(default_factory=dict)
 
+    # Per-cycle options after template resolution — same keys as config_options
+    # but with TEMPLATABLE_KEYS rendered to numbers (issue #577). Used to show
+    # raw template alongside its resolved value in diagnostics.
+    resolved_options: dict = field(default_factory=dict)
+
     # Motion manager state
     motion_detected: bool = True
     motion_timeout_active: bool = False
@@ -625,5 +630,24 @@ class DiagnosticsBuilder:
                 "is_sunny_source": (
                     options.get(CONF_IS_SUNNY_SENSOR) or "weather_state"
                 ),
+                "templated_thresholds": DiagnosticsBuilder._templated_thresholds(ctx),
             }
+        }
+
+    @staticmethod
+    def _templated_thresholds(ctx: DiagnosticContext) -> dict:
+        """Map each threshold configured as a template to its raw + resolved value.
+
+        Only keys whose raw value is an actual Jinja2 template appear, so a plain
+        numeric config yields an empty dict (issue #577).
+        """
+        from ..config_fields import TEMPLATABLE_KEYS
+        from ..templates import is_template_string
+
+        raw = ctx.config_options
+        resolved = ctx.resolved_options
+        return {
+            key: {"template": raw[key], "resolved": resolved.get(key)}
+            for key in TEMPLATABLE_KEYS
+            if is_template_string(raw.get(key))
         }

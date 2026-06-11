@@ -1476,6 +1476,27 @@ def _build_option_ranges() -> dict[str, tuple[float, float]]:
 OPTION_RANGES: dict[str, tuple[float, float]] = _build_option_ranges()
 
 
+#: Threshold fields that accept a Home Assistant Jinja2 template (rendered to a
+#: number once per coordinator cycle) in place of a fixed value (issue #577).
+#: Single source consumed by the config-flow selector builder
+#: (``config_dynamic``), the service validators (``services.options_service``),
+#: and the runtime resolver (``templates.TemplateResolver``). All are values
+#: compared against live readings each cycle, so a dynamic value is meaningful.
+TEMPLATABLE_KEYS: frozenset[str] = frozenset(
+    {
+        CONF_LUX_THRESHOLD,
+        CONF_IRRADIANCE_THRESHOLD,
+        CONF_CLOUD_COVERAGE_THRESHOLD,
+        CONF_TEMP_LOW,
+        CONF_TEMP_HIGH,
+        CONF_OUTSIDE_THRESHOLD,
+        CONF_WEATHER_WIND_SPEED_THRESHOLD,
+        CONF_WEATHER_RAIN_THRESHOLD,
+        CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
+    }
+)
+
+
 def option_default(key: str, fallback: Any = None) -> Any:
     """Return the declared default for *key*, or *fallback* if none/unknown."""
     spec = FIELD_SPECS.get(key)

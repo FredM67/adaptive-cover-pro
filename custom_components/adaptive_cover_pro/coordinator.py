@@ -115,6 +115,7 @@ from .pipeline.handlers import (
 from .pipeline.floors import effective_floor, gather_active_floors
 from .pipeline.registry import PipelineRegistry
 from .pipeline.snapshot_builder import PipelineSnapshotBuilder
+from .templates import TemplateResolver
 from .const import ControlMethod
 from .state.climate_provider import ClimateProvider, ClimateReadings
 from .state.cover_provider import CoverProvider
@@ -329,6 +330,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         # Climate state provider
         self._climate_provider = ClimateProvider(hass=self.hass, logger=self.logger)
+
+        # Renders templated threshold options to numbers once per cycle (#577).
+        self._template_resolver = TemplateResolver(self.hass)
+        # Current cycle's options after template resolution (for diagnostics).
+        self._resolved_options: dict = dict(self.config_entry.options)
 
         # Sun data provider
         self._sun_provider = SunProvider(hass=self.hass)
@@ -1153,7 +1159,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         if self.first_refresh:
             self._cached_options = self.config_entry.options
 
-        options = self.config_entry.options
+        # Render any templated threshold options to numbers for this cycle, so
+        # every downstream consumer (RuntimeConfig, climate reads) sees a number,
+        # never a raw template string (#577).
+        options = self._template_resolver.resolve(self.config_entry.options)
+        self._resolved_options = options
         self._update_options(options)
 
         # Capture force override state before this cycle so we can detect
@@ -2180,6 +2190,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             use_interpolation=self._use_interpolation,
             final_state=self.state,
             config_options=dict(self.config_entry.options),
+            resolved_options=dict(self._resolved_options),
             motion_detected=self.is_motion_detected,
             motion_timeout_active=self._motion_mgr.is_motion_timeout_active,
             motion_hold_active=(

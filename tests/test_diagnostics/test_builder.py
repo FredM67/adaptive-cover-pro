@@ -770,6 +770,7 @@ class TestConfigurationDiagnostics:
             "cloud_suppression_enabled",
             "cloudy_position",
             "is_sunny_source",
+            "templated_thresholds",
         }
         assert expected_keys == set(config.keys())
 
