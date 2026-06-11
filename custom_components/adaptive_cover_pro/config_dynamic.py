@@ -105,19 +105,19 @@ _WEATHER_STATES = [
 ]
 
 
-def _threshold_selector() -> selector.TextSelector:
+def _threshold_selector() -> selector.TemplateSelector:
     """Selector for a threshold that accepts a number *or* a Jinja2 template.
 
     Issue #577: these fields are rendered to a number once per cycle by
-    ``templates.TemplateResolver``. A **multiline** ``TextSelector`` is used
-    (not ``TemplateSelector``): the template code-editor element fails to render
-    when handed a legacy integer value via ``add_suggested_values_to_schema``,
-    and a single-line input would strip newlines from a multi-line template.
-    The textarea renders reliably for both numbers and templates and preserves
-    newlines. The unit lives in the field's translation description, since this
-    selector carries no ``unit_of_measurement``.
+    ``templates.TemplateResolver``. ``TemplateSelector`` is the Jinja code
+    editor — it gives entity autocomplete and syntax highlighting. It only
+    renders a *string* value, so the config flow stringifies legacy numeric
+    threshold values before handing them to ``add_suggested_values_to_schema``
+    (see ``config_flow._stringify_templatable``). The unit lives in the field's
+    translation description, since this selector carries no
+    ``unit_of_measurement``.
     """
-    return selector.TextSelector(selector.TextSelectorConfig(multiline=True))
+    return selector.TemplateSelector()
 
 
 def sun_tracking_schema(hass: HomeAssistant | None = None) -> vol.Schema:

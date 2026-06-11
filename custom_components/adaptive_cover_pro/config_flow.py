@@ -683,6 +683,28 @@ def _get_azimuth_edges(data) -> int:
     return data[CONF_FOV_LEFT] + data[CONF_FOV_RIGHT]
 
 
+def _stringify_templatable(suggested: dict) -> dict:
+    """Coerce templatable threshold values to strings for the template editor.
+
+    The ``TemplateSelector`` code editor only renders a *string* value; legacy
+    entries store these thresholds as numbers, so a raw int/float collapses the
+    field to nothing (issue #577). Stringify them before
+    ``add_suggested_values_to_schema`` injects the suggested value. Whole-valued
+    floats render without a trailing ``.0``; ``None`` and existing strings
+    (including templates) are left untouched.
+    """
+    out = dict(suggested)
+    for key in config_fields.TEMPLATABLE_KEYS:
+        value = out.get(key)
+        if value is None or isinstance(value, str):
+            continue
+        if isinstance(value, float) and value.is_integer():
+            out[key] = str(int(value))
+        else:
+            out[key] = str(value)
+    return out
+
+
 def _format_duration(dur: dict | int | float | None) -> str:
     """Format a DurationSelector value (dict or legacy int minutes) as human-readable text.
 
@@ -3521,7 +3543,7 @@ class OptionsFlowHandler(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ):
         """Manage weather-based safety overrides."""
-        suggested = user_input or self.options
+        suggested = _stringify_templatable(user_input or self.options)
         if user_input is not None:
             self.optional_entities(_WEATHER_OVERRIDE_OPTIONAL_KEYS, user_input)
             self.options.update(user_input)
@@ -3730,7 +3752,7 @@ class OptionsFlowHandler(OptionsFlow):
 
     async def async_step_light_cloud(self, user_input: dict[str, Any] | None = None):
         """Manage light sensors, weather conditions, and cloud suppression."""
-        suggested = user_input or self.options
+        suggested = _stringify_templatable(user_input or self.options)
         if user_input is not None:
             self.optional_entities(_LIGHT_CLOUD_OPTIONAL_KEYS, user_input)
             self.options.update(user_input)
@@ -3749,7 +3771,7 @@ class OptionsFlowHandler(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ):
         """Manage temperature-based climate mode."""
-        suggested = user_input or self.options
+        suggested = _stringify_templatable(user_input or self.options)
         if user_input is not None:
             self.optional_entities(_TEMPERATURE_CLIMATE_OPTIONAL_KEYS, user_input)
             if user_input.get(CONF_CLIMATE_MODE) and not user_input.get(

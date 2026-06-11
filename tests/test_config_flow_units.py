@@ -16,6 +16,7 @@ from custom_components.adaptive_cover_pro.config_flow import (
     weather_override_schema,
     _build_glare_zones_schema,
     _glare_zone_length_keys,
+    _stringify_templatable,
 )
 from custom_components.adaptive_cover_pro.const import (
     CONF_CLOUD_COVERAGE_THRESHOLD,
@@ -169,44 +170,69 @@ def _selector_obj(schema, key):
 
 @pytest.mark.unit
 class TestTemplatableThresholdSelectors:
-    """The 9 threshold fields use a multiline TextSelector (number or template).
+    """The 9 threshold fields use a TemplateSelector (number or Jinja2 template).
 
-    Issue #577 swapped these from unit-aware NumberSelectors to multiline
-    TextSelectors so they accept a number or a Jinja2 template. They no longer
-    carry a ``unit_of_measurement`` or numeric range — the unit now lives in the
-    field's translation description instead. A multiline textarea is used
-    (rather than the template code-editor) because the editor fails to render a
-    legacy integer value and a single-line box would strip template newlines.
+    Issue #577 swapped these from unit-aware NumberSelectors to the Jinja code
+    editor so they accept a number or a template, with entity autocomplete and
+    syntax highlighting. They no longer carry a ``unit_of_measurement`` or
+    numeric range — the unit now lives in the field's translation description.
+    Legacy numeric values are stringified before the form so the editor (which
+    only renders a string) does not collapse — see
+    ``config_flow._stringify_templatable``.
     """
 
     @staticmethod
-    def _assert_multiline_text(schema, key):
-        sel = _selector_obj(schema, key)
-        assert isinstance(sel, selector.TextSelector)
-        assert sel.config["multiline"] is True
+    def _assert_template(schema, key):
+        assert isinstance(_selector_obj(schema, key), selector.TemplateSelector)
 
-    def test_temperature_thresholds_are_text_selectors(self):
+    def test_temperature_thresholds_are_template_selectors(self):
         schema = temperature_climate_schema(_hass(imperial=False), {})
         for key in (CONF_TEMP_LOW, CONF_TEMP_HIGH, CONF_OUTSIDE_THRESHOLD):
-            self._assert_multiline_text(schema, key)
+            self._assert_template(schema, key)
 
-    def test_weather_thresholds_are_text_selectors(self):
+    def test_weather_thresholds_are_template_selectors(self):
         schema = weather_override_schema(_hass(imperial=False), {})
         for key in (
             CONF_WEATHER_WIND_SPEED_THRESHOLD,
             CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
             CONF_WEATHER_RAIN_THRESHOLD,
         ):
-            self._assert_multiline_text(schema, key)
+            self._assert_template(schema, key)
 
-    def test_light_cloud_thresholds_are_text_selectors(self):
+    def test_light_cloud_thresholds_are_template_selectors(self):
         schema = light_cloud_schema(_hass(imperial=False), {})
         for key in (
             CONF_LUX_THRESHOLD,
             CONF_IRRADIANCE_THRESHOLD,
             CONF_CLOUD_COVERAGE_THRESHOLD,
         ):
-            self._assert_multiline_text(schema, key)
+            self._assert_template(schema, key)
+
+
+@pytest.mark.unit
+class TestStringifyTemplatable:
+    """Legacy numeric thresholds are stringified so the template editor renders."""
+
+    def test_int_becomes_string(self):
+        out = _stringify_templatable({CONF_LUX_THRESHOLD: 1000})
+        assert out[CONF_LUX_THRESHOLD] == "1000"
+
+    def test_whole_float_drops_trailing_zero(self):
+        out = _stringify_templatable({CONF_WEATHER_RAIN_THRESHOLD: 1.0})
+        assert out[CONF_WEATHER_RAIN_THRESHOLD] == "1"
+
+    def test_fractional_float_kept(self):
+        out = _stringify_templatable({CONF_WEATHER_RAIN_THRESHOLD: 1.5})
+        assert out[CONF_WEATHER_RAIN_THRESHOLD] == "1.5"
+
+    def test_template_string_untouched(self):
+        out = _stringify_templatable({CONF_TEMP_LOW: "{{ 21 }}"})
+        assert out[CONF_TEMP_LOW] == "{{ 21 }}"
+
+    def test_none_and_non_templatable_untouched(self):
+        out = _stringify_templatable({CONF_TEMP_LOW: None, "name": "Office"})
+        assert out[CONF_TEMP_LOW] is None
+        assert out["name"] == "Office"
 
 
 # --- Dict-level conversion: imperial round-trip --------------------------- #
