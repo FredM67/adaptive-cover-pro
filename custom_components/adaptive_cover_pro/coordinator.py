@@ -22,6 +22,8 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.exceptions import TemplateError
+from homeassistant.helpers.template import result_as_boolean
 
 # EventStateChangedData was added in Home Assistant 2024.4+
 # For backwards compatibility with older versions
@@ -39,7 +41,6 @@ from .helpers import (
     get_datetime_from_str,
     get_safe_state,
     is_entity_active,
-    motion_entities,
     state_attr,
 )
 from .config_context_adapter import ConfigContextAdapter
@@ -853,26 +854,50 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             entity_id,
             new_state.state,
         )
+        await self._handle_occupancy_change(
+            active=is_entity_active(self.hass, entity_id), source=entity_id
+        )
 
-        if is_entity_active(self.hass, entity_id):
+    async def async_check_motion_template_change(
+        self, event: Event | None, updates: list
+    ) -> None:
+        """Handle the occupancy template's rendered result changing (#577 follow-up).
+
+        Routed from ``async_track_template_result`` so a template flipping truthy
+        resumes positioning instantly — the same immediacy as a motion sensor,
+        with no polling. A render error is treated as not-occupied.
+        """
+        result = updates[-1].result if updates else None
+        active = (
+            False if isinstance(result, TemplateError) else result_as_boolean(result)
+        )
+        await self._handle_occupancy_change(active=active, source="occupancy template")
+
+    async def _handle_occupancy_change(self, *, active: bool, source: str) -> None:
+        """Apply an occupancy-source transition shared by sensors and the template.
+
+        Single source for the detect/clear policy: on detection, record motion
+        and refresh if needed; on clear, start the debounce timeout only when no
+        other occupancy source is still active.
+        """
+        if active:
             # Occupancy detected - immediate response.
-            # Returns True if timeout was active (expired) or pending (task
-            # still running), so we refresh in both cases, not just when the
-            # timeout had already fully expired.
-            needs_refresh = self._motion_mgr.record_motion_detected()
-
-            if needs_refresh:
-                self.logger.info("Motion detected - resuming automatic sun positioning")
+            # record_motion_detected() returns True if the timeout was active
+            # (expired) or pending (task still running), so we refresh in both
+            # cases, not just when the timeout had already fully expired.
+            if self._motion_mgr.record_motion_detected():
+                self.logger.info(
+                    "Motion detected (%s) - resuming automatic sun positioning", source
+                )
                 self.state_change = True
                 await self.async_refresh()
-
         elif not self.is_motion_detected:
             # This source cleared and no other source is active - start timeout.
             self._start_motion_timeout()
         else:
             self.logger.debug(
                 "Occupancy cleared on %s but another source still active — timeout not started",
-                entity_id,
+                source,
             )
 
     def process_entity_state_change(self):
@@ -962,8 +987,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
           last_motion_time so the sensor shows ``motion_detected``.
         - All entities **off** → set_no_motion() marks the timeout active so
           the sensor shows ``no_motion``.
+
+        Runs when any occupancy source is configured — sensors, media players,
+        or the occupancy template (issue #577 follow-up).
         """
-        if not motion_entities(self.config_entry.options):
+        if not self._motion_mgr.is_configured:
             return
         if self.is_motion_detected:
             self._motion_mgr.record_motion_detected()
@@ -1875,6 +1903,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             sensors=rc.motion.sensors,
             timeout_seconds=rc.motion.timeout_seconds,
             media_players=rc.motion.media_players,
+            template=rc.motion.template,
         )
         self._weather_mgr.update_config(
             wind_speed_sensor=rc.weather.wind_speed_sensor,
@@ -2193,6 +2222,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             resolved_options=dict(self._resolved_options),
             motion_detected=self.is_motion_detected,
             motion_timeout_active=self._motion_mgr.is_motion_timeout_active,
+            motion_template_active=self._motion_mgr.template_active,
             motion_hold_active=(
                 self._pipeline_result is not None
                 and self._pipeline_result.skip_command

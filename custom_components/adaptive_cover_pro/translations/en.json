@@ -283,12 +283,14 @@
         "data": {
           "motion_sensors": "Motion/occupancy sensors for occupancy-based control",
           "motion_media_players": "Media players for occupancy-based control",
+          "motion_template": "Occupancy template (optional)",
           "motion_timeout": "Motion timeout duration",
           "motion_timeout_mode": "When motion times out"
         },
         "data_description": {
           "motion_sensors": "Binary sensors that enable/disable automatic sun positioning based on occupancy. When ANY sensor detects motion, covers use automatic sun-based positioning. When ALL sensors show no motion for the timeout duration, covers return to default position. Leave empty to disable this feature.",
           "motion_media_players": "Media players treated as occupancy. ANY player whose state is something other than off (playing, paused, idle, on, …) counts as occupied and keeps automatic sun positioning active. Players that are off, unavailable, or unknown do not count. Combined with the motion sensors above under the same OR logic. Leave empty to disable.",
+          "motion_template": "Optional Home Assistant Jinja2 template that acts as an extra occupancy source. When it renders truthy (on/true/1) the room counts as occupied, OR'd with the sensors and media players above; when it renders falsy the timeout starts like any other source clearing. It is re-evaluated the instant a referenced entity changes — no polling — so it triggers as immediately as a sensor, and can stand alone with no sensors configured. For example, a template that returns true while an input_boolean helper is on. Leave empty to disable.",
           "motion_timeout": "Duration (in seconds) to wait after last motion before returning covers to default position. Prevents rapid position changes when motion sensors toggle frequently. Range: 30-3600 seconds (0.5-60 minutes). Default: 300 seconds (5 minutes).",
           "motion_timeout_mode": "What to do when motion has been absent for the timeout duration. 'Return to default' moves covers to the default position. 'Hold position' leaves covers where they are while the sun is in the FOV (so an occupant who returns finds them how they left them); covers still return to default once the sun leaves the FOV or the time window closes."
         }
@@ -802,12 +804,14 @@
         "data": {
           "motion_sensors": "Motion/occupancy sensors for occupancy-based control",
           "motion_media_players": "Media players for occupancy-based control",
+          "motion_template": "Occupancy template (optional)",
           "motion_timeout": "Motion timeout duration",
           "motion_timeout_mode": "When motion times out"
         },
         "data_description": {
           "motion_sensors": "Binary sensors that enable/disable automatic sun positioning based on occupancy. When ANY sensor detects motion, covers use automatic sun-based positioning. When ALL sensors show no motion for the timeout duration, covers return to default position. Leave empty to disable this feature.",
           "motion_media_players": "Media players treated as occupancy. ANY player whose state is something other than off (playing, paused, idle, on, …) counts as occupied and keeps automatic sun positioning active. Players that are off, unavailable, or unknown do not count. Combined with the motion sensors above under the same OR logic. Leave empty to disable.",
+          "motion_template": "Optional Home Assistant Jinja2 template that acts as an extra occupancy source. When it renders truthy (on/true/1) the room counts as occupied, OR'd with the sensors and media players above; when it renders falsy the timeout starts like any other source clearing. It is re-evaluated the instant a referenced entity changes — no polling — so it triggers as immediately as a sensor, and can stand alone with no sensors configured. For example, a template that returns true while an input_boolean helper is on. Leave empty to disable.",
           "motion_timeout": "Duration (in seconds) to wait after last motion before returning covers to default position. Prevents rapid position changes when motion sensors toggle frequently. Range: 30-3600 seconds (0.5-60 minutes). Default: 300 seconds (5 minutes).",
           "motion_timeout_mode": "What to do when motion has been absent for the timeout duration. 'Return to default' moves covers to the default position. 'Hold position' leaves covers where they are while the sun is in the FOV (so an occupant who returns finds them how they left them); covers still return to default once the sun leaves the FOV or the time window closes."
         }
@@ -1790,7 +1794,7 @@
       "manual": "✋ Manual override: pauses automatic control when you move the cover{detail}",
       "custom_tilt_only": "🎯 Custom #{slot}: if {eid} is on → tilt only (slat fixed at {slat}%; position driven by sun tracking)",
       "custom": "🎯 Custom #{slot}: if {eid} is on → {target}{cp_min}{tilt_note} — bypasses delta gates and auto-control",
-      "motion": "🚶 Motion-based: if no occupancy for {motion_timeout}s ({n} {sensor_word}) → {action}",
+      "motion": "🚶 Motion-based: if no occupancy for {motion_timeout}s ({sources}) → {action}",
       "cloud": "☁️ Cloud suppression: skips sun tracking{cloud} → {fallback}",
       "climate": "🌡️ Climate mode: adjusts strategy for heating/cooling{detail}",
       "glare": "🔆 Glare zones: lowers blind further to protect floor areas from glare{detail}",
@@ -1831,6 +1835,7 @@
       "proxy_no_min": "⚠️ Proxy cover is enabled but no custom-position slot has Use as minimum on — the managed cover will not clamp."
     },
     "motion": {
+      "template_source": "occupancy template",
       "action_hold": "covers hold current position (return to default when sun leaves FOV)",
       "action_return": "covers return to default ({default_pos}%)"
     },

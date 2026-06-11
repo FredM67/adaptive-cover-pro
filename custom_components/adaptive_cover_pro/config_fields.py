@@ -108,6 +108,7 @@ from .const import (
     CONF_MINIMIZE_MOVEMENTS,
     CONF_MOTION_MEDIA_PLAYERS,
     CONF_MOTION_SENSORS,
+    CONF_MOTION_TEMPLATE,
     CONF_MOTION_TIMEOUT,
     CONF_MOTION_TIMEOUT_MODE,
     CONF_MY_POSITION_VALUE,
@@ -853,6 +854,13 @@ _MOTION_OVERRIDE_SPECS = _spec(
         ValidatorKind.ENTITIES,
         default=[],
         make_selector=_const(lambda: media_player_selector(multiple=True)),
+    ),
+    FieldSpec(
+        CONF_MOTION_TEMPLATE,
+        SECTION_MOTION_OVERRIDE,
+        ValidatorKind.NONE,
+        clearable=True,
+        make_selector=_const(lambda: selector.TemplateSelector()),
     ),
     FieldSpec(
         CONF_MOTION_TIMEOUT,

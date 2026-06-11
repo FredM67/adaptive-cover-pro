@@ -69,6 +69,8 @@ class DiagnosticContext:
     motion_detected: bool = True
     motion_timeout_active: bool = False
     motion_hold_active: bool = False
+    # Occupancy template's current rendered result (issue #577 follow-up).
+    motion_template_active: bool = False
 
     # Force override config
     force_override_sensors: list = field(default_factory=list)
@@ -582,6 +584,7 @@ class DiagnosticsBuilder:
             CONF_MIN_POSITION,
             CONF_MIN_POSITION_SUN_TRACKING,
             CONF_MOTION_SENSORS,
+            CONF_MOTION_TEMPLATE,
             CONF_MOTION_TIMEOUT,
             DEFAULT_MOTION_TIMEOUT,
         )
@@ -614,6 +617,8 @@ class DiagnosticsBuilder:
                     result is not None and result.control_method == ControlMethod.FORCE
                 ),
                 "motion_sensors": options.get(CONF_MOTION_SENSORS, []),
+                "motion_template": options.get(CONF_MOTION_TEMPLATE),
+                "motion_template_active": ctx.motion_template_active,
                 "motion_timeout": options.get(
                     CONF_MOTION_TIMEOUT, DEFAULT_MOTION_TIMEOUT
                 ),

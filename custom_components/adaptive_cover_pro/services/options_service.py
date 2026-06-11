@@ -78,6 +78,7 @@ from ..const import (
     CONF_MODE,
     CONF_MOTION_MEDIA_PLAYERS,
     CONF_MOTION_SENSORS,
+    CONF_MOTION_TEMPLATE,
     CONF_MOTION_TIMEOUT,
     CONF_MY_POSITION_VALUE,
     CONF_OPEN_CLOSE_THRESHOLD,
@@ -194,19 +195,40 @@ def _templatable_num(key: str):
 
     def _validate(value):
         if _is_template_str(value):
-            # Syntax-gate via jinja2 directly — a bare HA ``Template`` here would
-            # trip the frame helper (no hass at validation time) and log a usage
-            # warning. Semantic rendering happens later in ``TemplateResolver``.
-            import jinja2
-
-            try:
-                jinja2.Environment().parse(value)
-            except jinja2.TemplateError as err:
-                raise vol.Invalid(f"Invalid template: {err}") from err
-            return value
+            return _check_template_syntax(value)
         return number(value)
 
     return _validate
+
+
+def _check_template_syntax(value: str) -> str:
+    """Raise ``vol.Invalid`` if *value* is not syntactically valid Jinja2.
+
+    Syntax-gate via jinja2 directly — a bare HA ``Template`` here would trip the
+    frame helper (no hass at validation time) and log a usage warning. Semantic
+    rendering happens later at runtime.
+    """
+    import jinja2
+
+    try:
+        jinja2.Environment().parse(value)
+    except jinja2.TemplateError as err:
+        raise vol.Invalid(f"Invalid template: {err}") from err
+    return value
+
+
+def _template_or_none(value):
+    """Validate an optional *condition* template field (#577 follow-up).
+
+    Accepts ``None`` / empty (cleared), or a syntactically valid Jinja2 template
+    string. Unlike ``_templatable_num`` this never coerces to a number — the
+    value is rendered to a boolean at runtime by ``templates.render_condition``.
+    """
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise vol.Invalid("expected a template string")
+    return _check_template_syntax(value)
 
 
 def _bool_v():
@@ -362,6 +384,7 @@ FIELD_VALIDATORS: dict[str, Any] = {
     # Motion
     CONF_MOTION_SENSORS: _entities_v(),
     CONF_MOTION_MEDIA_PLAYERS: _entities_v(),
+    CONF_MOTION_TEMPLATE: _template_or_none,
     CONF_MOTION_TIMEOUT: _range(CONF_MOTION_TIMEOUT),
     # Light & Cloud
     CONF_WEATHER_ENTITY: _entity_v(),

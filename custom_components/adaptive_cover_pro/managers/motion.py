@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 from ..const import DEFAULT_MOTION_TIMEOUT
 from ..helpers import is_entity_active
+from ..templates import is_template_string, render_condition
 from .common import EventRecorder, TimeoutController
 
 
@@ -43,6 +44,7 @@ class MotionManager:
         self._events = EventRecorder(event_buffer, now_fn=self._now)
 
         self._sensors: list[str] = []
+        self._template: str | None = None
         self._timeout_seconds: int = DEFAULT_MOTION_TIMEOUT
 
         self._timer = TimeoutController(logger, label="motion timeout")
@@ -67,38 +69,60 @@ class MotionManager:
         sensors: list[str],
         timeout_seconds: int,
         media_players: list[str] = (),
+        template: str | None = None,
     ) -> None:
-        """Update tracked entity list and timeout duration.
+        """Update tracked entity list, occupancy template, and timeout duration.
 
         Called whenever config options change so the manager stays in sync
         without recreating it. Media players are folded into the same tracked
         list as motion sensors — ``is_entity_active`` handles each domain, so
         any non-off media player counts as occupancy under the same OR logic.
+        The optional ``template`` is an extra occupancy source: when it renders
+        truthy it counts as motion, OR'd with the sensors (issue #577 follow-up).
 
         Args:
             sensors: Entity IDs of binary motion/occupancy sensors to track
             timeout_seconds: Seconds to wait after last motion before setting active
             media_players: media_player entity IDs treated as occupancy when on
+            template: optional Jinja2 condition; truthy result counts as occupancy
 
         """
         self._sensors = list(sensors) + list(media_players)
+        self._template = template
         self._timeout_seconds = timeout_seconds
 
     # --- Properties ---
 
     @property
+    def is_configured(self) -> bool:
+        """Return True when any occupancy source — sensor or template — is set.
+
+        Single source for "is motion control active?": the timeout machinery and
+        startup state only run when occupancy is actually configured.
+        """
+        return bool(self._sensors) or is_template_string(self._template)
+
+    @property
+    def template_active(self) -> bool:
+        """Return True when the occupancy template is set and renders truthy."""
+        return render_condition(self._hass, self._template)
+
+    @property
     def is_motion_detected(self) -> bool:
-        """Check whether any configured motion sensor currently detects motion.
+        """Check whether any occupancy source currently reports presence.
 
         Returns:
-            True if no sensors configured (feature disabled → assume presence),
-            or if any sensor reports state "on".
+            True if nothing is configured (feature disabled → assume presence),
+            if the occupancy template renders truthy, or if any sensor reports
+            an active state.
 
         """
-        if not self._sensors:
+        if not self.is_configured:
             return True  # Feature disabled — assume presence
 
-        return any(is_entity_active(self._hass, sid) for sid in self._sensors)
+        return self.template_active or any(
+            is_entity_active(self._hass, sid) for sid in self._sensors
+        )
 
     @property
     def is_motion_timeout_active(self) -> bool:

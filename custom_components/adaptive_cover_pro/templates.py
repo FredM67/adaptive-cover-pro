@@ -1,25 +1,50 @@
-"""Runtime resolution of templated threshold options (issue #577).
+"""Runtime resolution of templated config options (issue #577).
 
-Threshold config fields in :data:`config_fields.TEMPLATABLE_KEYS` may hold a
-Home Assistant Jinja2 template string instead of a fixed number. The template is
-rendered to a float once per coordinator update cycle, at the coordinator
-boundary, so the pure calculation engine and ``RuntimeConfig`` never see a raw
-template string.
+Two flavours of optional template field share this module:
 
-A render or coercion failure never propagates into the update cycle: the
-offending key is dropped from the returned options so the field falls back to its
-declared default, and a warning is logged once per failure transition.
+* **Numeric thresholds** (:data:`config_fields.TEMPLATABLE_KEYS`) — a template
+  that renders to a *number*. :class:`TemplateResolver` renders these once per
+  coordinator cycle so the pure engine and ``RuntimeConfig`` never see a raw
+  template string.
+* **Boolean conditions** — an optional template that renders to a *truthy/falsy*
+  value, used as an extra "is this condition active?" signal (e.g. the motion
+  occupancy template). :func:`render_condition` is the reusable primitive; it is
+  the baseline pattern for adding condition-template fields to other screens.
+
+Rendering failures never propagate: a numeric failure drops the key (field falls
+back to its default); a condition failure returns the supplied default.
 """
 
 import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
-from homeassistant.helpers.template import Template
+from homeassistant.helpers.template import Template, result_as_boolean
 
 from .config_fields import TEMPLATABLE_KEYS
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def render_condition(
+    hass: HomeAssistant, template_str, *, default: bool = False
+) -> bool:
+    """Render an optional Jinja2 *condition* template to a boolean.
+
+    The reusable primitive for optional "extra condition" template fields — a
+    template that answers a yes/no question (issue #577 follow-up). Returns
+    *default* when the value is empty / not a template, or when rendering fails.
+    HA's :func:`result_as_boolean` decides truthiness (``"on"``/``"true"``/``1``
+    → True), matching how conditions read elsewhere in Home Assistant.
+    """
+    if not is_template_string(template_str):
+        return default
+    try:
+        result = Template(template_str, hass).async_render()
+    except TemplateError as err:
+        _LOGGER.debug("Condition template %r failed to render: %s", template_str, err)
+        return default
+    return result_as_boolean(result)
 
 
 def is_template_string(value) -> bool:

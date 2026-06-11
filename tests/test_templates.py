@@ -14,6 +14,7 @@ from custom_components.adaptive_cover_pro.config_types import RuntimeConfig, _nu
 from custom_components.adaptive_cover_pro.const import (
     CONF_IRRADIANCE_THRESHOLD,
     CONF_LUX_THRESHOLD,
+    CONF_MOTION_TEMPLATE,
     CONF_TEMP_HIGH,
     CONF_TEMP_LOW,
     CONF_WEATHER_WIND_SPEED_THRESHOLD,
@@ -27,6 +28,7 @@ from custom_components.adaptive_cover_pro.state.climate_provider import ClimateP
 from custom_components.adaptive_cover_pro.templates import (
     TemplateResolver,
     is_template_string,
+    render_condition,
 )
 from homeassistant.exceptions import ServiceValidationError
 
@@ -135,6 +137,44 @@ class TestTemplateResolver:
 
 
 # ---------------------------------------------------------------------------
+# render_condition — boolean condition templates (motion occupancy, #577 f/u)
+# ---------------------------------------------------------------------------
+
+
+class TestRenderCondition:
+    """The reusable boolean-condition template primitive."""
+
+    async def test_truthy_constant(self, hass: HomeAssistant):
+        assert render_condition(hass, "{{ true }}") is True
+
+    async def test_falsy_constant(self, hass: HomeAssistant):
+        assert render_condition(hass, "{{ false }}") is False
+
+    async def test_entity_state(self, hass: HomeAssistant):
+        hass.states.async_set("input_boolean.guest", "on")
+        await hass.async_block_till_done()
+        assert (
+            render_condition(hass, "{{ is_state('input_boolean.guest', 'on') }}")
+            is True
+        )
+        hass.states.async_set("input_boolean.guest", "off")
+        await hass.async_block_till_done()
+        assert (
+            render_condition(hass, "{{ is_state('input_boolean.guest', 'on') }}")
+            is False
+        )
+
+    @pytest.mark.parametrize("value", [None, "", "not a template", 123])
+    async def test_non_template_returns_default(self, hass: HomeAssistant, value):
+        assert render_condition(hass, value) is False
+        assert render_condition(hass, value, default=True) is True
+
+    async def test_render_error_returns_default(self, hass: HomeAssistant):
+        # References an undefined function → render raises → default.
+        assert render_condition(hass, "{{ nonexistent_fn() }}") is False
+
+
+# ---------------------------------------------------------------------------
 # Service validators — number or template
 # ---------------------------------------------------------------------------
 
@@ -184,6 +224,20 @@ class TestTemplatableValidators:
             {CONF_TEMP_LOW: 30, CONF_TEMP_HIGH: "{{ 25 }}"}, {}
         )
         assert result[CONF_TEMP_LOW] == 30
+
+    def test_condition_template_accepted(self):
+        tmpl = "{{ is_state('input_boolean.guest', 'on') }}"
+        result = validate_options_patch({CONF_MOTION_TEMPLATE: tmpl}, {})
+        assert result[CONF_MOTION_TEMPLATE] == tmpl
+
+    def test_condition_template_empty_accepted(self):
+        # Empty is accepted (no raise); treated as no-template at runtime.
+        result = validate_options_patch({CONF_MOTION_TEMPLATE: ""}, {})
+        assert result[CONF_MOTION_TEMPLATE] == ""
+
+    def test_condition_template_malformed_rejected(self):
+        with pytest.raises(ServiceValidationError):
+            validate_options_patch({CONF_MOTION_TEMPLATE: "{{ unclosed"}, {})
 
     @pytest.mark.parametrize(
         ("value", "expected"),

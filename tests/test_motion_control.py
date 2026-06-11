@@ -1,6 +1,7 @@
 """Tests for motion-based automatic control feature."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -10,6 +11,10 @@ from custom_components.adaptive_cover_pro.managers.motion import MotionManager
 
 def _make_coordinator_with_motion_mgr(sensors=None, timeout_seconds=300):
     """Create a MagicMock coordinator with a real MotionManager pre-configured."""
+    from custom_components.adaptive_cover_pro.coordinator import (
+        AdaptiveDataUpdateCoordinator,
+    )
+
     hass = MagicMock()
     logger = MagicMock()
 
@@ -23,6 +28,12 @@ def _make_coordinator_with_motion_mgr(sensors=None, timeout_seconds=300):
         timeout_seconds=timeout_seconds,
     )
     coordinator._motion_mgr = mgr
+
+    # Bind the real shared detect/clear policy so the motion handlers delegate
+    # to actual logic (sensors + template route through this).
+    coordinator._handle_occupancy_change = (
+        AdaptiveDataUpdateCoordinator._handle_occupancy_change.__get__(coordinator)
+    )
 
     return coordinator, hass
 
@@ -1295,3 +1306,110 @@ def test_configured_handlers_includes_motion_for_media_player_only():
     from custom_components.adaptive_cover_pro.sensor import _configured_handlers
 
     assert "motion" in _configured_handlers(_media_player_only_options())
+
+
+# ---------------------------------------------------------------------------
+# Occupancy template — extra condition source (issue #577 follow-up)
+# ---------------------------------------------------------------------------
+
+
+class TestMotionTemplate:
+    """MotionManager treats an optional truthy template as an occupancy source."""
+
+    def _mgr(self, hass, *, sensors=None, template=None):
+        mgr = MotionManager(hass=hass, logger=MagicMock())
+        mgr.update_config(sensors=sensors or [], timeout_seconds=300, template=template)
+        return mgr
+
+    async def test_disabled_when_nothing_configured(self, hass):
+        mgr = self._mgr(hass)
+        assert mgr.is_configured is False
+        assert mgr.is_motion_detected is True  # assume presence
+
+    async def test_template_standalone_truthy(self, hass):
+        mgr = self._mgr(hass, template="{{ true }}")
+        assert mgr.is_configured is True
+        assert mgr.template_active is True
+        assert mgr.is_motion_detected is True
+
+    async def test_template_standalone_falsy(self, hass):
+        mgr = self._mgr(hass, template="{{ false }}")
+        assert mgr.is_configured is True
+        assert mgr.template_active is False
+        assert mgr.is_motion_detected is False  # eligible for timeout
+
+    async def test_template_ors_with_sensors(self, hass):
+        hass.states.async_set("binary_sensor.motion", "off")
+        await hass.async_block_till_done()
+        mgr = self._mgr(hass, sensors=["binary_sensor.motion"], template="{{ true }}")
+        # Sensor off but template truthy → detected.
+        assert mgr.is_motion_detected is True
+
+    async def test_entity_template_tracks_state(self, hass):
+        hass.states.async_set("input_boolean.guest", "on")
+        await hass.async_block_till_done()
+        mgr = self._mgr(hass, template="{{ is_state('input_boolean.guest', 'on') }}")
+        assert mgr.is_motion_detected is True
+        hass.states.async_set("input_boolean.guest", "off")
+        await hass.async_block_till_done()
+        assert mgr.is_motion_detected is False
+
+
+@pytest.mark.asyncio
+async def test_async_check_motion_template_change_truthy_refreshes():
+    """A template flipping truthy records motion and refreshes immediately."""
+    from custom_components.adaptive_cover_pro.coordinator import (
+        AdaptiveDataUpdateCoordinator,
+    )
+
+    coordinator, _ = _make_coordinator_with_motion_mgr(sensors=[])
+    coordinator._motion_mgr.set_no_motion()  # timeout active → refresh needed
+    coordinator.state_change = False
+    coordinator.async_refresh = AsyncMock()
+
+    await AdaptiveDataUpdateCoordinator.async_check_motion_template_change(
+        coordinator, None, [SimpleNamespace(result="on")]
+    )
+
+    assert coordinator._motion_mgr.last_motion_time is not None
+    assert coordinator._motion_mgr.is_motion_timeout_active is False
+    assert coordinator.state_change is True
+    coordinator.async_refresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_check_motion_template_change_falsy_starts_timeout():
+    """A template clearing starts the debounce timeout when nothing else is active."""
+    from custom_components.adaptive_cover_pro.coordinator import (
+        AdaptiveDataUpdateCoordinator,
+    )
+
+    coordinator, _ = _make_coordinator_with_motion_mgr(sensors=[])
+    type(coordinator).is_motion_detected = property(lambda self: False)
+    coordinator._start_motion_timeout = Mock()
+
+    await AdaptiveDataUpdateCoordinator.async_check_motion_template_change(
+        coordinator, None, [SimpleNamespace(result="off")]
+    )
+
+    coordinator._start_motion_timeout.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_check_motion_template_change_error_is_falsy():
+    """A render error is treated as not-occupied (starts timeout)."""
+    from homeassistant.exceptions import TemplateError
+
+    from custom_components.adaptive_cover_pro.coordinator import (
+        AdaptiveDataUpdateCoordinator,
+    )
+
+    coordinator, _ = _make_coordinator_with_motion_mgr(sensors=[])
+    type(coordinator).is_motion_detected = property(lambda self: False)
+    coordinator._start_motion_timeout = Mock()
+
+    await AdaptiveDataUpdateCoordinator.async_check_motion_template_change(
+        coordinator, None, [SimpleNamespace(result=TemplateError("boom"))]
+    )
+
+    coordinator._start_motion_timeout.assert_called_once()

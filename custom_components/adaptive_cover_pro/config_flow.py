@@ -86,6 +86,7 @@ from .const import (
     CONF_MODE,
     CONF_MOTION_MEDIA_PLAYERS,
     CONF_MOTION_SENSORS,
+    CONF_MOTION_TEMPLATE,
     CONF_MOTION_TIMEOUT,
     CONF_MOTION_TIMEOUT_MODE,
     DEFAULT_MOTION_TIMEOUT_MODE,
@@ -504,6 +505,7 @@ MOTION_OVERRIDE_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_MOTION_MEDIA_PLAYERS, default=[]
         ): config_fields.media_player_selector(multiple=True),
+        vol.Optional(CONF_MOTION_TEMPLATE): selector.TemplateSelector(),
         vol.Optional(
             CONF_MOTION_TIMEOUT, default=DEFAULT_MOTION_TIMEOUT
         ): selector.NumberSelector(
@@ -1035,8 +1037,9 @@ _SUMMARY_LABELS_EN: dict[str, str] = {
     # --- Motion (75) ---
     "rules.motion": (
         "🚶 Motion-based: if no occupancy for {motion_timeout}s "
-        "({n} {sensor_word}) → {action}"
+        "({sources}) → {action}"
     ),
+    "motion.template_source": "occupancy template",
     "motion.action_hold": (
         "covers hold current position (return to default when sun leaves FOV)"
     ),
@@ -1269,9 +1272,11 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
         ]
     )
     from .helpers import motion_entities
+    from .templates import is_template_string
 
     _motion_sources = motion_entities(config)
-    has_motion = bool(_motion_sources)
+    _has_motion_template = is_template_string(config.get(CONF_MOTION_TEMPLATE))
+    has_motion = bool(_motion_sources) or _has_motion_template
     # Build per-slot custom position data:
     # list of (slot, entity_id, position, priority, use_my, tilt, tilt_only)
     _custom_slots: list[tuple[int, str, int, int, bool, int | None, bool]] = []
@@ -1524,6 +1529,12 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     if has_motion:
         n = len(_motion_sources)
         sensor_word = L["words.source_singular"] if n == 1 else L["words.source_plural"]
+        src_parts = []
+        if n:
+            src_parts.append(f"{n} {sensor_word}")
+        if _has_motion_template:
+            src_parts.append(L["motion.template_source"])
+        sources = ", ".join(src_parts)
         if timeout_mode == MOTION_TIMEOUT_MODE_HOLD:
             action = L["motion.action_hold"]
         else:
@@ -1531,8 +1542,7 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
         lines.append(
             L["rules.motion"].format(
                 motion_timeout=motion_timeout,
-                n=n,
-                sensor_word=sensor_word,
+                sources=sources,
                 action=action,
             )
             + _badge(75)
@@ -2145,6 +2155,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
         {
             CONF_MOTION_SENSORS,
             CONF_MOTION_MEDIA_PLAYERS,
+            CONF_MOTION_TEMPLATE,
         }
     ),
     # Legacy alias: full union of motion_override_values + motion_override_sensors
@@ -2152,6 +2163,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
         {
             CONF_MOTION_SENSORS,
             CONF_MOTION_MEDIA_PLAYERS,
+            CONF_MOTION_TEMPLATE,
             CONF_MOTION_TIMEOUT,
             CONF_MOTION_TIMEOUT_MODE,
         }
