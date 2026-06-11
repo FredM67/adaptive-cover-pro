@@ -86,10 +86,12 @@ from custom_components.adaptive_cover_pro.const import (
     CONF_WEATHER_WIND_SPEED_SENSOR,
     CONF_WEATHER_WIND_SPEED_THRESHOLD,
     CONF_TRANSIT_TIMEOUT,
+    CONF_FOV_MODE,
     CONF_WINDOW_DEPTH,
     CONF_WINDOW_WIDTH,
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
     CoverType,
+    FovMode,
 )
 
 # ---------------------------------------------------------------------------
@@ -2523,3 +2525,41 @@ def test_summary_without_entities_uses_offset_annotation():
     assert "+30" in summary or "30 min" in summary
     # The entity IDs should NOT appear
     assert "sun2" not in summary
+
+
+# ---------------------------------------------------------------------------
+# FOV-mode computed-FOV summary line (#565)
+# ---------------------------------------------------------------------------
+
+
+def test_summary_shows_computed_fov_in_measurements_mode():
+    """Measurements mode appends a read-only 'Computed FOV ≈ ...' summary line."""
+    cfg = _minimal_vertical()
+    cfg[CONF_FOV_MODE] = FovMode.MEASUREMENTS
+    cfg[CONF_WINDOW_WIDTH] = 1.2
+    cfg[CONF_WINDOW_DEPTH] = 0.5
+    summary = _build_config_summary(cfg, CoverType.BLIND)
+    # width 1.2 / depth 0.5 → atan(1.2) ≈ 50.19° → 50
+    assert "Computed FOV" in summary
+    assert "50°/50°" in summary
+    assert "1.2 m width" in summary
+    assert "0.5 m reveal depth" in summary
+
+
+def test_summary_omits_computed_fov_in_angles_mode():
+    """Angles mode (the default) never shows the computed-FOV line."""
+    cfg = _minimal_vertical()
+    cfg[CONF_FOV_MODE] = FovMode.ANGLES
+    cfg[CONF_WINDOW_WIDTH] = 1.2
+    cfg[CONF_WINDOW_DEPTH] = 0.5
+    summary = _build_config_summary(cfg, CoverType.BLIND)
+    assert "Computed FOV" not in summary
+
+
+def test_summary_omits_computed_fov_when_mode_absent():
+    """Absent fov_mode (back-compat) behaves as angles — no computed line."""
+    cfg = _minimal_vertical()
+    cfg[CONF_WINDOW_WIDTH] = 1.2
+    cfg[CONF_WINDOW_DEPTH] = 0.5
+    summary = _build_config_summary(cfg, CoverType.BLIND)
+    assert "Computed FOV" not in summary

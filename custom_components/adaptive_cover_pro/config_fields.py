@@ -77,6 +77,7 @@ from .const import (
     CONF_FORCE_OVERRIDE_POSITION,
     CONF_FORCE_OVERRIDE_SENSORS,
     CONF_FOV_LEFT,
+    CONF_FOV_MODE,
     CONF_FOV_RIGHT,
     CONF_HEIGHT_WIN,
     CONF_INTERP,
@@ -436,6 +437,20 @@ _SUN_TRACKING_SPECS = _spec(
         default=DEFAULT_WINDOW_AZIMUTH,
         required=True,
         make_selector=_number(minimum=0, maximum=359, unit="°"),
+    ),
+    # FOV-mode selector (#565). Vertical-blind only — BlindPolicy advertises it
+    # as a sun-tracking extra; awning/tilt never render it. Declared here so it
+    # carries SELECT validation metadata and a single-sourced default.
+    FieldSpec(
+        CONF_FOV_MODE,
+        SECTION_SUN_TRACKING,
+        ValidatorKind.SELECT,
+        default=const.FovMode.ANGLES.value,
+        select_options=tuple(m.value for m in const.FovMode),
+        make_selector=_select(
+            *[m.value for m in const.FovMode],
+            translation_key="fov_mode",
+        ),
     ),
     FieldSpec(
         CONF_FOV_LEFT,

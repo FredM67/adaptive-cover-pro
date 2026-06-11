@@ -77,6 +77,20 @@ def geometry_vertical_schema(hass: HomeAssistant | None = None) -> vol.Schema:
 GEOMETRY_VERTICAL_SCHEMA = geometry_vertical_schema()
 
 
+def _as_optional(marker: vol.Marker) -> vol.Optional:
+    """Re-emit *marker* as ``vol.Optional``, preserving its default if any.
+
+    Used so the fov sliders are not ``vol.Required`` (#565): a Required field
+    triggers HA's frontend client-side "all required fields filled" check,
+    which blocks switching to Measurements mode before the backend can
+    re-render with the sliders hidden. The existing ``default`` callable is
+    reused so no ``90`` literal is duplicated here.
+    """
+    if marker.default is vol.UNDEFINED:
+        return vol.Optional(str(marker))
+    return vol.Optional(str(marker), default=marker.default)
+
+
 class BlindPolicy(CoverTypePolicy, register=True):
     """Cover that moves vertically (raise/lower)."""
 
@@ -84,6 +98,47 @@ class BlindPolicy(CoverTypePolicy, register=True):
     axes: ClassVar[tuple[CoverAxis, ...]] = (POSITION_AXIS,)
     supports_glare_zones = True
     supports_return_to_default_switch = True
+    supports_fov_mode = True
+
+    def fov_mode_schema(
+        self,
+        base: vol.Schema,
+        mode: str | None = None,
+    ) -> vol.Schema:
+        """Insert the FOV-mode selector; hide the fov sliders in Measurements.
+
+        The mode selector is placed immediately before the fov sliders. In
+        ``MEASUREMENTS`` mode the ``fov_left``/``fov_right`` sliders are dropped
+        (the FOV is derived from window width + reveal depth at save time); in
+        ``ANGLES`` mode they stay exactly as today.
+        """
+        from .. import config_fields as cf
+        from ..const import CONF_FOV_LEFT, CONF_FOV_MODE, CONF_FOV_RIGHT, FovMode
+
+        resolved = mode if mode is not None else FovMode.ANGLES
+        hide_sliders = str(resolved) == FovMode.MEASUREMENTS
+
+        spec = cf.FIELD_SPECS[CONF_FOV_MODE]
+        mode_marker, mode_selector = spec.to_marker(None, None)
+
+        rebuilt: dict = {}
+        inserted = False
+        for marker, sel in base.schema.items():
+            key = str(marker)
+            if key in (CONF_FOV_LEFT, CONF_FOV_RIGHT):
+                if not inserted:
+                    rebuilt[mode_marker] = mode_selector
+                    inserted = True
+                if hide_sliders:
+                    continue
+                # Optional so the frontend Required check never blocks a mode
+                # switch (#565); default preserved, so ANGLES is unchanged.
+                rebuilt[_as_optional(marker)] = sel
+                continue
+            rebuilt[marker] = sel
+        if not inserted:
+            rebuilt[mode_marker] = mode_selector
+        return vol.Schema(rebuilt)
 
     def section_order(self, options: dict | None = None) -> tuple[str, ...]:
         """Vertical blinds add the glare-zones section after the blind spot."""
@@ -94,12 +149,12 @@ class BlindPolicy(CoverTypePolicy, register=True):
         return tuple(order)
 
     def extra_field_keys(self, section: str) -> tuple[str, ...]:
-        """Add the glare-zones enable toggle to the sun-tracking section."""
+        """Add the FOV-mode selector + glare-zones toggle to sun tracking."""
         from .. import config_fields as cf
-        from ..const import CONF_ENABLE_GLARE_ZONES
+        from ..const import CONF_ENABLE_GLARE_ZONES, CONF_FOV_MODE
 
         if section == cf.SECTION_SUN_TRACKING:
-            return (CONF_ENABLE_GLARE_ZONES,)
+            return (CONF_FOV_MODE, CONF_ENABLE_GLARE_ZONES)
         return ()
 
     def wiki_anchor(self) -> str:
@@ -155,8 +210,25 @@ class BlindPolicy(CoverTypePolicy, register=True):
         return selector.EntityFilterSelectorConfig(domain="cover")
 
     def summary_geometry_lines(self, config: dict[str, Any]) -> list[str]:
-        """Render the window-dimensions block."""
-        return window_dimensions_lines(config)
+        """Render the window-dimensions block, plus the computed FOV (#565).
+
+        In Measurements FOV mode the FOV is derived from the window width +
+        reveal depth, so the summary appends a read-only "Computed FOV ≈ …"
+        line via the shared ``computed_fov_line`` helper (same formula as the
+        save path — no second arctan).
+        """
+        from ..const import CONF_FOV_MODE, FovMode
+        from ..engine.sun_geometry import computed_fov_line
+
+        lines = window_dimensions_lines(config)
+        if str(config.get(CONF_FOV_MODE)) == FovMode.MEASUREMENTS:
+            lines.append(
+                computed_fov_line(
+                    config.get(CONF_WINDOW_WIDTH),
+                    config.get(CONF_WINDOW_DEPTH),
+                )
+            )
+        return lines
 
     def cover_capability_warnings(self, known: dict[str, dict]) -> list[str]:
         """Warn when no bound entity advertises ``set_position``."""

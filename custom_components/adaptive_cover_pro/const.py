@@ -96,6 +96,7 @@ CONF_FOV_LEFT = "fov_left"  # left half-FOV from azimuth, degrees 0-180
 CONF_FOV_RIGHT = "fov_right"  # right half-FOV from azimuth, degrees 0-180
 DEFAULT_FOV_LEFT = 90  # degrees; matches config flow default
 DEFAULT_FOV_RIGHT = 90  # degrees; matches config flow default
+CONF_FOV_MODE = "fov_mode"  # how horizontal tracking is defined; see FovMode
 CONF_ENTITIES = "group"  # list of HA cover entity_ids controlled
 CONF_ENABLE_PROXY_COVER = "enable_proxy_cover"  # opt-in proxy cover platform
 DEFAULT_ENABLE_PROXY_COVER = False
@@ -927,6 +928,26 @@ _RANGE_VENETIAN_BACKROTATE_PUBLISH_LAG = (
     MIN_VENETIAN_BACKROTATE_PUBLISH_LAG,
     MAX_VENETIAN_BACKROTATE_PUBLISH_LAG,
 )  # CONF_VENETIAN_BACKROTATE_PUBLISH_LAG, seconds
+
+
+# Defined here (above the ``config_fields`` import) because ``config_fields``
+# reads ``FovMode`` at module-import time to build the FOV-mode FieldSpec. Same
+# import-ordering rule as ``VENETIAN_MODES`` above — names config_fields needs
+# must exist before the ``from .config_fields import OPTION_RANGES`` line.
+class FovMode(StrEnum):
+    """How the horizontal field-of-view is defined for a vertical blind (#565).
+
+    ``ANGLES`` (default) shows the manual ``fov_left``/``fov_right`` sliders —
+    identical to historical behaviour. ``MEASUREMENTS`` hides those sliders and
+    derives a symmetric FOV from the window width + reveal depth via
+    :func:`engine.sun_geometry.fov_from_reveal`; the derived value is stored
+    into ``fov_left``/``fov_right`` at save time so the engine is unchanged.
+
+    Absent from a config entry → treated as ``ANGLES`` (back-compat).
+    """
+
+    ANGLES = "angles"
+    MEASUREMENTS = "measurements"
 
 
 # ``OPTION_RANGES`` is now assembled from the single field registry in
