@@ -167,6 +167,7 @@ from .const import (
     DEFAULT_MAX_COVERAGE_STEPS,
     DEFAULT_MINIMIZE_MOVEMENTS,
     DEFAULT_MOTION_TEMPLATE_MODE,
+    DEFAULT_TEMPLATE_COMBINE_MODE,
     DEFAULT_MOTION_TIMEOUT,
     DEFAULT_MOTION_TIMEOUT_MODE,
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
@@ -265,11 +266,11 @@ def position_slider() -> selector.NumberSelector:
 
 
 def priority_slider() -> selector.NumberSelector:
-    """Return a number selector for pipeline priority (1-99)."""
+    """Return a number selector for pipeline priority (1-100; 100 = safety)."""
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=1,
-            max=99,
+            max=100,
             step=1,
             mode=selector.NumberSelectorMode.SLIDER,
         )
@@ -947,6 +948,8 @@ def _custom_position_base_specs() -> list[FieldSpec]:
     """Per-slot base custom-position fields (no tilt)."""
     specs: list[FieldSpec] = []
     for slot in CUSTOM_POSITION_SLOTS.values():
+        # Legacy single-sensor key: still settable (rollback mirror target) but
+        # superseded by the `sensors` list in the config-flow schema.
         specs.append(
             FieldSpec(
                 slot["sensor"],
@@ -954,6 +957,38 @@ def _custom_position_base_specs() -> list[FieldSpec]:
                 ValidatorKind.ENTITY,
                 clearable=True,
                 make_selector=_const(binary_on_selector),
+            )
+        )
+        specs.append(
+            FieldSpec(
+                slot["sensors"],
+                SECTION_CUSTOM_POSITION,
+                ValidatorKind.ENTITIES,
+                default=[],
+                make_selector=_const(lambda: binary_on_selector(multiple=True)),
+            )
+        )
+        specs.append(
+            FieldSpec(
+                slot["template"],
+                SECTION_CUSTOM_POSITION,
+                ValidatorKind.NONE,
+                clearable=True,
+                make_selector=_const(lambda: selector.TemplateSelector()),
+            )
+        )
+        specs.append(
+            FieldSpec(
+                slot["template_mode"],
+                SECTION_CUSTOM_POSITION,
+                ValidatorKind.SELECT,
+                default=DEFAULT_TEMPLATE_COMBINE_MODE,
+                select_options=tuple(m.value for m in const.TemplateCombineMode),
+                make_selector=_select(
+                    *[m.value for m in const.TemplateCombineMode],
+                    mode=selector.SelectSelectorMode.LIST,
+                    translation_key="template_combine_mode",
+                ),
             )
         )
         specs.append(

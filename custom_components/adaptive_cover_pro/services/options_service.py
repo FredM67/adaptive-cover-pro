@@ -350,10 +350,22 @@ FIELD_VALIDATORS: dict[str, Any] = {
     CONF_FORCE_OVERRIDE_SENSORS: _entities_v(),
     CONF_FORCE_OVERRIDE_POSITION: _range(CONF_FORCE_OVERRIDE_POSITION),
     CONF_FORCE_OVERRIDE_MIN_MODE: _bool_v(),
-    # Custom positions 1–4 — sensor/min_mode/use_my are non-numeric;
+    # Custom positions 1–5 — sensor(s)/template/min_mode/use_my are non-numeric;
     # position/priority pull their range from OPTION_RANGES.
     **{
         slot_keys["sensor"]: _entity_v() for slot_keys in CUSTOM_POSITION_SLOTS.values()
+    },
+    **{
+        slot_keys["sensors"]: _entities_v()
+        for slot_keys in CUSTOM_POSITION_SLOTS.values()
+    },
+    **{
+        slot_keys["template"]: _template_or_none
+        for slot_keys in CUSTOM_POSITION_SLOTS.values()
+    },
+    **{
+        slot_keys["template_mode"]: _select_v(*[m.value for m in TemplateCombineMode])
+        for slot_keys in CUSTOM_POSITION_SLOTS.values()
     },
     **{
         slot_keys["position"]: _range(slot_keys["position"])

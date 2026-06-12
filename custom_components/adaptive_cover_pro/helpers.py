@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, split_entity_id
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_MOTION_MEDIA_PLAYERS, CONF_MOTION_SENSORS
+from .templates import is_template_string
 
 if TYPE_CHECKING:
     from homeassistant.core import State
@@ -37,6 +38,37 @@ def motion_entities(options: Mapping) -> list[str]:
     return list(options.get(CONF_MOTION_SENSORS, [])) + list(
         options.get(CONF_MOTION_MEDIA_PLAYERS, [])
     )
+
+
+def custom_position_slot_sensors(
+    options: Mapping, slot_keys: Mapping[str, str]
+) -> list[str]:
+    """Return a custom-position slot's trigger sensors.
+
+    The new ``sensors`` list key wins whenever present (issue #563); otherwise
+    the legacy single-sensor key is wrapped, so entries never saved through the
+    multi-sensor UI keep working — including after a rollback-then-upgrade
+    cycle where only the legacy key was edited.
+    """
+    sensors = options.get(slot_keys["sensors"])
+    if sensors is not None:
+        return [s for s in sensors if s]
+    legacy = options.get(slot_keys["sensor"])
+    return [legacy] if legacy else []
+
+
+def custom_position_slot_configured(
+    options: Mapping, slot_keys: Mapping[str, str]
+) -> bool:
+    """Return True when a custom-position slot is fully configured.
+
+    Single source of truth for the "slot participates" gate: a slot needs a
+    trigger (at least one sensor, or a condition template) and a position.
+    """
+    has_trigger = bool(
+        custom_position_slot_sensors(options, slot_keys)
+    ) or is_template_string(options.get(slot_keys["template"]))
+    return has_trigger and options.get(slot_keys["position"]) is not None
 
 
 def get_safe_state(hass: HomeAssistant, entity_id: str):
