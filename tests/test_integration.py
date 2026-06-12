@@ -181,7 +181,6 @@ def _build_diagnostic_context(
     pipeline_result,
     *,
     climate_mode: bool = False,
-    force_override_position: int = 0,
     final_state: int = 0,
 ) -> DiagnosticContext:
     """Build a DiagnosticContext from real cover and pipeline result objects."""
@@ -197,7 +196,6 @@ def _build_diagnostic_context(
         end_time=None,
         automatic_control=True,
         final_state=final_state,
-        force_override_position=force_override_position,
     )
 
 

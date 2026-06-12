@@ -814,7 +814,9 @@ class ControlStatus:
     MANUAL_OVERRIDE = "manual_override"  # manual override active
     AUTOMATIC_CONTROL_OFF = "automatic_control_off"  # auto-control toggled off
     SUN_NOT_VISIBLE = "sun_not_visible"  # sun outside elevation/FOV
-    FORCE_OVERRIDE_ACTIVE = "force_override_active"  # priority-100 handler
+    # Deprecated (issue #563): no longer produced — force override merged into
+    # custom-position slot 5. Kept for card/diagnostics value-set stability.
+    FORCE_OVERRIDE_ACTIVE = "force_override_active"
     WEATHER_OVERRIDE_ACTIVE = "weather_override_active"  # priority-90 handler
     MOTION_TIMEOUT = "motion_timeout"  # priority-75 handler fired
 
@@ -1133,7 +1135,9 @@ class ControlMethod(StrEnum):
     """No occupancy detected after timeout; cover returns to default position."""
 
     FORCE = "force_override"
-    """A force override binary sensor is active; cover moves to the override position."""
+    """Deprecated (issue #563): no longer produced — force override merged into
+    custom-position slot 5 (CUSTOM_POSITION at safety priority). Kept for
+    card/diagnostics value-set stability."""
 
     WEATHER = "weather_override"
     """Weather conditions (wind/rain/storm) exceed thresholds; covers retract for safety."""

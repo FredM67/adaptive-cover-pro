@@ -57,8 +57,6 @@ from .const import (
     CONF_DEFAULT_HEIGHT,
     CONF_DRY_RUN,
     CONF_ENTITIES,
-    CONF_FORCE_OVERRIDE_POSITION,
-    CONF_FORCE_OVERRIDE_SENSORS,
     CONF_FOV_LEFT,
     CONF_FOV_RIGHT,
     CONF_INTERP,
@@ -2229,12 +2227,6 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self._pipeline_result is not None
                 and self._pipeline_result.skip_command
                 and self._pipeline_result.control_method == ControlMethod.MOTION
-            ),
-            force_override_sensors=self.config_entry.options.get(
-                CONF_FORCE_OVERRIDE_SENSORS, []
-            ),
-            force_override_position=self.config_entry.options.get(
-                CONF_FORCE_OVERRIDE_POSITION, 0
             ),
             event_timeline=self._event_buffer.snapshot() or None,
             cover_command_state=self._cmd_svc.get_all_entity_state_snapshots() or None,
