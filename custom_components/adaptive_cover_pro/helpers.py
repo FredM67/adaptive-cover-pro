@@ -12,7 +12,11 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, split_entity_id
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_MOTION_MEDIA_PLAYERS, CONF_MOTION_SENSORS
+from .const import (
+    CONF_MOTION_MEDIA_PLAYERS,
+    CONF_MOTION_SENSORS,
+    CUSTOM_POSITION_SLOTS,
+)
 from .templates import is_template_string
 
 if TYPE_CHECKING:
@@ -55,6 +59,27 @@ def custom_position_slot_sensors(
         return [s for s in sensors if s]
     legacy = options.get(slot_keys["sensor"])
     return [legacy] if legacy else []
+
+
+def mirror_legacy_slot_sensor_keys(options: dict) -> None:
+    """Mirror each slot's first sensor into the legacy single-sensor key.
+
+    Called after every save path that writes the ``sensors`` list (config
+    flow, options flow, ``set_custom_position`` service) so a rollback to the
+    previous integration version still finds a working single-sensor config
+    (issue #563). Slots whose list key is absent are left untouched — their
+    legacy key is still the live source via the read fallback.
+    """
+    for slot_keys in CUSTOM_POSITION_SLOTS.values():
+        if slot_keys["sensors"] not in options:
+            continue
+        sensors = options[slot_keys["sensors"]] or []
+        if sensors:
+            options[slot_keys["sensor"]] = sensors[0]
+        elif options.get(slot_keys["sensor"]):
+            # Slot cleared: null the stale mirror so neither old nor new code
+            # resurrects it. Never-configured slots get no key at all.
+            options[slot_keys["sensor"]] = None
 
 
 def custom_position_slot_configured(

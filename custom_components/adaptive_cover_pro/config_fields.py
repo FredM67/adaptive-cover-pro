@@ -1081,14 +1081,27 @@ def _custom_position_tilt_specs() -> list[FieldSpec]:
 def custom_position_schema(*, include_tilt: bool = False) -> vol.Schema:
     """Build the custom-position section schema (slot-interleaved).
 
-    Reproduces the legacy ``_build_custom_position_schema_dict`` ordering:
-    per-slot sensor/position/priority/min_mode/use_my, with tilt/tilt_only
-    interleaved per slot when *include_tilt* (venetian), then global
-    default/sunset tilt at the end.
+    Per-slot sensors/template/template_mode/position/priority/min_mode/use_my,
+    with tilt/tilt_only interleaved per slot when *include_tilt* (venetian),
+    then global default/sunset tilt at the end. The legacy single-sensor key
+    is deliberately absent — it lives on only as a rollback mirror written at
+    save time (issue #563).
     """
     schema: dict = {}
     for slot in CUSTOM_POSITION_SLOTS.values():
-        schema[vol.Optional(slot["sensor"])] = binary_on_selector()
+        schema[vol.Optional(slot["sensors"], default=[])] = binary_on_selector(
+            multiple=True
+        )
+        schema[vol.Optional(slot["template"])] = selector.TemplateSelector()
+        schema[
+            vol.Optional(slot["template_mode"], default=DEFAULT_TEMPLATE_COMBINE_MODE)
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[m.value for m in const.TemplateCombineMode],
+                mode=selector.SelectSelectorMode.LIST,
+                translation_key="template_combine_mode",
+            )
+        )
         schema[vol.Optional(slot["position"])] = position_slider()
         schema[vol.Optional(slot["priority"])] = priority_slider()
         schema[vol.Optional(slot["min_mode"], default=False)] = (
