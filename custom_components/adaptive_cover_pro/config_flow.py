@@ -349,6 +349,15 @@ POSITION_SCHEMA = vol.Schema(
                 unit_of_measurement="%",
             )
         ),
+        vol.Optional(CONF_POSITION_TOLERANCE, default=3): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=20,
+                step=1,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="%",
+            )
+        ),
         vol.Optional(CONF_INVERSE_STATE, default=False): selector.BooleanSelector(),
         vol.Optional(CONF_INTERP, default=False): selector.BooleanSelector(),
     }
@@ -372,15 +381,6 @@ AUTOMATION_SCHEMA = vol.Schema(
             selector.NumberSelectorConfig(
                 min=1,
                 max=90,
-                step=1,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="%",
-            )
-        ),
-        vol.Optional(CONF_POSITION_TOLERANCE, default=3): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0,
-                max=20,
                 step=1,
                 mode=selector.NumberSelectorMode.SLIDER,
                 unit_of_measurement="%",
@@ -2170,6 +2170,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_SUNSET_TIME_ENTITY,
             CONF_SUNRISE_TIME_ENTITY,
             CONF_OPEN_CLOSE_THRESHOLD,
+            CONF_POSITION_TOLERANCE,
             CONF_INVERSE_STATE,
             CONF_INTERP,
             CONF_RETURN_SUNSET,
@@ -2186,7 +2187,6 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
     "automation": frozenset(
         {
             CONF_DELTA_POSITION,
-            CONF_POSITION_TOLERANCE,
             CONF_DELTA_TIME,
             CONF_START_TIME,
             CONF_START_ENTITY,

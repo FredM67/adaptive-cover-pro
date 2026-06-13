@@ -718,7 +718,7 @@ _AUTOMATION_SPECS = _spec(
     ),
     FieldSpec(
         CONF_POSITION_TOLERANCE,
-        SECTION_AUTOMATION,
+        SECTION_POSITION,
         ValidatorKind.RANGE,
         rng=const._RANGE_POSITION_TOLERANCE,
         default=3,
