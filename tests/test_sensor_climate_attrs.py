@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.adaptive_cover_pro.const import (
     CONF_OUTSIDE_THRESHOLD,
@@ -20,7 +19,10 @@ from custom_components.adaptive_cover_pro.const import (
     CoverType,
     CONF_SENSOR_TYPE,
 )
-from custom_components.adaptive_cover_pro.pipeline.types import DecisionStep, PipelineResult
+from custom_components.adaptive_cover_pro.pipeline.types import (
+    DecisionStep,
+    PipelineResult,
+)
 from custom_components.adaptive_cover_pro.sensor import AdaptiveCoverClimateStatusSensor
 
 
@@ -100,7 +102,9 @@ def _make_pipeline_result_climate_off(position: int = 50) -> PipelineResult:
         control_method=ControlMethod.DEFAULT,
         reason="default",
         decision_trace=[
-            DecisionStep(handler="default", matched=True, reason="default", position=position)
+            DecisionStep(
+                handler="default", matched=True, reason="default", position=position
+            )
         ],
     )
 
@@ -184,7 +188,9 @@ class TestClimateStatusThresholdAttrs:
         )
         assert "temp_low" in attrs, "temp_low must be present in standby"
         assert "temp_high" in attrs, "temp_high must be present in standby"
-        assert "temp_summer_outside" in attrs, "temp_summer_outside must be present in standby"
+        assert (
+            "temp_summer_outside" in attrs
+        ), "temp_summer_outside must be present in standby"
 
     def test_threshold_attrs_values_in_standby(self) -> None:
         """Threshold values from config_entry.options are present in standby."""
@@ -251,15 +257,12 @@ class TestClimateStatusInactiveReasonAttr:
 
     def test_inactive_reason_other_mode_when_outprioritized(self) -> None:
         """inactive_reason=other_mode_active when climate outprioritized in trace."""
-        from custom_components.adaptive_cover_pro.pipeline.types import ClimateOptions
-        from custom_components.adaptive_cover_pro.state.climate_provider import (
-            ClimateReadings,
-        )
-        from custom_components.adaptive_cover_pro.pipeline.types import PipelineSnapshot
 
         # Build a coordinator with a snapshot where climate is enabled
         coord = _make_coordinator(
-            diagnostics={"climate_conditions": {"is_summer": False, "is_winter": False}},
+            diagnostics={
+                "climate_conditions": {"is_summer": False, "is_winter": False}
+            },
             pipeline_result=_make_pipeline_result_climate_outprioritized(),
         )
         # Patch the snapshot onto coordinator
