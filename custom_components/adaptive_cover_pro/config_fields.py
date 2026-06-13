@@ -63,7 +63,6 @@ from .const import (
     CONF_DEFAULT_TILT,
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
-    CONF_DISABLE_POSITION_MATCHING,
     CONF_DISTANCE,
     CONF_DRY_RUN,
     CONF_ENABLE_BLIND_SPOT,
@@ -71,6 +70,7 @@ from .const import (
     CONF_ENABLE_MAX_POSITION,
     CONF_ENABLE_MIN_POSITION,
     CONF_ENABLE_MY_POSITION_ENTITIES,
+    CONF_ENABLE_POSITION_MATCHING,
     CONF_ENABLE_SUN_TRACKING,
     CONF_END_ENTITY,
     CONF_END_TIME,
@@ -726,10 +726,10 @@ _AUTOMATION_SPECS = _spec(
         make_selector=_number(minimum=0, maximum=20, step=1, unit="%"),
     ),
     FieldSpec(
-        CONF_DISABLE_POSITION_MATCHING,
+        CONF_ENABLE_POSITION_MATCHING,
         SECTION_POSITION,
         ValidatorKind.BOOL,
-        default=const.DEFAULT_DISABLE_POSITION_MATCHING,
+        default=const.DEFAULT_ENABLE_POSITION_MATCHING,
         make_selector=_bool(),
     ),
     FieldSpec(

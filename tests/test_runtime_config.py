@@ -16,7 +16,7 @@ from custom_components.adaptive_cover_pro.const import (
     CONF_DEBUG_EVENT_BUFFER_SIZE,
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
-    CONF_DISABLE_POSITION_MATCHING,
+    CONF_ENABLE_POSITION_MATCHING,
     CONF_END_ENTITY,
     CONF_END_TIME,
     CONF_ENTITIES,
@@ -111,16 +111,16 @@ def test_position_tolerance_reads_provided_value() -> None:
     assert rc.tracking.position_tolerance == 8
 
 
-def test_disable_position_matching_defaults_false() -> None:
-    """Empty options → position matching stays enabled (issue #591)."""
+def test_enable_position_matching_defaults_false() -> None:
+    """Empty options → position matching is off by default (issue #591)."""
     rc = RuntimeConfig.from_options({})
-    assert rc.tracking.disable_position_matching is False
+    assert rc.tracking.enable_position_matching is False
 
 
-def test_disable_position_matching_reads_provided_value() -> None:
-    """The disable toggle flows through to the tracking slice (issue #591)."""
-    rc = RuntimeConfig.from_options({CONF_DISABLE_POSITION_MATCHING: True})
-    assert rc.tracking.disable_position_matching is True
+def test_enable_position_matching_reads_provided_value() -> None:
+    """The enable toggle flows through to the tracking slice (issue #591)."""
+    rc = RuntimeConfig.from_options({CONF_ENABLE_POSITION_MATCHING: True})
+    assert rc.tracking.enable_position_matching is True
 
 
 def test_from_options_reads_every_field_from_provided_dict() -> None:

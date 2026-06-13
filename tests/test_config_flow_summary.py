@@ -235,28 +235,29 @@ def test_dry_run_banner_absent_when_disabled():
     assert "Dry-run mode" not in _build_config_summary({}, CoverType.BLIND)
 
 
-def test_summary_shows_position_matching_off_when_disabled():
-    """The disable toggle surfaces a warning line in the summary (issue #591)."""
+def test_summary_shows_position_matching_on_when_enabled():
+    """Enabling matching surfaces the 'on' line in the summary (issue #591)."""
     from custom_components.adaptive_cover_pro.const import (
-        CONF_DISABLE_POSITION_MATCHING,
+        CONF_ENABLE_POSITION_MATCHING,
     )
 
     summary = _build_config_summary(
-        {CONF_DISABLE_POSITION_MATCHING: True}, CoverType.BLIND
+        {CONF_ENABLE_POSITION_MATCHING: True}, CoverType.BLIND
     )
-    assert "Position matching off" in summary
+    assert "Position matching on" in summary
+    assert "Position matching off" not in summary
 
 
-def test_summary_omits_position_matching_off_when_enabled():
-    """No warning line when the toggle is off or unset (issue #591)."""
+def test_summary_shows_position_matching_off_by_default():
+    """Default/unset → matching is off, summary shows the 'off' line (issue #591)."""
     from custom_components.adaptive_cover_pro.const import (
-        CONF_DISABLE_POSITION_MATCHING,
+        CONF_ENABLE_POSITION_MATCHING,
     )
 
-    assert "Position matching off" not in _build_config_summary(
-        {CONF_DISABLE_POSITION_MATCHING: False}, CoverType.BLIND
-    )
-    assert "Position matching off" not in _build_config_summary({}, CoverType.BLIND)
+    for cfg in ({CONF_ENABLE_POSITION_MATCHING: False}, {}):
+        summary = _build_config_summary(cfg, CoverType.BLIND)
+        assert "Position matching off" in summary
+        assert "Position matching on" not in summary
 
 
 def test_entity_included_in_your_cover():

@@ -199,11 +199,12 @@ class CoverCommandService:
         # Synced by the coordinator each update cycle from the Integration Enabled switch.
         self._enabled: bool = True
 
-        # When True, the reconciliation pass never resends on a position mismatch
-        # (issue #591). The cover is commanded once and left where it lands; a
-        # settled landing-delta then surfaces as a manual override instead of a
-        # retry. Synced by the coordinator each update cycle.
-        self._disable_position_matching: bool = False
+        # When True, the reconciliation pass resends on a position mismatch until
+        # the cover reaches the target. When False (the default), the cover is
+        # commanded once and left where it lands; a settled landing-delta then
+        # surfaces as a manual override instead of a retry (issue #591). Synced by
+        # the coordinator each update cycle.
+        self._enable_position_matching: bool = False
 
         # Dry-run mode — when True, no outbound cover commands are sent, but the
         # full update cycle (pipeline, diagnostics, sensors) runs normally.
@@ -427,19 +428,20 @@ class CoverCommandService:
         self._enabled = value
 
     @property
-    def disable_position_matching(self) -> bool:
-        """Whether the reconciliation resend is suppressed (issue #591)."""
-        return self._disable_position_matching
+    def enable_position_matching(self) -> bool:
+        """Whether the reconciliation pass resends until the cover arrives (#591)."""
+        return self._enable_position_matching
 
-    @disable_position_matching.setter
-    def disable_position_matching(self, value: bool) -> None:
-        """Update the disable-position-matching flag.
+    @enable_position_matching.setter
+    def enable_position_matching(self, value: bool) -> None:
+        """Update the enable-position-matching flag.
 
-        When True, the reconciliation pass never resends on a mismatch — the
-        cover is commanded once and left where it lands.  Synced by the
-        coordinator each update cycle from the runtime config.
+        When False (the default), the reconciliation pass never resends on a
+        mismatch — the cover is commanded once and left where it lands.  When
+        True, the pass resends until the cover reaches the target.  Synced by
+        the coordinator each update cycle from the runtime config.
         """
-        self._disable_position_matching = value
+        self._enable_position_matching = value
 
     @property
     def dry_run(self) -> bool:
@@ -1340,13 +1342,13 @@ class CoverCommandService:
                 )
                 continue
 
-            # 8. Mismatch. If position matching is disabled, never resend
+            # 8. Mismatch. Unless position matching is enabled, never resend
             #    (issue #591): the cover is commanded once and left where it
             #    lands; a settled landing-delta surfaces as a manual override
             #    via the position-delta detector instead of a retry. Step 1's
             #    wait_for_target timeout-clear above still runs, so the detector
             #    stays reachable.
-            if self._disable_position_matching:
+            if not self._enable_position_matching:
                 self._logger.debug(
                     "Reconcile: %s off target (actual=%s target=%s) — position "
                     "matching disabled, leaving cover where it landed",

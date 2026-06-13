@@ -671,7 +671,7 @@ async def test_multiple_covers_both_processed() -> None:
     coordinator.cover_state_change = True
     coordinator._is_in_startup_grace_period = MagicMock(return_value=False)
     coordinator._target_just_reached = set()
-    coordinator._cmd_svc.disable_position_matching = False
+    coordinator._cmd_svc.enable_position_matching = True
     coordinator._pending_cover_events = [
         _event(
             "cover.a", 30

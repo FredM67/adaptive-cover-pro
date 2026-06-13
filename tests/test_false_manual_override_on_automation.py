@@ -54,7 +54,7 @@ def _make_coordinator(
     automatic_control: bool = True,
     manual_threshold: int | None = None,
     target_just_reached: set | None = None,
-    disable_position_matching: bool = False,
+    enable_position_matching: bool = True,
     position_tolerance: int = 3,
 ):
     """Build a minimal mock coordinator with the attributes used by the state-change handlers."""
@@ -66,7 +66,7 @@ def _make_coordinator(
     cmd_svc.get_target = MagicMock(return_value=target)
     cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
     cmd_svc.discard_target = MagicMock()
-    cmd_svc.disable_position_matching = disable_position_matching
+    cmd_svc.enable_position_matching = enable_position_matching
     coordinator._cmd_svc = cmd_svc
     coordinator._cover_type = "cover_blind"
     coordinator.manual_reset = False
@@ -210,21 +210,21 @@ async def test_different_entity_in_target_just_reached_does_not_skip_current():
 
 
 # ===========================================================================
-# Issue #591: when position matching is disabled, a settle beyond the position
-# tolerance (but under the user manual-override threshold) must engage a full
-# manual override. The coordinator delivers this by lowering the detection
-# threshold it passes to handle_state_change to the position tolerance.
+# Issue #591: with position matching off (the default), a settle beyond the
+# position tolerance (but under the user manual-override threshold) must engage
+# a full manual override. The coordinator delivers this by lowering the
+# detection threshold it passes to handle_state_change to the position tolerance.
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_disabled_matching_lowers_detection_threshold_to_tolerance():
-    """Matching off → detection threshold passed is the position tolerance (#591).
+async def test_matching_off_lowers_detection_threshold_to_tolerance():
+    """Matching off (default) → detection threshold passed is the tolerance (#591).
 
     Scenario: target 72, manual_threshold 10, tolerance 3. Cover settles at 65
-    (delta 7 — the middle band). With matching enabled this is "within
-    threshold" and would just retry; with matching disabled the coordinator
-    lowers the threshold so the detector engages a manual override.
+    (delta 7 — the middle band). With matching on this is "within threshold"
+    and would just retry; with matching off the coordinator lowers the
+    threshold so the detector engages a manual override.
     """
     from custom_components.adaptive_cover_pro.coordinator import (
         AdaptiveDataUpdateCoordinator,
@@ -235,7 +235,7 @@ async def test_disabled_matching_lowers_detection_threshold_to_tolerance():
         entity_id=entity_id,
         target=72,
         manual_threshold=10,
-        disable_position_matching=True,
+        enable_position_matching=False,
         position_tolerance=3,
     )
     event_data = _make_state_change_data(entity_id, position=65)
@@ -251,8 +251,8 @@ async def test_disabled_matching_lowers_detection_threshold_to_tolerance():
 
 
 @pytest.mark.asyncio
-async def test_enabled_matching_passes_manual_threshold_unchanged():
-    """Matching on (default) → the user manual_threshold is passed unchanged (#591)."""
+async def test_matching_on_passes_manual_threshold_unchanged():
+    """Matching on (opt-in) → the user manual_threshold is passed unchanged (#591)."""
     from custom_components.adaptive_cover_pro.coordinator import (
         AdaptiveDataUpdateCoordinator,
     )
@@ -262,7 +262,7 @@ async def test_enabled_matching_passes_manual_threshold_unchanged():
         entity_id=entity_id,
         target=72,
         manual_threshold=10,
-        disable_position_matching=False,
+        enable_position_matching=True,
         position_tolerance=3,
     )
     event_data = _make_state_change_data(entity_id, position=65)
@@ -273,7 +273,7 @@ async def test_enabled_matching_passes_manual_threshold_unchanged():
 
     coordinator.manager.handle_state_change.assert_called_once()
     passed_threshold = coordinator.manager.handle_state_change.call_args.args[5]
-    assert passed_threshold == 10  # unchanged — enabled path untouched
+    assert passed_threshold == 10  # unchanged — matching-on path untouched
 
 
 # ===========================================================================

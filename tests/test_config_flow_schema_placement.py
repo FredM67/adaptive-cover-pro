@@ -8,7 +8,7 @@ from custom_components.adaptive_cover_pro import config_flow as cf
 from custom_components.adaptive_cover_pro.const import (
     CONF_DEBUG_EVENT_BUFFER_SIZE,
     CONF_DEBUG_MODE,
-    CONF_DISABLE_POSITION_MATCHING,
+    CONF_ENABLE_POSITION_MATCHING,
     CONF_MANUAL_OVERRIDE_DURATION,
     CONF_POSITION_TOLERANCE,
     CONF_TRANSIT_TIMEOUT,
@@ -32,13 +32,13 @@ def test_position_tolerance_in_position_schema_with_default_three() -> None:
     assert marker.default() == 3
 
 
-def test_disable_position_matching_in_position_schema() -> None:
-    """CONF_DISABLE_POSITION_MATCHING lives on the position step, default False (#591)."""
+def test_enable_position_matching_in_position_schema() -> None:
+    """CONF_ENABLE_POSITION_MATCHING lives on the position step, default False (#591)."""
     keys = _schema_keys(cf.POSITION_SCHEMA)
-    assert CONF_DISABLE_POSITION_MATCHING in keys
-    assert CONF_DISABLE_POSITION_MATCHING not in _schema_keys(cf.AUTOMATION_SCHEMA)
+    assert CONF_ENABLE_POSITION_MATCHING in keys
+    assert CONF_ENABLE_POSITION_MATCHING not in _schema_keys(cf.AUTOMATION_SCHEMA)
     marker = next(
-        k for k in cf.POSITION_SCHEMA.schema if str(k) == CONF_DISABLE_POSITION_MATCHING
+        k for k in cf.POSITION_SCHEMA.schema if str(k) == CONF_ENABLE_POSITION_MATCHING
     )
     assert marker.default() is False
 

@@ -134,7 +134,7 @@ async def test_full_repro_user_recovery_observed():
     coord._cmd_svc = MagicMock()
     coord._cmd_svc.get_target = MagicMock(return_value=100)  # latched
     coord._cmd_svc.is_waiting_for_target = MagicMock(return_value=True)
-    coord._cmd_svc.disable_position_matching = False
+    coord._cmd_svc.enable_position_matching = True
 
     coord.manager = MagicMock()
     # was_manual=False before observation, became_manual=True after

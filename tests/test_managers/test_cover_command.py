@@ -1003,6 +1003,9 @@ async def test_reconcile_gives_up_on_unreachable_target(mock_hass, logger, grace
         position_tolerance=3,
         max_retries=2,
     )
+    # Reconciliation resend/give-up is exercised here; opt into matching
+    # (default is off per issue #591).
+    svc.enable_position_matching = True
     mock_hass.services.async_call = AsyncMock(return_value=None)
 
     caps = patch(

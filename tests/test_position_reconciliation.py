@@ -40,7 +40,7 @@ def grace_mgr():
 
 @pytest.fixture
 def svc(mock_hass, grace_mgr):
-    return CoverCommandService(
+    service = CoverCommandService(
         hass=mock_hass,
         logger=MagicMock(),
         cover_type="cover_blind",
@@ -50,6 +50,12 @@ def svc(mock_hass, grace_mgr):
         position_tolerance=3,
         max_retries=3,
     )
+    # This suite exercises the reconciliation/resend machinery, so it opts into
+    # position matching. The product default is OFF (issue #591) — that default
+    # is covered by test_reconcile_skips_resend_when_position_matching_disabled
+    # here and by the runtime-config/schema/summary tests.
+    service.enable_position_matching = True
+    return service
 
 
 def _ctx(**overrides) -> PositionContext:
@@ -335,7 +341,7 @@ async def test_reconcile_no_action_when_at_target(svc, mock_hass):
 @pytest.fixture
 def svc_tol6(mock_hass, grace_mgr):
     """CoverCommandService with a widened reconciliation tolerance (issue #507)."""
-    return CoverCommandService(
+    service = CoverCommandService(
         hass=mock_hass,
         logger=MagicMock(),
         cover_type="cover_blind",
@@ -345,6 +351,9 @@ def svc_tol6(mock_hass, grace_mgr):
         position_tolerance=6,
         max_retries=3,
     )
+    # See the `svc` fixture: this suite opts into matching to exercise resends.
+    service.enable_position_matching = True
+    return service
 
 
 @pytest.mark.asyncio
@@ -391,11 +400,11 @@ async def test_reconcile_retries_when_cover_missed_target(svc, mock_hass):
 
 @pytest.mark.asyncio
 async def test_reconcile_skips_resend_when_position_matching_disabled(svc, mock_hass):
-    """With the disable toggle on, a mismatch never resends the command (issue #591)."""
-    svc.disable_position_matching = True
+    """Matching off (the default) → a mismatch never resends the command (issue #591)."""
+    svc.enable_position_matching = False  # the product default
     svc.set_target("cover.test", 50)
     svc.set_waiting("cover.test", False)
-    _patch_position(svc, 42)  # delta=8 > tolerance=3 — would normally resend
+    _patch_position(svc, 42)  # delta=8 > tolerance=3 — would resend if matching on
 
     with _patch_caps():
         await svc.run_reconciliation_pass(dt.datetime.now(dt.UTC))
@@ -406,8 +415,8 @@ async def test_reconcile_skips_resend_when_position_matching_disabled(svc, mock_
 
 @pytest.mark.asyncio
 async def test_reconcile_resends_when_position_matching_enabled(svc, mock_hass):
-    """Default (matching enabled) still resends on a mismatch — unchanged (issue #591)."""
-    assert svc.disable_position_matching is False  # default
+    """Matching on (opt-in) → resends on a mismatch until the cover arrives (issue #591)."""
+    svc.enable_position_matching = True
     svc.set_target("cover.test", 50)
     svc.set_waiting("cover.test", False)
     _patch_position(svc, 42)  # delta=8 > tolerance=3

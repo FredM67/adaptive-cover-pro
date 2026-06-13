@@ -170,7 +170,8 @@
     "calibration_on": "Positionskalibrierung aktiviert",
     "sun_tracking_min": "Sonnenverfolgung Min: {pos}%",
     "separator": " · ",
-    "position_matching_off": "⚠️ Positionsabgleich aus (kein Neuversand bei Nichtübereinstimmung)"
+    "position_matching_off": "📍 Positionsabgleich aus (Befehl wird einmal gesendet; Abweichung wird als manuelle Übersteuerung behandelt)",
+    "position_matching_on": "📍 Positionsabgleich an (Befehle werden wiederholt bis zum Erreichen der Zielposition)"
   },
   "my": {
     "entities_enabled": "🎛️ My-Preset-Entitäten: aktiviert",

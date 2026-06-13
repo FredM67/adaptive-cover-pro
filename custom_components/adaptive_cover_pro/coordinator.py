@@ -1771,17 +1771,18 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             recorded_target = self._cmd_svc.get_target(entity_id)
             expected_position = state if recorded_target is None else recorded_target
 
-            # Issue #591: when position matching is disabled, a settle beyond the
-            # position-match tolerance is the cover's final resting position (a
-            # remote stop, or a cover that won't reach target). Lower the
-            # detection threshold to the tolerance so any "not arrived" settle
-            # engages a full manual override for the configured duration —
-            # suppressing both resends (handled in reconciliation) and new
-            # sun-driven targets — instead of being retried. With matching
-            # enabled the user manual_threshold is used unchanged (no regression
-            # to the slow-actuator reconciliation behaviour).
+            # Issue #591: when position matching is disabled (the default), a
+            # settle beyond the position-match tolerance is the cover's final
+            # resting position (a remote stop, or a cover that won't reach
+            # target). Lower the detection threshold to the tolerance so any
+            # "not arrived" settle engages a full manual override for the
+            # configured duration — suppressing both resends (handled in
+            # reconciliation) and new sun-driven targets — instead of being
+            # retried. When matching is enabled the user manual_threshold is
+            # used unchanged (no regression to the slow-actuator reconciliation
+            # behaviour).
             detection_threshold = self.manual_threshold
-            if self._cmd_svc.disable_position_matching:
+            if not self._cmd_svc.enable_position_matching:
                 detection_threshold = (
                     self._position_tolerance
                     if self.manual_threshold is None
@@ -1913,7 +1914,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         self._cmd_svc.update_threshold(rc.open_close_threshold)
         self._cmd_svc.update_position_tolerance(rc.tracking.position_tolerance)
-        self._cmd_svc.disable_position_matching = rc.tracking.disable_position_matching
+        self._cmd_svc.enable_position_matching = rc.tracking.enable_position_matching
         self._time_mgr.update_config(
             start_time=rc.time_window.start_time,
             start_time_entity=rc.time_window.start_time_entity,

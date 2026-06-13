@@ -254,7 +254,7 @@ async def test_startup_grace_period_allows_manual_override_after_expiration():
     coordinator._cmd_svc = MagicMock()
     coordinator._cmd_svc.get_target = MagicMock(return_value=50)
     coordinator._cmd_svc.is_waiting_for_target = MagicMock(return_value=False)
-    coordinator._cmd_svc.disable_position_matching = False
+    coordinator._cmd_svc.enable_position_matching = True
 
     # Mock _is_in_startup_grace_period to return False (expired)
     coordinator._is_in_startup_grace_period = MagicMock(return_value=False)
