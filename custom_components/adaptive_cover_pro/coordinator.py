@@ -1771,6 +1771,23 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             recorded_target = self._cmd_svc.get_target(entity_id)
             expected_position = state if recorded_target is None else recorded_target
 
+            # Issue #591: when position matching is disabled, a settle beyond the
+            # position-match tolerance is the cover's final resting position (a
+            # remote stop, or a cover that won't reach target). Lower the
+            # detection threshold to the tolerance so any "not arrived" settle
+            # engages a full manual override for the configured duration —
+            # suppressing both resends (handled in reconciliation) and new
+            # sun-driven targets — instead of being retried. With matching
+            # enabled the user manual_threshold is used unchanged (no regression
+            # to the slow-actuator reconciliation behaviour).
+            detection_threshold = self.manual_threshold
+            if self._cmd_svc.disable_position_matching:
+                detection_threshold = (
+                    self._position_tolerance
+                    if self.manual_threshold is None
+                    else min(self.manual_threshold, self._position_tolerance)
+                )
+
             secondary_axis_check = (
                 self._policy.secondary_axis_check(self._pipeline_result, self._cmd_svc)
                 if self._pipeline_result is not None
@@ -1786,7 +1803,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 self._policy,
                 self.manual_reset,
                 self._cmd_svc.is_waiting_for_target,
-                self.manual_threshold,
+                detection_threshold,
                 has_recorded_target=recorded_target is not None,
                 secondary_axis_check=secondary_axis_check,
                 is_in_command_grace=self._grace_mgr.is_in_command_grace_period,
@@ -1880,6 +1897,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.manual_duration = rc.manual_override.duration
         self.manual_ignore_external = rc.manual_override.ignore_external
         self.manual_threshold = rc.tracking.manual_threshold
+        # Mirror the reconciliation tolerance coordinator-side so the cover
+        # state-change handler can lower the override-detection threshold when
+        # position matching is disabled (issue #591).
+        self._position_tolerance = rc.tracking.position_tolerance
         # Apply manual-override config to the engine + active detector at
         # runtime (auto-reset duration, threshold, command window) so changes
         # take effect without a reload. The detection *strategy* itself is
