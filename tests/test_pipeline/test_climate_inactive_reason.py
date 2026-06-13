@@ -6,10 +6,6 @@ const.py and inactive_reason() is implemented in pipeline/handlers/climate.py.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from unittest.mock import MagicMock
-
-import pytest
 
 from custom_components.adaptive_cover_pro.const import ClimateInactiveReason
 from custom_components.adaptive_cover_pro.pipeline.handlers.climate import (
@@ -90,7 +86,9 @@ class TestClimateInactiveReasonSlugs:
         result = _make_result_with_trace(
             climate_matched=False, climate_reason="outside time window"
         )
-        assert inactive_reason(snap, result) == ClimateInactiveReason.OUTSIDE_TIME_WINDOW
+        assert (
+            inactive_reason(snap, result) == ClimateInactiveReason.OUTSIDE_TIME_WINDOW
+        )
 
     def test_readings_unavailable(self) -> None:
         """climate_readings=None with mode enabled → ClimateInactiveReason.READINGS_UNAVAILABLE."""
@@ -104,10 +102,12 @@ class TestClimateInactiveReasonSlugs:
             climate_matched=False,
             climate_reason="climate readings or options unavailable",
         )
-        assert inactive_reason(snap, result) == ClimateInactiveReason.READINGS_UNAVAILABLE
+        assert (
+            inactive_reason(snap, result) == ClimateInactiveReason.READINGS_UNAVAILABLE
+        )
 
     def test_thresholds_not_met_when_deferred(self) -> None:
-        """climate enabled + readings available + deferred → THRESHOLDS_NOT_MET."""
+        """Climate enabled + readings available + deferred → THRESHOLDS_NOT_MET."""
         from custom_components.adaptive_cover_pro.pipeline.types import ClimateOptions
         from custom_components.adaptive_cover_pro.state.climate_provider import (
             ClimateReadings,
@@ -144,7 +144,7 @@ class TestClimateInactiveReasonSlugs:
         assert inactive_reason(snap, result) == ClimateInactiveReason.THRESHOLDS_NOT_MET
 
     def test_other_mode_active_when_outprioritized(self) -> None:
-        """climate outprioritized by a higher handler → OTHER_MODE_ACTIVE."""
+        """Climate outprioritized by a higher handler → OTHER_MODE_ACTIVE."""
         from custom_components.adaptive_cover_pro.pipeline.types import ClimateOptions
         from custom_components.adaptive_cover_pro.state.climate_provider import (
             ClimateReadings,
@@ -198,7 +198,7 @@ class TestClimateInactiveReasonSlugs:
         assert inactive_reason(snap, result) == ClimateInactiveReason.OTHER_MODE_ACTIVE
 
     def test_active_when_climate_is_winner(self) -> None:
-        """climate is the winning handler → ClimateInactiveReason.ACTIVE."""
+        """Climate is the winning handler → ClimateInactiveReason.ACTIVE."""
         from custom_components.adaptive_cover_pro.pipeline.types import ClimateOptions
         from custom_components.adaptive_cover_pro.state.climate_provider import (
             ClimateReadings,
@@ -240,7 +240,10 @@ class TestClimateInactiveReasonSlugs:
         """OUTSIDE_TIME_WINDOW slug value matches ControlStatus.OUTSIDE_TIME_WINDOW."""
         from custom_components.adaptive_cover_pro.const import ControlStatus
 
-        assert ClimateInactiveReason.OUTSIDE_TIME_WINDOW == ControlStatus.OUTSIDE_TIME_WINDOW
+        assert (
+            ClimateInactiveReason.OUTSIDE_TIME_WINDOW
+            == ControlStatus.OUTSIDE_TIME_WINDOW
+        )
 
 
 class TestClimateInactiveReasonSlugsDescribeSkipConsistency:

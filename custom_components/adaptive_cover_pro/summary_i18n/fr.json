@@ -169,7 +169,9 @@
     "calibration": "Étalonnage {lo}→{hi}",
     "calibration_on": "Étalonnage position activé",
     "sun_tracking_min": "Min suivi solaire : {pos}%",
-    "separator": " · "
+    "separator": " · ",
+    "position_matching_off": "📍 Correspondance de position désactivée (commande unique; une stabilisation au-delà de la tolérance devient une dérogation manuelle)",
+    "position_matching_on": "📍 Correspondance de position activée (renvoie jusqu'à ce que la store atteigne la position cible)"
   },
   "my": {
     "entities_enabled": "🎛️ Entités préréglage My : activées",

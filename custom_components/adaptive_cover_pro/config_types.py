@@ -288,6 +288,10 @@ class TrackingSlice:
     # Opt-in sun-tracking movement minimization (quantize to N coverage levels).
     minimize_movements: bool = False
     max_coverage_steps: int = 1
+    # When True, the reconciliation pass resends until the cover reaches target.
+    # When False (default), command once and let a settle past tolerance become
+    # a manual override (issue #591).
+    enable_position_matching: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +336,7 @@ class RuntimeConfig:
             CONF_DEBUG_EVENT_BUFFER_SIZE,
             CONF_DELTA_POSITION,
             CONF_DELTA_TIME,
+            CONF_ENABLE_POSITION_MATCHING,
             CONF_END_ENTITY,
             CONF_END_TIME,
             CONF_ENTITIES,
@@ -369,6 +374,7 @@ class RuntimeConfig:
             CONF_WEATHER_WIND_SPEED_SENSOR,
             CONF_WEATHER_WIND_SPEED_THRESHOLD,
             DEFAULT_DEBUG_EVENT_BUFFER_SIZE,
+            DEFAULT_ENABLE_POSITION_MATCHING,
             DEFAULT_MAX_COVERAGE_STEPS,
             DEFAULT_MINIMIZE_MOVEMENTS,
             DEFAULT_MOTION_TIMEOUT,
@@ -404,6 +410,9 @@ class RuntimeConfig:
                 ),
                 max_coverage_steps=int(
                     options.get(CONF_MAX_COVERAGE_STEPS, DEFAULT_MAX_COVERAGE_STEPS)
+                ),
+                enable_position_matching=options.get(
+                    CONF_ENABLE_POSITION_MATCHING, DEFAULT_ENABLE_POSITION_MATCHING
                 ),
             ),
             manual_override=ManualOverrideSlice(

@@ -500,6 +500,12 @@ DEFAULT_DELTA_TIME = 2  # minimum seconds between commands
 # same-position gate must NOT use it — it keys off exact equality, and
 # movement hysteresis is owned by CONF_DELTA_POSITION (issue #567).
 CONF_POSITION_TOLERANCE = "position_tolerance"
+# When True, the periodic reconciliation pass actively resends a command on a
+# position mismatch until the cover reaches the target. When False (the
+# default), the cover is commanded once and left where it lands; a settled
+# landing-delta then surfaces as a manual override instead of a retry
+# (issue #591). Default is DEFAULT_ENABLE_POSITION_MATCHING (section 20).
+CONF_ENABLE_POSITION_MATCHING = "enable_position_matching"
 CONF_START_TIME = "start_time"  # active-window start "HH:MM:SS"
 CONF_START_ENTITY = "start_entity"  # input_datetime overriding start_time
 CONF_END_TIME = "end_time"  # active-window end "HH:MM:SS"
@@ -623,6 +629,9 @@ POSITION_CHECK_INTERVAL_MINUTES = 1  # minutes — recheck cadence
 # in managers/manual_override.py reads this constant directly, NOT the option).
 POSITION_TOLERANCE_PERCENT = 3  # % — "position matches" tolerance (default)
 MAX_POSITION_RETRIES = 3  # maximum re-send attempts before giving up
+# Default for CONF_ENABLE_POSITION_MATCHING (issue #591). False = matching off:
+# command once, no resend; a settle past tolerance becomes a manual override.
+DEFAULT_ENABLE_POSITION_MATCHING = False
 
 
 # =============================================================================
@@ -837,7 +846,9 @@ class ClimateInactiveReason:
     OUTSIDE_TIME_WINDOW = (
         "outside_time_window"  # reuses ControlStatus value — same concept
     )
-    THRESHOLDS_NOT_MET = "thresholds_not_met"  # climate active, no season threshold hit (deferred)
+    THRESHOLDS_NOT_MET = (
+        "thresholds_not_met"  # climate active, no season threshold hit (deferred)
+    )
     OTHER_MODE_ACTIVE = "other_mode_active"  # outprioritized by a higher handler
     READINGS_UNAVAILABLE = "readings_unavailable"  # sensors misconfigured/unavailable
 

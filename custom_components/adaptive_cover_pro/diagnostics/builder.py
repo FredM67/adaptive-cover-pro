@@ -563,6 +563,7 @@ class DiagnosticsBuilder:
             CONF_ENABLE_BLIND_SPOT,
             CONF_ENABLE_MAX_POSITION,
             CONF_ENABLE_MIN_POSITION,
+            CONF_ENABLE_POSITION_MATCHING,
             CONF_FOV_LEFT,
             CONF_FOV_RIGHT,
             CONF_INTERP,
@@ -578,6 +579,7 @@ class DiagnosticsBuilder:
             CONF_MOTION_TEMPLATE,
             CONF_MOTION_TEMPLATE_MODE,
             CONF_MOTION_TIMEOUT,
+            CONF_POSITION_TOLERANCE,
             DEFAULT_MOTION_TEMPLATE_MODE,
             DEFAULT_MOTION_TIMEOUT,
         )
@@ -602,6 +604,10 @@ class DiagnosticsBuilder:
                 "max_position": options.get(CONF_MAX_POSITION),
                 "enable_min_position": options.get(CONF_ENABLE_MIN_POSITION, False),
                 "enable_max_position": options.get(CONF_ENABLE_MAX_POSITION, False),
+                "position_tolerance": options.get(CONF_POSITION_TOLERANCE),
+                "enable_position_matching": options.get(
+                    CONF_ENABLE_POSITION_MATCHING, False
+                ),
                 "inverse_state": options.get(CONF_INVERSE_STATE, False),
                 "interpolation": options.get(CONF_INTERP, False),
                 # Kept one release for the companion card (issue #563): True

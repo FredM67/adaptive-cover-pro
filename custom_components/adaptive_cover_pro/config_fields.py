@@ -70,6 +70,7 @@ from .const import (
     CONF_ENABLE_MAX_POSITION,
     CONF_ENABLE_MIN_POSITION,
     CONF_ENABLE_MY_POSITION_ENTITIES,
+    CONF_ENABLE_POSITION_MATCHING,
     CONF_ENABLE_SUN_TRACKING,
     CONF_END_ENTITY,
     CONF_END_TIME,
@@ -718,11 +719,18 @@ _AUTOMATION_SPECS = _spec(
     ),
     FieldSpec(
         CONF_POSITION_TOLERANCE,
-        SECTION_AUTOMATION,
+        SECTION_POSITION,
         ValidatorKind.RANGE,
         rng=const._RANGE_POSITION_TOLERANCE,
         default=3,
         make_selector=_number(minimum=0, maximum=20, step=1, unit="%"),
+    ),
+    FieldSpec(
+        CONF_ENABLE_POSITION_MATCHING,
+        SECTION_POSITION,
+        ValidatorKind.BOOL,
+        default=const.DEFAULT_ENABLE_POSITION_MATCHING,
+        make_selector=_bool(),
     ),
     FieldSpec(
         CONF_DELTA_TIME,

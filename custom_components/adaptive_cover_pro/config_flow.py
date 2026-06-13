@@ -41,6 +41,7 @@ from .const import (
     CONF_ENABLE_MAX_POSITION,
     CONF_ENABLE_MIN_POSITION,
     CONF_ENABLE_MY_POSITION_ENTITIES,
+    CONF_ENABLE_POSITION_MATCHING,
     CONF_ENABLE_PROXY_COVER,
     CONF_ENABLE_SUN_TRACKING,
     CONF_END_ENTITY,
@@ -56,6 +57,7 @@ from .const import (
     CUSTOM_POSITION_SLOTS,
     DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEFAULT_ENABLE_MY_POSITION_ENTITIES,
+    DEFAULT_ENABLE_POSITION_MATCHING,
     DEFAULT_ENABLE_PROXY_COVER,
     CONF_FOV_LEFT,
     CONF_FOV_MODE,
@@ -349,6 +351,19 @@ POSITION_SCHEMA = vol.Schema(
                 unit_of_measurement="%",
             )
         ),
+        vol.Optional(CONF_POSITION_TOLERANCE, default=3): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=20,
+                step=1,
+                mode=selector.NumberSelectorMode.SLIDER,
+                unit_of_measurement="%",
+            )
+        ),
+        vol.Optional(
+            CONF_ENABLE_POSITION_MATCHING,
+            default=DEFAULT_ENABLE_POSITION_MATCHING,
+        ): selector.BooleanSelector(),
         vol.Optional(CONF_INVERSE_STATE, default=False): selector.BooleanSelector(),
         vol.Optional(CONF_INTERP, default=False): selector.BooleanSelector(),
     }
@@ -372,15 +387,6 @@ AUTOMATION_SCHEMA = vol.Schema(
             selector.NumberSelectorConfig(
                 min=1,
                 max=90,
-                step=1,
-                mode=selector.NumberSelectorMode.SLIDER,
-                unit_of_measurement="%",
-            )
-        ),
-        vol.Optional(CONF_POSITION_TOLERANCE, default=3): selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0,
-                max=20,
                 step=1,
                 mode=selector.NumberSelectorMode.SLIDER,
                 unit_of_measurement="%",
@@ -1170,6 +1176,8 @@ _SUMMARY_LABELS_EN: dict[str, str] = {
     "limits.min_change": "Min change: {delta}%",
     "limits.min_interval": "Min interval: {delta} min",
     "limits.position_tolerance": "Position tolerance: {tol}%",
+    "limits.position_matching_on": "📍 Position matching on (re-sends until the cover reaches target)",
+    "limits.position_matching_off": "📍 Position matching off (commands once; a settle past tolerance becomes a manual override)",
     "limits.inverse_state": "Inverse state",
     "limits.open_close_threshold": "Open/close threshold: {thresh}%",
     "limits.calibration": "Calibration {lo}→{hi}",
@@ -1960,6 +1968,10 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     pos_tol = config.get(CONF_POSITION_TOLERANCE)
     if pos_tol is not None:
         limit_parts.append(L["limits.position_tolerance"].format(tol=pos_tol))
+    if config.get(CONF_ENABLE_POSITION_MATCHING):
+        limit_parts.append(L["limits.position_matching_on"])
+    else:
+        limit_parts.append(L["limits.position_matching_off"])
     if config.get(CONF_INVERSE_STATE):
         limit_parts.append(L["limits.inverse_state"])
     oc_thresh = config.get(CONF_OPEN_CLOSE_THRESHOLD)
@@ -2170,6 +2182,8 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_SUNSET_TIME_ENTITY,
             CONF_SUNRISE_TIME_ENTITY,
             CONF_OPEN_CLOSE_THRESHOLD,
+            CONF_POSITION_TOLERANCE,
+            CONF_ENABLE_POSITION_MATCHING,
             CONF_INVERSE_STATE,
             CONF_INTERP,
             CONF_RETURN_SUNSET,
@@ -2186,7 +2200,6 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
     "automation": frozenset(
         {
             CONF_DELTA_POSITION,
-            CONF_POSITION_TOLERANCE,
             CONF_DELTA_TIME,
             CONF_START_TIME,
             CONF_START_ENTITY,
@@ -2902,7 +2915,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="position",
             data_schema=POSITION_SCHEMA,
             description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position"
+                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position",
+                "position_matching_wiki": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position-Matching",
             },
         )
 
@@ -3488,7 +3502,8 @@ class OptionsFlowHandler(OptionsFlow):
                 POSITION_SCHEMA, user_input or self.options
             ),
             description_placeholders={
-                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position"
+                "learn_more": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position",
+                "position_matching_wiki": "https://github.com/jrhubott/adaptive-cover-pro/wiki/Configuration-Position-Matching",
             },
         )
 

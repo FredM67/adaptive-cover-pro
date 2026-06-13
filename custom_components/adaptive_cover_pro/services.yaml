@@ -148,6 +148,14 @@ set_position_limits:
           step: 1
           mode: slider
           unit_of_measurement: "%"
+    enable_position_matching:
+      name: Enable position matching
+      description: >-
+        If true, the reconciliation pass resends the target until the cover
+        reaches it. If false (the default), the cover is commanded once and a
+        settle past the position tolerance becomes a manual override.
+      selector:
+        boolean:
     inverse_state:
       name: Inverse state
       description: "Invert position (0%=open, 100%=closed) for covers that report state inversely."

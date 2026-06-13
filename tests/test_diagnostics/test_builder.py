@@ -749,6 +749,8 @@ class TestConfigurationDiagnostics:
             "max_position",
             "enable_min_position",
             "enable_max_position",
+            "position_tolerance",
+            "enable_position_matching",
             "inverse_state",
             "interpolation",
             "force_override_active",

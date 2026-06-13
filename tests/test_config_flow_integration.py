@@ -933,11 +933,15 @@ async def test_options_flow_form_step_saves_and_returns_to_init(
 
 
 @pytest.mark.integration
-async def test_options_flow_automation_saves_position_tolerance(
+async def test_options_flow_position_saves_position_tolerance(
     hass: HomeAssistant,
 ) -> None:
-    """Submitting the automation step persists CONF_POSITION_TOLERANCE (issue #507)."""
-    from custom_components.adaptive_cover_pro.const import CONF_POSITION_TOLERANCE
+    """Submitting the position step persists CONF_POSITION_TOLERANCE (issue #591)."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_ENABLE_MY_POSITION_ENTITIES,
+        CONF_POSITION_TOLERANCE,
+        CONF_SUNSET_USE_MY,
+    )
     from tests.ha_helpers import VERTICAL_OPTIONS, _patch_coordinator_refresh
 
     entry = MockConfigEntry(
@@ -955,19 +959,27 @@ async def test_options_flow_automation_saves_position_tolerance(
         result = await hass.config_entries.options.async_init(entry.entry_id)
         if result["type"] == "menu":
             result = await hass.config_entries.options.async_configure(
-                result["flow_id"], {"next_step_id": "automation"}
+                result["flow_id"], {"next_step_id": "position"}
             )
-        assert result["step_id"] == "automation"
+        assert result["step_id"] == "position"
 
-        # Submit the automation step with the new tolerance; returns to the menu.
+        # Submit the position step with the new tolerance; returns to the menu.
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             {
-                CONF_DELTA_POSITION: 5,
+                CONF_DEFAULT_HEIGHT: 60,
+                CONF_MIN_POSITION: 0,
+                CONF_ENABLE_MIN_POSITION: False,
+                CONF_MAX_POSITION: 100,
+                CONF_ENABLE_MAX_POSITION: False,
+                CONF_SUNSET_OFFSET: 0,
+                CONF_SUNRISE_OFFSET: 0,
+                CONF_INVERSE_STATE: False,
+                "interp": False,
+                "open_close_threshold": 50,
                 CONF_POSITION_TOLERANCE: 8,
-                CONF_DELTA_TIME: 2,
-                CONF_START_TIME: "08:00:00",
-                CONF_END_TIME: "20:00:00",
+                CONF_ENABLE_MY_POSITION_ENTITIES: False,
+                CONF_SUNSET_USE_MY: False,
             },
         )
         # Finish the flow so the accumulated options are written to the entry.
