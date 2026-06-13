@@ -235,6 +235,30 @@ def test_dry_run_banner_absent_when_disabled():
     assert "Dry-run mode" not in _build_config_summary({}, CoverType.BLIND)
 
 
+def test_summary_shows_position_matching_off_when_disabled():
+    """The disable toggle surfaces a warning line in the summary (issue #591)."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_DISABLE_POSITION_MATCHING,
+    )
+
+    summary = _build_config_summary(
+        {CONF_DISABLE_POSITION_MATCHING: True}, CoverType.BLIND
+    )
+    assert "Position matching off" in summary
+
+
+def test_summary_omits_position_matching_off_when_enabled():
+    """No warning line when the toggle is off or unset (issue #591)."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_DISABLE_POSITION_MATCHING,
+    )
+
+    assert "Position matching off" not in _build_config_summary(
+        {CONF_DISABLE_POSITION_MATCHING: False}, CoverType.BLIND
+    )
+    assert "Position matching off" not in _build_config_summary({}, CoverType.BLIND)
+
+
 def test_entity_included_in_your_cover():
     """Cover entity ID appears in the Your Cover line."""
     cfg = {CONF_ENTITIES: ["cover.living_room"]}

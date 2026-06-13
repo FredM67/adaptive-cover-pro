@@ -390,6 +390,36 @@ async def test_reconcile_retries_when_cover_missed_target(svc, mock_hass):
 
 
 @pytest.mark.asyncio
+async def test_reconcile_skips_resend_when_position_matching_disabled(svc, mock_hass):
+    """With the disable toggle on, a mismatch never resends the command (issue #591)."""
+    svc.disable_position_matching = True
+    svc.set_target("cover.test", 50)
+    svc.set_waiting("cover.test", False)
+    _patch_position(svc, 42)  # delta=8 > tolerance=3 — would normally resend
+
+    with _patch_caps():
+        await svc.run_reconciliation_pass(dt.datetime.now(dt.UTC))
+
+    mock_hass.services.async_call.assert_not_called()
+    assert svc.state("cover.test").retry_count == 0  # never entered the retry path
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resends_when_position_matching_enabled(svc, mock_hass):
+    """Default (matching enabled) still resends on a mismatch — unchanged (issue #591)."""
+    assert svc.disable_position_matching is False  # default
+    svc.set_target("cover.test", 50)
+    svc.set_waiting("cover.test", False)
+    _patch_position(svc, 42)  # delta=8 > tolerance=3
+
+    with _patch_caps():
+        await svc.run_reconciliation_pass(dt.datetime.now(dt.UTC))
+
+    mock_hass.services.async_call.assert_called_once()
+    assert svc.state("cover.test").retry_count == 1
+
+
+@pytest.mark.asyncio
 async def test_reconcile_stops_at_max_retries(svc, mock_hass):
     """Reconciliation gives up after max_retries and logs warning."""
     svc.set_target("cover.test", 50)

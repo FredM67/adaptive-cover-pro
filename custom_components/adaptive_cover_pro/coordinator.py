@@ -1892,6 +1892,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         self._cmd_svc.update_threshold(rc.open_close_threshold)
         self._cmd_svc.update_position_tolerance(rc.tracking.position_tolerance)
+        self._cmd_svc.disable_position_matching = rc.tracking.disable_position_matching
         self._time_mgr.update_config(
             start_time=rc.time_window.start_time,
             start_time_entity=rc.time_window.start_time_entity,

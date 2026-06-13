@@ -169,7 +169,8 @@
     "calibration": "Kalibrierung {lo}→{hi}",
     "calibration_on": "Positionskalibrierung aktiviert",
     "sun_tracking_min": "Sonnenverfolgung Min: {pos}%",
-    "separator": " · "
+    "separator": " · ",
+    "position_matching_off": "⚠️ Positionsabgleich aus (kein Neuversand bei Nichtübereinstimmung)"
   },
   "my": {
     "entities_enabled": "🎛️ My-Preset-Entitäten: aktiviert",

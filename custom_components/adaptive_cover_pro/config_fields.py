@@ -63,6 +63,7 @@ from .const import (
     CONF_DEFAULT_TILT,
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
+    CONF_DISABLE_POSITION_MATCHING,
     CONF_DISTANCE,
     CONF_DRY_RUN,
     CONF_ENABLE_BLIND_SPOT,
@@ -723,6 +724,13 @@ _AUTOMATION_SPECS = _spec(
         rng=const._RANGE_POSITION_TOLERANCE,
         default=3,
         make_selector=_number(minimum=0, maximum=20, step=1, unit="%"),
+    ),
+    FieldSpec(
+        CONF_DISABLE_POSITION_MATCHING,
+        SECTION_POSITION,
+        ValidatorKind.BOOL,
+        default=const.DEFAULT_DISABLE_POSITION_MATCHING,
+        make_selector=_bool(),
     ),
     FieldSpec(
         CONF_DELTA_TIME,

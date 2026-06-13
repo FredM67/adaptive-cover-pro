@@ -35,6 +35,7 @@ from .const import (
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
     CONF_DEVICE_ID,
+    CONF_DISABLE_POSITION_MATCHING,
     CONF_DISTANCE,
     CONF_ENABLE_BLIND_SPOT,
     CONF_ENABLE_GLARE_ZONES,
@@ -55,6 +56,7 @@ from .const import (
     CUSTOM_POSITION_SLOT_NUMBERS,
     CUSTOM_POSITION_SLOTS,
     DEFAULT_CUSTOM_POSITION_PRIORITY,
+    DEFAULT_DISABLE_POSITION_MATCHING,
     DEFAULT_ENABLE_MY_POSITION_ENTITIES,
     DEFAULT_ENABLE_PROXY_COVER,
     CONF_FOV_LEFT,
@@ -358,6 +360,10 @@ POSITION_SCHEMA = vol.Schema(
                 unit_of_measurement="%",
             )
         ),
+        vol.Optional(
+            CONF_DISABLE_POSITION_MATCHING,
+            default=DEFAULT_DISABLE_POSITION_MATCHING,
+        ): selector.BooleanSelector(),
         vol.Optional(CONF_INVERSE_STATE, default=False): selector.BooleanSelector(),
         vol.Optional(CONF_INTERP, default=False): selector.BooleanSelector(),
     }
@@ -1170,6 +1176,7 @@ _SUMMARY_LABELS_EN: dict[str, str] = {
     "limits.min_change": "Min change: {delta}%",
     "limits.min_interval": "Min interval: {delta} min",
     "limits.position_tolerance": "Position tolerance: {tol}%",
+    "limits.position_matching_off": "⚠️ Position matching off (no resend on mismatch)",
     "limits.inverse_state": "Inverse state",
     "limits.open_close_threshold": "Open/close threshold: {thresh}%",
     "limits.calibration": "Calibration {lo}→{hi}",
@@ -1960,6 +1967,8 @@ def _build_config_summary(  # noqa: C901, PLR0912, PLR0915
     pos_tol = config.get(CONF_POSITION_TOLERANCE)
     if pos_tol is not None:
         limit_parts.append(L["limits.position_tolerance"].format(tol=pos_tol))
+    if config.get(CONF_DISABLE_POSITION_MATCHING):
+        limit_parts.append(L["limits.position_matching_off"])
     if config.get(CONF_INVERSE_STATE):
         limit_parts.append(L["limits.inverse_state"])
     oc_thresh = config.get(CONF_OPEN_CLOSE_THRESHOLD)
@@ -2171,6 +2180,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_SUNRISE_TIME_ENTITY,
             CONF_OPEN_CLOSE_THRESHOLD,
             CONF_POSITION_TOLERANCE,
+            CONF_DISABLE_POSITION_MATCHING,
             CONF_INVERSE_STATE,
             CONF_INTERP,
             CONF_RETURN_SUNSET,

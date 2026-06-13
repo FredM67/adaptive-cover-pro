@@ -164,6 +164,7 @@
     "min_change": "Min change: {delta}%",
     "min_interval": "Min interval: {delta} min",
     "position_tolerance": "Position tolerance: {tol}%",
+    "position_matching_off": "⚠️ Position matching off (no resend on mismatch)",
     "inverse_state": "Inverse state",
     "open_close_threshold": "Open/close threshold: {thresh}%",
     "calibration": "Calibration {lo}→{hi}",
