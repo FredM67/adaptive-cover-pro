@@ -155,6 +155,15 @@ class CoverTypePolicy(ABC):
 
     cover_type: ClassVar[str]
 
+    # Whether this policy drives a physical cover (registers platforms, has at
+    # least one controllable axis). The default is ``True`` so every real
+    # cover-type policy is treated as a cover. Virtual entry types — the
+    # building profile, which only stores shared building-level sensor IDs and
+    # registers no platforms — set this ``False`` so cover-contract suites,
+    # cover-only menus, and the setup path can filter them out by capability
+    # rather than by branching on the cover-type string.
+    controls_cover: ClassVar[bool] = True
+
     def __init_subclass__(cls, *, register: bool = False, **kwargs: Any) -> None:
         """Auto-register a concrete policy by its ``cover_type``.
 
@@ -203,6 +212,15 @@ class CoverTypePolicy(ABC):
     # reveal depth. Set on the cover types that carry window geometry (vertical
     # blinds + venetians); awnings/tilt keep the plain fov sliders.
     supports_fov_compute: ClassVar[bool] = False
+
+    # Per-cover default for the ``CONF_SHOW_WEATHER_RETRACTION`` UI toggle, which
+    # reveals the wind/rain/severe retraction sensor pickers in the
+    # weather-override config step. Awning-style covers (awning, oscillating
+    # awning) default this on — wind/rain retraction is their headline safety
+    # behaviour; every other cover type defaults it off. It is only a default:
+    # any user can flip the toggle on for any cover type. Read via the policy so
+    # no consumer branches on the cover-type string.
+    weather_retraction_default: ClassVar[bool] = False
 
     def fov_compute_schema(self, base: vol.Schema) -> vol.Schema:
         """Insert the "Generate FOV from measurements" toggle before the sliders.
