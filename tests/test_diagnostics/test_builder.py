@@ -33,6 +33,7 @@ from custom_components.adaptive_cover_pro.const import ClimateStrategy, ControlM
 def _make_cover(
     *,
     gamma: float = 10.0,
+    sol_elev: float = 30.0,
     valid: bool = True,
     valid_elevation: bool = True,
     is_sun_in_blind_spot: bool = False,
@@ -45,6 +46,7 @@ def _make_cover(
     """Create a minimal cover mock."""
     cover = SimpleNamespace(
         gamma=gamma,
+        sol_elev=sol_elev,
         valid=valid,
         valid_elevation=valid_elevation,
         is_sun_in_blind_spot=is_sun_in_blind_spot,
@@ -1538,6 +1540,52 @@ class TestCalculationDetailsTrace:
         assert tilt["sol_elev_deg"] == 46.0
         assert tilt["slat_angle_raw_deg"] == 88.8
         assert tilt["position_pct"] == 60
+
+    def test_status_stamped_on_full_trace(self, builder: DiagnosticsBuilder):
+        """The reason string is stamped as ``status`` on the direct-sun trace too."""
+        cover = _make_cover(
+            calc_details=self._raw_vertical_trace(),
+            control_state_reason="Direct Sun",
+        )
+        diag, _ = builder.build(_base_ctx(cover=cover, cover_type="cover_blind"))
+        assert diag["calculation_details"]["status"] == "Direct Sun"
+
+
+class TestCalculationDetailsFallback:
+    """No-solar-target fallback trace (issue #682 follow-up).
+
+    When the sun is outside the window no engine trace is recorded, but the
+    builder still surfaces the sun inputs + reason so the live
+    ``solar_calculation`` sensor's attributes explain the geometry. The state
+    (``position_pct``) stays None — there is no solar target.
+    """
+
+    def test_fallback_emitted_when_no_engine_trace(self, builder: DiagnosticsBuilder):
+        cover = _make_cover(
+            calc_details=None,
+            valid=False,
+            direct_sun_valid=False,
+            control_state_reason="Default: FOV Exit",
+            sol_elev=-3.21,
+            gamma=41.04,
+        )
+        diag, _ = builder.build(_base_ctx(cover=cover, cover_type="cover_blind"))
+        details = diag["calculation_details"]
+        assert details["position_pct"] is None
+        assert details["status"] == "Default: FOV Exit"
+        assert details["cover_type"] == "cover_blind"
+
+    def test_fallback_sun_inputs_rounded(self, builder: DiagnosticsBuilder):
+        cover = _make_cover(
+            calc_details=None,
+            direct_sun_valid=False,
+            sol_elev=-3.21987,
+            gamma=41.04321,
+        )
+        diag, _ = builder.build(_base_ctx(cover=cover, cover_type="cover_tilt"))
+        details = diag["calculation_details"]
+        assert details["sol_elev_deg"] == -3.2
+        assert details["gamma_deg"] == 41.0
 
 
 class TestCalculationDetailsAllCoverTypes:

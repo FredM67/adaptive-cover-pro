@@ -403,19 +403,33 @@ class DiagnosticsBuilder:
 
     @classmethod
     def _build_position_calc_details(cls, ctx: DiagnosticContext) -> dict:
-        """Surface the cover's per-cycle calc trace when one was recorded.
+        """Surface the cover's per-cycle calc trace.
 
         Stamps the ``cover_type`` discriminator from ``ctx.cover_type`` (config
-        data — engines never branch on their own type string) and rounds every
-        numeric leaf at this presentation boundary.
+        data — engines never branch on their own type string), the
+        ``status`` reason string, and rounds every numeric leaf at this
+        presentation boundary.
+
+        When no engine trace was recorded this cycle — the sun is outside the
+        window (sunset/elevation/FOV/blind-spot), so the solar handler never
+        ran — a minimal fallback trace carrying just the sun inputs is emitted
+        with ``position_pct`` None. This keeps the live ``solar_calculation``
+        sensor's attributes populated (explaining the geometry and the reason)
+        even though its state stays None — there is no solar target to report
+        (issue #682 follow-up).
         """
         if not ctx.cover:
             return {}
         calc_details = getattr(ctx.cover, "_last_calc_details", None)
         if calc_details is None:
-            return {}
+            calc_details = {
+                "sol_elev_deg": getattr(ctx.cover, "sol_elev", None),
+                "gamma_deg": getattr(ctx.cover, "gamma", None),
+                "position_pct": None,
+            }
         details = cls._round_trace(calc_details)
         details["cover_type"] = ctx.cover_type
+        details["status"] = getattr(ctx.cover, "control_state_reason", None)
         return {"calculation_details": details}
 
     @staticmethod
