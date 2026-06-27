@@ -13,6 +13,7 @@ from custom_components.adaptive_cover_pro.building_overview import (
 )
 from custom_components.adaptive_cover_pro.const import (
     CONF_CLIMATE_MODE,
+    CONF_CLOUD_COVERAGE_THRESHOLD,
     CONF_DELTA_POSITION,
     CONF_ENTITIES,
     CONF_LUX_ENTITY,
@@ -21,6 +22,7 @@ from custom_components.adaptive_cover_pro.const import (
     CONF_SENSOR_TYPE,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_WIND_SPEED_SENSOR,
+    CONF_WEATHER_WIND_SPEED_THRESHOLD,
     DEFAULT_DELTA_POSITION,
     CoverType,
 )
@@ -170,6 +172,36 @@ def test_unset_equals_default_in_comparison():
     # under the identical section, never as a "most …, except …" difference line.
     delta_line = next(line for line in text.splitlines() if "Delta position" in line)
     assert delta_line.startswith("- Delta position")
+
+
+def test_int_and_equal_float_compare_identical():
+    """75.0 (HA selector float) and 75 (int default) are the same magnitude."""
+    profile = _profile({})
+    # Float-stored value, int-stored value, and an unset cover (uses int default).
+    a = _cover("A", options={CONF_CLOUD_COVERAGE_THRESHOLD: 75.0})
+    b = _cover("B", options={CONF_CLOUD_COVERAGE_THRESHOLD: 75})
+    c = _cover("C")  # unset → default 75
+    text = build_building_overview(profile, [a, b, c])
+    # Not a difference → no "most …, except …" line for cloud coverage.
+    cloud_line = next(
+        line for line in text.splitlines() if "Cloud coverage threshold" in line
+    )
+    assert cloud_line.startswith("- Cloud coverage threshold")
+    # The ".0" never leaks into the rendered value.
+    assert "75.0" not in text
+
+
+def test_wind_speed_threshold_is_compared():
+    """The weather wind-speed threshold now appears in the comparison."""
+    profile = _profile({})
+    breezy = _cover("Breezy", options={CONF_WEATHER_WIND_SPEED_THRESHOLD: 30})
+    calm = _cover("Calm", options={CONF_WEATHER_WIND_SPEED_THRESHOLD: 60})
+    text = build_building_overview(profile, [breezy, calm])
+    wind_row = next(
+        line for line in text.splitlines() if "Wind speed threshold" in line
+    )
+    assert "Breezy" in wind_row and "30" in wind_row
+    assert "Calm" in wind_row and "60" in wind_row
 
 
 def test_custom_positions_compared_as_count():

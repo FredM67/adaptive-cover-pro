@@ -34,12 +34,15 @@ from .const import (
     CONF_CLIMATE_MODE,
     CONF_CLOUD_COVERAGE_ENTITY,
     CONF_CLOUD_COVERAGE_THRESHOLD,
+    CONF_CLOUD_SUPPRESSION,
+    CONF_CLOUDY_POSITION,
     CONF_DAYTIME_GATE_SENSORS,
     CONF_DAYTIME_GATE_TEMPLATE,
     CONF_DEFAULT_HEIGHT,
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
     CONF_ENABLE_GLARE_ZONES,
+    CONF_END_TIME,
     CONF_ENTITIES,
     CONF_IRRADIANCE_ENTITY,
     CONF_IRRADIANCE_THRESHOLD,
@@ -49,25 +52,43 @@ from .const import (
     CONF_LUX_THRESHOLD,
     CONF_MANUAL_OVERRIDE_DURATION,
     CONF_MANUAL_THRESHOLD,
+    CONF_MAX_ELEVATION,
     CONF_MAX_POSITION,
+    CONF_MIN_ELEVATION,
     CONF_MIN_POSITION,
+    CONF_MOTION_TIMEOUT,
+    CONF_OUTSIDE_THRESHOLD,
     CONF_OUTSIDETEMP_ENTITY,
     CONF_SENSOR_TYPE,
+    CONF_START_TIME,
     CONF_SUNRISE_TIME_ENTITY,
     CONF_SUNSET_POS,
     CONF_SUNSET_TIME_ENTITY,
+    CONF_TEMP_HIGH,
+    CONF_TEMP_LOW,
+    CONF_WEATHER_ENABLED,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_IS_RAINING_SENSOR,
     CONF_WEATHER_IS_WINDY_SENSOR,
     CONF_WEATHER_RAIN_SENSOR,
+    CONF_WEATHER_RAIN_THRESHOLD,
     CONF_WEATHER_SEVERE_SENSORS,
+    CONF_WEATHER_TIMEOUT,
     CONF_WEATHER_WIND_DIRECTION_SENSOR,
+    CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
     CONF_WEATHER_WIND_SPEED_SENSOR,
+    CONF_WEATHER_WIND_SPEED_THRESHOLD,
     CUSTOM_POSITION_SLOTS,
     DEFAULT_CLOUD_COVERAGE_THRESHOLD,
     DEFAULT_DELTA_POSITION,
     DEFAULT_DELTA_TIME,
     DEFAULT_MANUAL_OVERRIDE_DURATION,
+    DEFAULT_MOTION_TIMEOUT,
+    DEFAULT_WEATHER_ENABLED,
+    DEFAULT_WEATHER_RAIN_THRESHOLD,
+    DEFAULT_WEATHER_TIMEOUT,
+    DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
+    DEFAULT_WEATHER_WIND_SPEED_THRESHOLD,
 )
 from .cover_types import get_policy
 from .helpers import (
@@ -333,10 +354,22 @@ def _eff(options: Mapping, key: str, default: Any) -> Any:
     return default if not _is_set(value) else value
 
 
+def _num(value: Any) -> str:
+    """Render a number by magnitude so an int and an equal float match.
+
+    HA number selectors store values as floats, while ``DEFAULT_*`` constants are
+    often ints — without this, ``75.0`` and ``75`` would compare/display as
+    different. Integer-valued floats drop the ``.0``; real fractions are kept.
+    """
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def _fmt(value: Any, suffix: str = "") -> str:
     if not _is_set(value):
         return _NONE
-    return f"{value}{suffix}"
+    return f"{_num(value)}{suffix}"
 
 
 def _onoff(value: Any) -> str:
@@ -359,9 +392,10 @@ def _count_custom_slots(options: Mapping) -> int:
     )
 
 
-# Behavioral comparison specs only — physical/geometry settings (cover type,
-# azimuth, FOV, elevation, window geometry) are expected to differ per window
-# and are deliberately excluded.
+# Behavioral comparison specs only — automation, climate, weather, motion, and
+# time-window thresholds. Physical/geometry settings (cover type, azimuth, FOV,
+# window dimensions) are expected to differ per window and are deliberately
+# excluded; sun-elevation tracking limits are behavioral and are included.
 _COMPARISON_SPECS: tuple[_DiffSpec, ...] = (
     _DiffSpec(
         "Climate mode", lambda r: _onoff(_eff(r.options, CONF_CLIMATE_MODE, False))
@@ -402,7 +436,14 @@ _COMPARISON_SPECS: tuple[_DiffSpec, ...] = (
         "Glare zones",
         lambda r: "enabled" if r.options.get(CONF_ENABLE_GLARE_ZONES) else "off",
     ),
-    _DiffSpec("Motion", lambda r: "enabled" if motion_entities(r.options) else "off"),
+    _DiffSpec(
+        "Motion",
+        lambda r: (
+            f"enabled / {_fmt(_eff(r.options, CONF_MOTION_TIMEOUT, DEFAULT_MOTION_TIMEOUT), 's')}"
+            if motion_entities(r.options)
+            else "off"
+        ),
+    ),
     _DiffSpec(
         "Manual override",
         lambda r: f"{_fmt_duration(_eff(r.options, CONF_MANUAL_OVERRIDE_DURATION, DEFAULT_MANUAL_OVERRIDE_DURATION))}"
@@ -410,8 +451,78 @@ _COMPARISON_SPECS: tuple[_DiffSpec, ...] = (
     ),
     _DiffSpec(
         "Delta position / time",
-        lambda r: f"{_eff(r.options, CONF_DELTA_POSITION, DEFAULT_DELTA_POSITION)}%"
-        f" / {_eff(r.options, CONF_DELTA_TIME, DEFAULT_DELTA_TIME)} min",
+        lambda r: f"{_num(_eff(r.options, CONF_DELTA_POSITION, DEFAULT_DELTA_POSITION))}%"
+        f" / {_num(_eff(r.options, CONF_DELTA_TIME, DEFAULT_DELTA_TIME))} min",
+    ),
+    _DiffSpec(
+        "Sun elevation range",
+        lambda r: f"{_fmt(_eff(r.options, CONF_MIN_ELEVATION, None))}"
+        f"–{_fmt(_eff(r.options, CONF_MAX_ELEVATION, None))}",
+    ),
+    _DiffSpec(
+        "Active time window",
+        lambda r: f"{_fmt(_eff(r.options, CONF_START_TIME, None))}"
+        f"–{_fmt(_eff(r.options, CONF_END_TIME, None))}",
+    ),
+    _DiffSpec(
+        "Indoor temp range",
+        lambda r: f"{_fmt(_eff(r.options, CONF_TEMP_LOW, None))}"
+        f"–{_fmt(_eff(r.options, CONF_TEMP_HIGH, None))}",
+    ),
+    _DiffSpec(
+        "Outdoor temp threshold",
+        lambda r: _fmt(_eff(r.options, CONF_OUTSIDE_THRESHOLD, None)),
+    ),
+    _DiffSpec(
+        "Cloud suppression",
+        lambda r: (
+            f"on / {_fmt(_eff(r.options, CONF_CLOUDY_POSITION, None))}"
+            if r.options.get(CONF_CLOUD_SUPPRESSION)
+            else "off"
+        ),
+    ),
+    _DiffSpec(
+        "Weather protection",
+        lambda r: _onoff(
+            _eff(r.options, CONF_WEATHER_ENABLED, DEFAULT_WEATHER_ENABLED)
+        ),
+    ),
+    _DiffSpec(
+        "Wind speed threshold",
+        lambda r: _fmt(
+            _eff(
+                r.options,
+                CONF_WEATHER_WIND_SPEED_THRESHOLD,
+                DEFAULT_WEATHER_WIND_SPEED_THRESHOLD,
+            )
+        ),
+    ),
+    _DiffSpec(
+        "Wind direction tolerance",
+        lambda r: _fmt(
+            _eff(
+                r.options,
+                CONF_WEATHER_WIND_DIRECTION_TOLERANCE,
+                DEFAULT_WEATHER_WIND_DIRECTION_TOLERANCE,
+            ),
+            "°",
+        ),
+    ),
+    _DiffSpec(
+        "Rain threshold",
+        lambda r: _fmt(
+            _eff(
+                r.options,
+                CONF_WEATHER_RAIN_THRESHOLD,
+                DEFAULT_WEATHER_RAIN_THRESHOLD,
+            )
+        ),
+    ),
+    _DiffSpec(
+        "Weather resume delay",
+        lambda r: _fmt(
+            _eff(r.options, CONF_WEATHER_TIMEOUT, DEFAULT_WEATHER_TIMEOUT), "s"
+        ),
     ),
 )
 
