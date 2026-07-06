@@ -39,6 +39,7 @@ COVER_TYPE_LABELS_EN: dict[str, str] = {
     "cover_types.oscillating_awning": "Oscillating Awning",
     "cover_types.venetian": "Venetian Blind (Dual-Axis)",
     "cover_types.roof_window": "Roof Window",
+    "cover_types.sliding_curtain": "Sliding Curtain",
     "cover_types.louvered_roof": "Louvered Roof",
 }
 
@@ -71,6 +72,14 @@ GEOMETRY_LABELS_EN: dict[str, str] = {
     # Roof / skylight window (#212).
     "geometry.roof.pitch": "roof pitch {v}° from horizontal",
     "geometry.roof.height_above": "{v}m roof above window (ridge gate)",
+    # Sliding curtain (#829, Part 2).
+    "geometry.sliding.slide": "slide: {v}",
+    "geometry.sliding.dir_left": "single (left)",
+    "geometry.sliding.dir_right": "single (right)",
+    "geometry.sliding.dir_bi_part": "centre-parting",
+    "geometry.sliding.width": "{v}m window width",
+    "geometry.sliding.shade_area": "shade area ({x1}, {y1})–({x2}, {y2}) m",
+    "geometry.sliding.binary": "binary open/close (no shade area)",
     # Venetian-only extras.
     "geometry.venetian.skip_tilt": "skip tilt when position > {skip_above}%",
     "geometry.venetian.skip_tilt_suppress": (

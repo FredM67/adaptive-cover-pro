@@ -202,6 +202,7 @@
     "oscillating_awning": "Oscillating Awning",
     "venetian": "Venetian Blind (Dual-Axis)",
     "roof_window": "Roof Window",
+    "sliding_curtain": "Sliding Curtain",
     "louvered_roof": "Louvered Roof"
   },
   "geometry": {
@@ -231,6 +232,15 @@
     "roof": {
       "pitch": "roof pitch {v}° from horizontal",
       "height_above": "{v}m roof above window (ridge gate)"
+    },
+    "sliding": {
+      "slide": "slide: {v}",
+      "dir_left": "single (left)",
+      "dir_right": "single (right)",
+      "dir_bi_part": "centre-parting",
+      "width": "{v}m window width",
+      "shade_area": "shade area ({x1}, {y1})–({x2}, {y2}) m",
+      "binary": "binary open/close (no shade area)"
     },
     "venetian": {
       "skip_tilt": "skip tilt when position > {skip_above}%",
