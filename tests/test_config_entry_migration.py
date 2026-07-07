@@ -562,6 +562,34 @@ async def test_migrate_v3_4_bumps_through_minor_5_without_seeding(
 # ---------------------------------------------------------------------------
 
 
+def test_config_flow_major_version_stays_3_for_rollback_safety() -> None:
+    """ConfigFlowHandler.VERSION must stay 3 so develop→main rollback never breaks.
+
+    Rollback contract (see CLAUDE.md § "Rollback-Safe Config Migrations"):
+    Home Assistant *refuses to load* a config entry whose stored MAJOR version
+    exceeds the running integration's VERSION — a user who installs a develop
+    build and rolls back to an older stable would get a hard "migration
+    downgrade not supported" failure and a dead integration.
+
+    A MINOR bump is forward-compatible (older code loads the entry and ignores
+    keys it doesn't know), which is why every migration to date is a minor bump
+    with an additive block. A MAJOR bump breaks that guarantee.
+
+    This lock does NOT forbid ever bumping VERSION — it forces the bump to be a
+    deliberate decision. If you truly need a non-additive/structural migration,
+    bump VERSION here AND update this assertion AND document the rollback break
+    in the release notes so users know a downgrade requires removing the entry.
+    """
+    from custom_components.adaptive_cover_pro.config_flow import ConfigFlowHandler
+
+    assert ConfigFlowHandler.VERSION == 3, (
+        "Config-entry MAJOR version changed. A major bump breaks rollback to "
+        "older releases (HA won't load a newer-major entry). If this is "
+        "intentional, update this assertion and flag the rollback break in the "
+        "release notes."
+    )
+
+
 def test_config_flow_minor_version_reaches_highest_migration_target() -> None:
     """ConfigFlowHandler.MINOR_VERSION must equal the highest minor version any
     migration block in async_migrate_entry targets.
