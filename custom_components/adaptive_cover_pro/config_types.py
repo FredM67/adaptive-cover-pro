@@ -344,6 +344,112 @@ class RoofWindowConfig:
 
 
 @dataclass
+class SlidingCurtainConfig:
+    """Configuration specific to horizontal sliding curtains (#829, Part 2).
+
+    The two shade-area points are floor Cartesian coordinates in the SAME frame
+    as :class:`GlareZone`: ``x`` along the wall (signed, positive = right facing
+    the window from inside), ``y`` depth into the room (> 0). Projecting both
+    points to the window plane gives the along-wall interval the fabric must
+    cover; ``slide_direction`` maps that interval to an open percentage.
+
+    When ``is_area_configured`` is False (the master toggle is off, or no window
+    width is set) the engine falls back to the Part 1 binary open/close.
+    """
+
+    enabled: bool = False
+    slide_direction: str = "bi_part"
+    window_width: float = 0.0
+    point1_x: float = 0.0
+    point1_y: float = 0.0
+    point2_x: float = 0.0
+    point2_y: float = 0.0
+
+    @property
+    def is_area_configured(self) -> bool:
+        """Whether the continuous two-point shade-area model should be used."""
+        return self.enabled and self.window_width > 0
+
+    @classmethod
+    def from_options(cls, options: dict) -> SlidingCurtainConfig:
+        """Build from a config-entry options dict, applying defaults."""
+        from .const import (
+            CONF_SLIDING_ENABLE_SHADE_AREA,
+            CONF_SLIDING_POINT1_X,
+            CONF_SLIDING_POINT1_Y,
+            CONF_SLIDING_POINT2_X,
+            CONF_SLIDING_POINT2_Y,
+            CONF_SLIDING_SLIDE_DIRECTION,
+            CONF_WINDOW_WIDTH,
+            DEFAULT_SLIDING_ENABLE_SHADE_AREA,
+            DEFAULT_SLIDING_POINT_X,
+            DEFAULT_SLIDING_POINT_Y,
+            DEFAULT_SLIDING_SLIDE_DIRECTION,
+        )
+
+        return cls(
+            enabled=options.get(
+                CONF_SLIDING_ENABLE_SHADE_AREA, DEFAULT_SLIDING_ENABLE_SHADE_AREA
+            ),
+            slide_direction=options.get(
+                CONF_SLIDING_SLIDE_DIRECTION, DEFAULT_SLIDING_SLIDE_DIRECTION
+            ),
+            window_width=float(options.get(CONF_WINDOW_WIDTH) or 0.0),
+            point1_x=float(options.get(CONF_SLIDING_POINT1_X, DEFAULT_SLIDING_POINT_X)),
+            point1_y=float(options.get(CONF_SLIDING_POINT1_Y, DEFAULT_SLIDING_POINT_Y)),
+            point2_x=float(options.get(CONF_SLIDING_POINT2_X, DEFAULT_SLIDING_POINT_X)),
+            point2_y=float(options.get(CONF_SLIDING_POINT2_Y, DEFAULT_SLIDING_POINT_Y)),
+        )
+
+
+@dataclass
+class LouveredRoofConfig:
+    """Configuration specific to louvered (lamella) roofs (#830).
+
+    A louvered roof rotates slats around a horizontal axis lying in a horizontal
+    (or pitched) roof plane — a bioclimatic pergola / "Lamellendach". It reuses
+    the venetian slat geometry (depth, spacing, mode — carried in a sibling
+    ``TiltConfig``) and adds only the roof-plane pitch.
+
+    ``roof_pitch`` is measured FROM HORIZONTAL: ``0`` = flat roof (the default),
+    ``90`` = vertical plane (reduces to the venetian/tilt profile angle exactly).
+
+    ``max_slat_angle`` optionally overrides the tilt mode's 90°/180° ceiling for
+    a pergola drive whose mechanical travel is neither (e.g. 0–160°). ``0`` (the
+    default sentinel) keeps the mode's max; a nonzero value becomes BOTH the
+    clamp ceiling and the tilt%→angle denominator.
+    """
+
+    roof_pitch: float = 0.0
+    max_slat_angle: float = 0.0
+
+    @classmethod
+    def from_options(cls, options: dict) -> LouveredRoofConfig:
+        """Build from a config-entry options dict, applying defaults."""
+        from .const import (
+            CONF_MAX_SLAT_ANGLE,
+            CONF_ROOF_PITCH,
+            DEFAULT_LOUVERED_ROOF_PITCH,
+            DEFAULT_MAX_SLAT_ANGLE,
+        )
+
+        pitch = options.get(CONF_ROOF_PITCH)
+        max_slat = options.get(CONF_MAX_SLAT_ANGLE)
+        return cls(
+            roof_pitch=(
+                float(pitch)
+                if pitch is not None
+                else float(DEFAULT_LOUVERED_ROOF_PITCH)
+            ),
+            max_slat_angle=(
+                float(max_slat)
+                if max_slat is not None
+                else float(DEFAULT_MAX_SLAT_ANGLE)
+            ),
+        )
+
+
+@dataclass
 class TiltConfig:
     """Configuration specific to tilt/venetian blinds."""
 

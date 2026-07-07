@@ -334,6 +334,23 @@ def test_geometry_tilt_shows_tilt_fields():
     assert "mode1" in summary
 
 
+def test_geometry_louvered_roof_shows_slat_and_pitch_fields():
+    """Louvered roof renders the shared slat block plus the roof-plane pitch."""
+    from custom_components.adaptive_cover_pro.const import CONF_ROOF_PITCH
+
+    cfg = {
+        CONF_TILT_DEPTH: 3.0,
+        CONF_TILT_DISTANCE: 2.0,
+        CONF_TILT_MODE: "mode2",
+        CONF_ROOF_PITCH: 15,
+    }
+    summary = _build_config_summary(cfg, CoverType.LOUVERED_ROOF)
+    assert "slat depth 3.0cm" in summary
+    assert "spacing 2.0cm" in summary
+    assert "roof pitch 15° from horizontal" in summary
+    assert "Louvered Roof" in summary
+
+
 def test_geometry_venetian_shows_retract_threshold_default():
     """Venetian summary includes the upper retract threshold at the default value."""
     summary = _build_config_summary({}, CoverType.VENETIAN)
@@ -3176,3 +3193,119 @@ def test_summary_building_profile_line_absent_when_unlinked() -> None:
     assert (
         "building profile" not in summary.lower()
     ), "Summary must not mention 'building profile' for an unlinked cover"
+
+
+# ---------------------------------------------------------------------------
+# Cover Group summary (issue #790)
+# ---------------------------------------------------------------------------
+
+
+def test_summary_group_shows_header_and_member_counts():
+    """A group renders its own compact summary, never the cover chain."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+    )
+
+    summary = _build_config_summary(
+        {
+            CONF_MEMBER_ENTRIES: ["entry_a", "entry_b"],
+            CONF_MEMBER_COVERS: ["cover.generic"],
+        },
+        CoverType.GROUP,
+    )
+
+    assert "**Cover Group**" in summary
+    assert "2 ACP member(s)" in summary
+    assert "1 generic cover(s)" in summary
+    assert "cover.generic" in summary
+    # None of the cover-chain sections appear for a group.
+    assert "How It Decides" not in summary
+
+
+def test_summary_group_empty_roster_warns():
+    """An empty group is called out — it will not command anything."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+    )
+
+    summary = _build_config_summary(
+        {CONF_MEMBER_ENTRIES: [], CONF_MEMBER_COVERS: []},
+        CoverType.GROUP,
+    )
+
+    assert "**Cover Group**" in summary
+    assert "no members" in summary
+
+
+def test_summary_group_shows_arbitration_lines():
+    """Phase 2: scene/lock priorities and the stagger, from the imported consts."""
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_GROUP_STAGGER_DELAY,
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+        CUSTOM_POSITION_SAFETY_PRIORITY,
+        GROUP_SCENE_PRIORITY,
+    )
+
+    summary = _build_config_summary(
+        {
+            CONF_MEMBER_ENTRIES: ["entry_a"],
+            CONF_MEMBER_COVERS: [],
+            CONF_GROUP_STAGGER_DELAY: 2.5,
+        },
+        CoverType.GROUP,
+    )
+
+    assert f"priority {GROUP_SCENE_PRIORITY}" in summary
+    assert f"priority {CUSTOM_POSITION_SAFETY_PRIORITY}" in summary
+    assert "2.5" in summary
+
+
+def test_summary_group_omits_stagger_line_when_zero():
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+    )
+
+    summary = _build_config_summary(
+        {CONF_MEMBER_ENTRIES: ["entry_a"], CONF_MEMBER_COVERS: []},
+        CoverType.GROUP,
+    )
+
+    assert "apart" not in summary
+
+
+def test_summary_group_shows_cover_entity_line_when_enabled():
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_GROUP_ENABLE_COVER_ENTITY,
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+    )
+
+    base = {CONF_MEMBER_ENTRIES: ["entry_a"], CONF_MEMBER_COVERS: []}
+    without = _build_config_summary(base, CoverType.GROUP)
+    assert "Aggregate cover entity" not in without
+
+    with_cover = _build_config_summary(
+        {**base, CONF_GROUP_ENABLE_COVER_ENTITY: True}, CoverType.GROUP
+    )
+    assert "Aggregate cover entity" in with_cover
+
+
+def test_summary_group_shows_area_line_when_configured():
+    from custom_components.adaptive_cover_pro.const import (
+        CONF_GROUP_AREA,
+        CONF_MEMBER_COVERS,
+        CONF_MEMBER_ENTRIES,
+    )
+
+    base = {CONF_MEMBER_ENTRIES: ["entry_a"], CONF_MEMBER_COVERS: []}
+    without = _build_config_summary(base, CoverType.GROUP)
+    assert "area" not in without.lower()
+
+    with_area = _build_config_summary(
+        {**base, CONF_GROUP_AREA: "living_room"}, CoverType.GROUP
+    )
+    assert "living_room" in with_area

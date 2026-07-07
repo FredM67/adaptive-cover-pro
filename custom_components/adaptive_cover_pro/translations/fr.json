@@ -6,7 +6,8 @@
         "menu_options": {
           "create_new": "Créer un nouveau store",
           "create_building_profile": "Créer un profil de bâtiment",
-          "duplicate_existing": "Dupliquer à partir d'un store existant"
+          "duplicate_existing": "Dupliquer à partir d'un store existant",
+          "create_group": "Créer un groupe de stores"
         }
       },
       "create_new": {
@@ -62,6 +63,7 @@
           "venetian_tilt_reset_direction": "Direction de réinitialisation de dérive",
           "venetian_tilt_reset_scope": "Portée de réinitialisation de dérive",
           "roof_pitch": "Pente de toit",
+          "max_slat_angle": "Angle de lamelle maximal",
           "roof_height_above": "Hauteur du toit au-dessus de la fenêtre",
           "venetian_tilt_skip_mode": "Mode Ignorer-Inclinaison",
           "set_azimuth": "Azimut de la fenêtre",
@@ -71,7 +73,13 @@
           "venetian_tilt_safety_margin": "Marge de Sécurité d'Inclinaison",
           "venetian_post_settle_mode": "Mode Attente Post-stabilisation",
           "max_tilt_sun_only": "Appliquer l'inclinaison maximale uniquement pendant le suivi du soleil",
-          "min_tilt_sun_only": "Appliquer l'inclinaison minimale uniquement pendant le suivi du soleil"
+          "min_tilt_sun_only": "Appliquer l'inclinaison minimale uniquement pendant le suivi du soleil",
+          "sliding_enable_shade_area": "Utiliser une zone d'ombrage (couverture continue)",
+          "sliding_slide_direction": "Sens de glissement",
+          "sliding_point1_x": "Point d'ombrage 1 — Le long du mur (X)",
+          "sliding_point1_y": "Point d'ombrage 1 — Vers l'intérieur (Y)",
+          "sliding_point2_x": "Point d'ombrage 2 — Le long du mur (X)",
+          "sliding_point2_y": "Point d'ombrage 2 — Vers l'intérieur (Y)"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre (de bas en haut de la zone vitrée). Affiché dans l'unité configurée dans Home Assistant. Exemples : Porte standard = 2,0 m / 79 in, Petite fenêtre = 1,5 m / 59 in, Du sol au plafond = 2,5 m / 98 in. Mesurez d'où la protection commence à d'où elle finit lorsqu'elle est complètement étendue.",
@@ -99,6 +107,7 @@
           "venetian_tilt_reset_direction": "Direction dans laquelle la réinitialisation de dérive entraîne les lamelles avant de revenir à la cible. **Ouvrir** (par défaut) : entraîner complètement ouvert, puis revenir — le comportement d'origine. **Fermer** : entraîner complètement fermé, puis revenir. Choisissez Fermer quand le store se situe près de la fermeture lors du suivi (une réinitialisation plus silencieuse et plus rapide) ou quand votre actionneur réinitialise les lamelles sur une commande de fermeture.",
           "venetian_tilt_reset_scope": "Détermine quelles commandes d'inclinaison peuvent accumuler de la dérive et déclencher une réinitialisation. **Toutes les commandes d'inclinaison** (par défaut) : chaque mouvement d'inclinaison compte — le comportement d'origine. **Suivi solaire uniquement** : seuls les mouvements de suivi solaire accumulent de la dérive, de sorte que les positions personnalisées ainsi que les inclinaisons manuelles et climatiques ne déclenchent plus le cycle complet d'ouverture puis de retour.",
           "roof_pitch": "Inclinaison du verre de toit mesurée DEPUIS L'HORIZONTALE (0–90°). 0° = un puits de lumière plat (le soleil entre chaque fois qu'il est au-dessus de l'horizon) ; 90° = une fenêtre verticale (se comporte exactement comme un store vertical). Les fenêtres de toit de style Velux typiques ont une pente de 30–50°. Si vous migrez depuis la solution de contournement utilisant les stores verticaux avec une limite d'élévation maximale, cette pente est le complément de cet angle (p. ex. un toit de 35° ↔ une solution de contournement d'environ 55° d'élévation maximale).",
+          "max_slat_angle": "Angle de lamelle maximal physique en degrés, pour un moteur de toit à lamelles dont la course mécanique complète n'est ni de 90° (une direction) ni de 180° (deux directions) — par exemple un moteur de pergola qui tourne de 0 à 160°. Laissez à 0 (par défaut) pour utiliser la plage impliquée par le mode de fonctionnement. Lorsqu'il est défini, cette valeur devient À LA FOIS la limite supérieure de l'angle de lamelle commandé ET la référence pour 100 % d'inclinaison, de sorte que le pourcentage d'inclinaison correspond à la course réelle de votre actionneur.",
           "roof_height_above": "Distance le long de la pente depuis le haut de la fenêtre jusqu'au faîtage du toit (0–10 m). Lorsqu'elle est > 0, le toit au-dessus de la fenêtre peut bloquer le soleil une fois qu'il dépasse le faîtage et descend bas (la porte d'occlusion du faîtage). Définissez à 0 (par défaut) pour désactiver la porte — p. ex. une fenêtre positionnée juste au faîtage sans toit au-dessus. Affichée dans l'unité configurée dans Home Assistant.",
           "venetian_tilt_skip_mode": "Que se passe-t-il pour la commande d'inclinaison une fois que le tablier est commandé au-dessus du seuil d'ignorance. **Neutral** (par défaut) : envoyer une inclinaison neutre complètement ouverte pour écraser l'inclinaison mise en cache de l'actionneur — nécessaire pour les moteurs KNX/Shelly qui réaffirment autrement l'angle de lamelle précédent sur un store relevé. **Suppress** : ne pas envoyer de commande d'inclinaison du tout. Choisissez Suppress pour les stores vénitiens extérieurs couplés mécaniquement (p. ex. Somfy sur Shelly) où toute commande d'inclinaison à la fin de course complètement ouverte entraîne le tablier de sa position de repos.",
           "set_azimuth": "Direction vers laquelle votre fenêtre fait face (0-359°). Nord=0°, Est=90°, Sud=180°, Ouest=270°. Exemple : une fenêtre orientée sud = 180°. Utilisez une application boussole ou vérifiez le soleil à midi pour déterminer. Cela indique à l'intégration où pointe votre fenêtre afin qu'elle puisse calculer les angles du soleil avec précision.",
@@ -108,7 +117,13 @@
           "venetian_tilt_safety_margin": "Marge supplémentaire de fermeture des lamelles pour le soleil en bord de champ (stores vénitiens uniquement), 0.0–1.0. Ajuste la marge de géométrie automatique dépendante de l'angle que l'axe vertical applique déjà, mais dans la direction de fermeture des lamelles. La valeur par défaut 0.0 conserve l'angle de rasance exact (comportement actuel) ; augmentez vers 1.0 pour fermer un peu plus les lamelles aux angles solaires extrêmes pour qu'un rayon de soleil direct ne s'échappe pas. Préférez ceci à l'abaissement de l'Inclinaison maximale des lamelles, qui est un plafond global peu nuancé.",
           "venetian_post_settle_mode": "Comment l'intégration attend entre la stabilisation du chariot et l'envoi de la commande d'inclinaison. **Délai fixe** (par défaut) : toujours attendre le délai Post-stabilisation configuré avant d'incliner — sûr pour tous les actionneurs. **État de l'entité** : au lieu de cela, interroger l'état propre de la protection et envoyer l'inclinaison dès qu'il ne se fait plus « ouvrir »/« fermer », pour les actionneurs (p. ex. Shelly 2PM) avec des états de mouvement fiables. Revient au délai fixe si l'état n'est pas disponible ou si le chariot est encore en mouvement une fois la durée d'attente écoulée.",
           "max_tilt_sun_only": "Lorsque désactivé (par défaut), le plafond d'inclinaison maximale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plafond s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon.",
-          "min_tilt_sun_only": "Lorsque désactivé (par défaut), le plancher d'inclinaison minimale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plancher s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon."
+          "min_tilt_sun_only": "Lorsque désactivé (par défaut), le plancher d'inclinaison minimale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plancher s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon.",
+          "sliding_enable_shade_area": "Lorsqu'elle est activée, le rideau se ferme uniquement autant que nécessaire pour garder une zone d'ombrage au sol à deux points à l'abri du soleil direct, offrant une couverture continue au lieu de l'ouverture/fermeture complète par défaut. Définissez les deux points de la zone d'ombrage ci-dessous. Lorsqu'elle est désactivée, le rideau se déploie entièrement chaque fois que le soleil direct atteint la fenêtre et se rétracte sinon.",
+          "sliding_slide_direction": "Comment le tissu se déploie sur l'ouverture. **Ouverture centrale** (par défaut) : deux pans se séparent du milieu. **Un seul pan (gauche)** : un pan ancré au bord gauche, se ferme vers la droite. **Un seul pan (droite)** : un pan ancré au bord droit, se ferme vers la gauche. Détermine comment la zone de sol couverte correspond à un pourcentage d'ouverture.",
+          "sliding_point1_x": "Position le long du mur du point 1 de la zone d'ombrage, mesurée à partir du centre de la fenêtre (0), positive vers la droite en regardant la fenêtre de l'intérieur. Affichée dans l'unité configurée pour Home Assistant. Même système de coordonnées que les zones d'éblouissement.",
+          "sliding_point1_y": "Profondeur du point 1 de la zone d'ombrage dans la pièce, mesurée à partir du plan de la fenêtre (doit être supérieure à 0). Affichée dans l'unité configurée pour Home Assistant. Les deux points délimitent la zone de sol que vous souhaitez garder dans l'ombre.",
+          "sliding_point2_x": "Position le long du mur du point 2 de la zone d'ombrage, mesurée à partir du centre de la fenêtre (0), positive vers la droite en regardant la fenêtre de l'intérieur. Affichée dans l'unité configurée pour Home Assistant. Même système de coordonnées que les zones d'éblouissement.",
+          "sliding_point2_y": "Profondeur du point 2 de la zone d'ombrage dans la pièce, mesurée à partir du plan de la fenêtre (doit être supérieure à 0). Affichée dans l'unité configurée pour Home Assistant. Les deux points délimitent la zone de sol que vous souhaitez garder dans l'ombre."
         }
       },
       "sun_tracking": {
@@ -758,6 +773,21 @@
         "data_description": {
           "building_profile_id": "Associez ce volet à un Profil de bâtiment pour hériter de ses capteurs partagés à l'échelle du bâtiment. Sélectionnez « Aucun (non lié) » pour ignorer l'association de profil et gérer les capteurs de ce volet localement."
         }
+      },
+      "create_group": {
+        "title": "Créer un groupe de stores",
+        "description": "Un groupe de stores commande un ensemble de stores ensemble : scènes (Tous ouverts, Tous fermés, Confidentialité), contrôle d'automation en masse et suppression des dérogations manuelles. Sélectionnez les instances Adaptive Cover Pro comme membres, et ajoutez les entités de store simples pour les stores sans leur propre instance. [En savoir plus]({learn_more})",
+        "data": {
+          "name": "Nom du groupe",
+          "member_entries": "Membres Adaptive Cover Pro",
+          "member_covers": "Entités de store génériques",
+          "group_area": "Zone (adhésion dynamique)"
+        },
+        "data_description": {
+          "member_entries": "Les membres sont orchestrés via leur propre instance, donc les portails et dérogations s'appliquent toujours.",
+          "member_covers": "Les stores simples sont commandés directement avec la cible de scène. Un store déjà contrôlé par un membre sélectionné est ignoré.",
+          "group_area": "Optionnel : les stores de cette zone rejoignent le groupe automatiquement et l'adhésion suit les modifications du registre. Combiné avec les listes ci-dessus."
+        }
       }
     },
     "abort": {
@@ -793,7 +823,10 @@
           "building_profile": "🏢 Profil de bâtiment",
           "profile_sensors": "📡 Capteurs partagés",
           "profile_overview": "🏢 Aperçu du profil",
-          "profile_overrides": "🧹 Dérogations locales"
+          "profile_overrides": "🧹 Dérogations locales",
+          "group_membership": "👥 Membres du groupe",
+          "group_arbitration": "⚖️ Arbitrage & Synchronisation",
+          "group_entities": "🧩 Entités exposées"
         },
         "description": "Configuration : **{instance_name}**{profile_line}\n\nSi Adaptive Cover Pro vous a été utile, vous pouvez [☕ Buy Me a Coffee]({coffee_url})."
       },
@@ -864,6 +897,7 @@
           "venetian_tilt_reset_direction": "Direction de réinitialisation de dérive",
           "venetian_tilt_reset_scope": "Portée de réinitialisation de dérive",
           "roof_pitch": "Pente de toit",
+          "max_slat_angle": "Angle de lamelle maximal",
           "roof_height_above": "Hauteur du toit au-dessus de la fenêtre",
           "venetian_tilt_skip_mode": "Mode Ignorer-Inclinaison",
           "set_azimuth": "Azimut de la fenêtre",
@@ -873,7 +907,13 @@
           "venetian_tilt_safety_margin": "Marge de Sécurité d'Inclinaison",
           "venetian_post_settle_mode": "Mode Attente Post-stabilisation",
           "max_tilt_sun_only": "Appliquer l'inclinaison maximale uniquement pendant le suivi du soleil",
-          "min_tilt_sun_only": "Appliquer l'inclinaison minimale uniquement pendant le suivi du soleil"
+          "min_tilt_sun_only": "Appliquer l'inclinaison minimale uniquement pendant le suivi du soleil",
+          "sliding_enable_shade_area": "Utiliser une zone d'ombrage (couverture continue)",
+          "sliding_slide_direction": "Sens de glissement",
+          "sliding_point1_x": "Point d'ombrage 1 — Le long du mur (X)",
+          "sliding_point1_y": "Point d'ombrage 1 — Vers l'intérieur (Y)",
+          "sliding_point2_x": "Point d'ombrage 2 — Le long du mur (X)",
+          "sliding_point2_y": "Point d'ombrage 2 — Vers l'intérieur (Y)"
         },
         "data_description": {
           "window_height": "Hauteur de votre fenêtre (de bas en haut de la zone vitrée). Affiché dans l'unité configurée dans Home Assistant. Exemples : Porte standard = 2,0 m / 79 in, Petite fenêtre = 1,5 m / 59 in, Du sol au plafond = 2,5 m / 98 in. Mesurez d'où la protection commence à d'où elle finit lorsqu'elle est complètement étendue.",
@@ -901,6 +941,7 @@
           "venetian_tilt_reset_direction": "Direction dans laquelle la réinitialisation de dérive entraîne les lamelles avant de revenir à la cible. **Ouvrir** (par défaut) : entraîner complètement ouvert, puis revenir — le comportement d'origine. **Fermer** : entraîner complètement fermé, puis revenir. Choisissez Fermer quand le store se situe près de la fermeture lors du suivi (une réinitialisation plus silencieuse et plus rapide) ou quand votre actionneur réinitialise les lamelles sur une commande de fermeture.",
           "venetian_tilt_reset_scope": "Détermine quelles commandes d'inclinaison peuvent accumuler de la dérive et déclencher une réinitialisation. **Toutes les commandes d'inclinaison** (par défaut) : chaque mouvement d'inclinaison compte — le comportement d'origine. **Suivi solaire uniquement** : seuls les mouvements de suivi solaire accumulent de la dérive, de sorte que les positions personnalisées ainsi que les inclinaisons manuelles et climatiques ne déclenchent plus le cycle complet d'ouverture puis de retour.",
           "roof_pitch": "Inclinaison du verre de toit mesurée DEPUIS L'HORIZONTALE (0–90°). 0° = un puits de lumière plat (le soleil entre chaque fois qu'il est au-dessus de l'horizon) ; 90° = une fenêtre verticale (se comporte exactement comme un store vertical). Les fenêtres de toit de style Velux typiques ont une pente de 30–50°. Si vous migrez depuis la solution de contournement utilisant les stores verticaux avec une limite d'élévation maximale, cette pente est le complément de cet angle (p. ex. un toit de 35° ↔ une solution de contournement d'environ 55° d'élévation maximale).",
+          "max_slat_angle": "Angle de lamelle maximal physique en degrés, pour un moteur de toit à lamelles dont la course mécanique complète n'est ni de 90° (une direction) ni de 180° (deux directions) — par exemple un moteur de pergola qui tourne de 0 à 160°. Laissez à 0 (par défaut) pour utiliser la plage impliquée par le mode de fonctionnement. Lorsqu'il est défini, cette valeur devient À LA FOIS la limite supérieure de l'angle de lamelle commandé ET la référence pour 100 % d'inclinaison, de sorte que le pourcentage d'inclinaison correspond à la course réelle de votre actionneur.",
           "roof_height_above": "Distance le long de la pente depuis le haut de la fenêtre jusqu'au faîtage du toit (0–10 m). Lorsqu'elle est > 0, le toit au-dessus de la fenêtre peut bloquer le soleil une fois qu'il dépasse le faîtage et descend bas (la porte d'occlusion du faîtage). Définissez à 0 (par défaut) pour désactiver la porte — p. ex. une fenêtre positionnée juste au faîtage sans toit au-dessus. Affichée dans l'unité configurée dans Home Assistant.",
           "venetian_tilt_skip_mode": "Que se passe-t-il pour la commande d'inclinaison une fois que le tablier est commandé au-dessus du seuil d'ignorance. **Neutral** (par défaut) : envoyer une inclinaison neutre complètement ouverte pour écraser l'inclinaison mise en cache de l'actionneur — nécessaire pour les moteurs KNX/Shelly qui réaffirment autrement l'angle de lamelle précédent sur un store relevé. **Suppress** : ne pas envoyer de commande d'inclinaison du tout. Choisissez Suppress pour les stores vénitiens extérieurs couplés mécaniquement (p. ex. Somfy sur Shelly) où toute commande d'inclinaison à la fin de course complètement ouverte entraîne le tablier de sa position de repos.",
           "set_azimuth": "Direction vers laquelle votre fenêtre fait face (0-359°). Nord=0°, Est=90°, Sud=180°, Ouest=270°. Exemple : une fenêtre orientée sud = 180°. Utilisez une application boussole ou vérifiez le soleil à midi pour déterminer. Cela indique à l'intégration où pointe votre fenêtre afin qu'elle puisse calculer les angles du soleil avec précision.",
@@ -910,7 +951,13 @@
           "venetian_tilt_safety_margin": "Marge supplémentaire de fermeture des lamelles pour le soleil en bord de champ (stores vénitiens uniquement), 0.0–1.0. Ajuste la marge de géométrie automatique dépendante de l'angle que l'axe vertical applique déjà, mais dans la direction de fermeture des lamelles. La valeur par défaut 0.0 conserve l'angle de rasance exact (comportement actuel) ; augmentez vers 1.0 pour fermer un peu plus les lamelles aux angles solaires extrêmes pour qu'un rayon de soleil direct ne s'échappe pas. Préférez ceci à l'abaissement de l'Inclinaison maximale des lamelles, qui est un plafond global peu nuancé.",
           "venetian_post_settle_mode": "Comment l'intégration attend entre la stabilisation du chariot et l'envoi de la commande d'inclinaison. **Délai fixe** (par défaut) : toujours attendre le délai Post-stabilisation configuré avant d'incliner — sûr pour tous les actionneurs. **État de l'entité** : au lieu de cela, interroger l'état propre de la protection et envoyer l'inclinaison dès qu'il ne se fait plus « ouvrir »/« fermer », pour les actionneurs (p. ex. Shelly 2PM) avec des états de mouvement fiables. Revient au délai fixe si l'état n'est pas disponible ou si le chariot est encore en mouvement une fois la durée d'attente écoulée.",
           "max_tilt_sun_only": "Lorsque désactivé (par défaut), le plafond d'inclinaison maximale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plafond s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon.",
-          "min_tilt_sun_only": "Lorsque désactivé (par défaut), le plancher d'inclinaison minimale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plancher s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon."
+          "min_tilt_sun_only": "Lorsque désactivé (par défaut), le plancher d'inclinaison minimale est appliqué à tout moment, y compris l'inclinaison par défaut utilisée lorsque le soleil est en dehors du champ de vision. Lorsqu'activé, le plancher s'applique uniquement pendant le suivi actif du soleil. L'inclinaison au coucher du soleil et les inclinaisons de position personnalisée ne sont jamais affectées de l'une ou l'autre façon.",
+          "sliding_enable_shade_area": "Lorsqu'elle est activée, le rideau se ferme uniquement autant que nécessaire pour garder une zone d'ombrage au sol à deux points à l'abri du soleil direct, offrant une couverture continue au lieu de l'ouverture/fermeture complète par défaut. Définissez les deux points de la zone d'ombrage ci-dessous. Lorsqu'elle est désactivée, le rideau se déploie entièrement chaque fois que le soleil direct atteint la fenêtre et se rétracte sinon.",
+          "sliding_slide_direction": "Comment le tissu se déploie sur l'ouverture. **Ouverture centrale** (par défaut) : deux pans se séparent du milieu. **Un seul pan (gauche)** : un pan ancré au bord gauche, se ferme vers la droite. **Un seul pan (droite)** : un pan ancré au bord droit, se ferme vers la gauche. Détermine comment la zone de sol couverte correspond à un pourcentage d'ouverture.",
+          "sliding_point1_x": "Position le long du mur du point 1 de la zone d'ombrage, mesurée à partir du centre de la fenêtre (0), positive vers la droite en regardant la fenêtre de l'intérieur. Affichée dans l'unité configurée pour Home Assistant. Même système de coordonnées que les zones d'éblouissement.",
+          "sliding_point1_y": "Profondeur du point 1 de la zone d'ombrage dans la pièce, mesurée à partir du plan de la fenêtre (doit être supérieure à 0). Affichée dans l'unité configurée pour Home Assistant. Les deux points délimitent la zone de sol que vous souhaitez garder dans l'ombre.",
+          "sliding_point2_x": "Position le long du mur du point 2 de la zone d'ombrage, mesurée à partir du centre de la fenêtre (0), positive vers la droite en regardant la fenêtre de l'intérieur. Affichée dans l'unité configurée pour Home Assistant. Même système de coordonnées que les zones d'éblouissement.",
+          "sliding_point2_y": "Profondeur du point 2 de la zone d'ombrage dans la pièce, mesurée à partir du plan de la fenêtre (doit être supérieure à 0). Affichée dans l'unité configurée pour Home Assistant. Les deux points délimitent la zone de sol que vous souhaitez garder dans l'ombre."
         }
       },
       "sun_tracking": {
@@ -1579,6 +1626,46 @@
         },
         "title": "Profil de bâtiment — Dérogations locales",
         "description": "Capteurs qu'une couverture liée a dérogée, ou définis localement lorsque ce profil les laisse vides. Sélectionnez-en un pour réinitialiser — un capteur dérogaté réhérite la valeur du profil; un capteur local est effacé.\n\n{overrides}"
+      },
+      "group_membership": {
+        "title": "Membres du groupe",
+        "description": "Modifiez quels stores ce groupe commande. [En savoir plus]({learn_more})",
+        "data": {
+          "member_entries": "Membres Adaptive Cover Pro",
+          "member_covers": "Entités de store génériques",
+          "group_area": "Zone (adhésion dynamique)"
+        },
+        "data_description": {
+          "member_entries": "Les membres sont orchestrés via leur propre instance, donc les portails et dérogations s'appliquent toujours.",
+          "member_covers": "Les stores simples sont commandés directement avec la cible de scène. Un store déjà contrôlé par un membre sélectionné est ignoré.",
+          "group_area": "Optionnel : les stores de cette zone rejoignent le groupe automatiquement et l'adhésion suit les modifications du registre. Combiné avec les listes ci-dessus."
+        }
+      },
+      "group_arbitration": {
+        "title": "Arbitrage & Synchronisation",
+        "description": "Les scènes de groupe l'emportent sur la dérogation manuelle d'un membre, mais cèdent à la sécurité météo ; le verrouillage de groupe prime sur tout sauf le déclencheur de sécurité propre d'un membre. [En savoir plus]({learn_more})",
+        "data": {
+          "group_stagger_delay": "Délai d'échelonnement",
+          "scene_opt_outs": "Exclusions de scène"
+        },
+        "data_description": {
+          "group_stagger_delay": "Secondes entre les commandes successives des membres lors d'une scène. 0 = commander tous les membres à la fois.",
+          "scene_opt_outs": "Les membres cochés ici sont ignorés pour la scène sélectionnée. « Toutes les scènes » ignore le membre pour chaque scène. Le verrouillage de groupe ignore les exclusions."
+        }
+      },
+      "group_entities": {
+        "title": "Entités exposées",
+        "description": "Choisissez les entités agrégées que ce groupe crée. Les contrôles de scène et les commutateurs en masse sont toujours disponibles. [En savoir plus]({learn_more})",
+        "data": {
+          "group_enable_cover_entity": "Entité de store agrégée",
+          "group_enable_position_sensor": "Capteur de position du groupe",
+          "group_enable_state_sensor": "Capteur d'état du groupe",
+          "group_enable_climate_sensor": "Capteur de mode climatique du groupe",
+          "group_enable_who_won_sensor": "Capteur de membres pilotés par le groupe"
+        },
+        "data_description": {
+          "group_enable_cover_entity": "Une seule entité de store pour les tableaux de bord et les assistants vocaux. La faire glisser commande chaque membre comme une action utilisateur. Désactivée par défaut pour éviter l'encombrement."
+        }
       }
     },
     "abort": {
@@ -1635,6 +1722,38 @@
       },
       "solar_calculation": {
         "name": "Calcul solaire"
+      },
+      "group_position": {
+        "name": "Position du groupe"
+      },
+      "group_state": {
+        "name": "État du groupe",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "mixed": "Mixte",
+          "unknown": "Inconnu"
+        }
+      },
+      "group_active_scene": {
+        "name": "Scène active",
+        "state": {
+          "all_open": "Tous ouverts",
+          "all_closed": "Tous fermés",
+          "privacy": "Confidentialité"
+        }
+      },
+      "group_who_won": {
+        "name": "Membres dirigés par le groupe"
+      },
+      "group_climate_mode": {
+        "name": "Mode climatique du groupe",
+        "state": {
+          "summer_mode": "Été",
+          "winter_mode": "Hiver",
+          "intermediate": "Intermédiaire",
+          "mixed": "Mixte"
+        }
       }
     },
     "switch": {
@@ -1684,16 +1803,50 @@
           "on": "Activé",
           "off": "Désactivé"
         }
+      },
+      "group_automation": {
+        "name": "Automation du groupe"
+      },
+      "group_lock": {
+        "name": "Verrouillage de groupe"
       }
     },
     "button": {
       "my_position": {
         "name": "Position My gérée"
+      },
+      "group_scene_all_open": {
+        "name": "Scène : Tous ouverts"
+      },
+      "group_scene_all_closed": {
+        "name": "Scène : Tous fermés"
+      },
+      "group_scene_privacy": {
+        "name": "Scène : Confidentialité"
+      },
+      "group_clear_overrides": {
+        "name": "Supprimer les dérogations des membres"
       }
     },
     "number": {
       "my_position_value": {
         "name": "Valeur de position My gérée"
+      }
+    },
+    "select": {
+      "group_scene_select": {
+        "name": "Scène",
+        "state": {
+          "all_open": "Tous ouverts",
+          "all_closed": "Tous fermés",
+          "privacy": "Confidentialité",
+          "auto": "Auto"
+        }
+      }
+    },
+    "cover": {
+      "group_cover": {
+        "name": "Store du groupe"
       }
     }
   },
@@ -1705,7 +1858,9 @@
         "cover_tilt": "Store à inclinaison",
         "cover_venetian": "Store vénitien (double axe)",
         "cover_oscillating_awning": "Store banne à bras articulé",
-        "cover_roof_window": "Fenêtre de toit"
+        "cover_roof_window": "Fenêtre de toit",
+        "cover_sliding_curtain": "Rideau coulissant (horizontal)",
+        "cover_louvered_roof": "Toit à lames"
       }
     },
     "tilt_mode": {
@@ -1768,6 +1923,13 @@
       "options": {
         "below": "En dessous — bloque le soleil bas (arbre ou avant-toit)",
         "above": "Au-dessus — bloque le soleil haut (obstacle en surplomb, par ex. balcon)"
+      }
+    },
+    "sliding_slide_direction": {
+      "options": {
+        "bi_part": "Ouverture centrale — deux pans se rejoignent au milieu",
+        "left": "Un seul pan — ancré à gauche, se ferme vers la droite",
+        "right": "Un seul pan — ancré à droite, se ferme vers la gauche"
       }
     }
   },
@@ -2385,6 +2547,52 @@
         "filename": {
           "name": "Chemin du fichier",
           "description": "Chemin du fichier JSON à importer. Les chemins relatifs se résolvent par rapport au répertoire de configuration Home Assistant et doivent rester à l'intérieur. Par défaut adaptive_cover_pro_export.json."
+        }
+      }
+    },
+    "group_activate_scene": {
+      "name": "Groupe : activer la scène",
+      "description": "Active une scène sur les groupes de stores ciblés, ou libère la prise avec « auto ». Les scènes suivent le pipeline de chaque membre — la météo et la sécurité du membre gagnent toujours.",
+      "fields": {
+        "scene": {
+          "name": "Scène",
+          "description": "La scène à activer, ou « auto » pour libérer la prise."
+        }
+      }
+    },
+    "group_set_position": {
+      "name": "Groupe : définir la position",
+      "description": "Déplace chaque membre des groupes de stores ciblés à la position donnée en tant que commande utilisateur (l'engagement de la dérogation manuelle et les pinces limites s'appliquent).",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Position (0-100%) pour déplacer les stores membres. 0% = fermé (stores baissés / store enroulé rétracté), 100% = ouvert (stores levés / store enroulé déroulé)."
+        },
+        "tilt": {
+          "name": "Inclinaison",
+          "description": "Inclinaison facultative des lames (0-100%) éventée sur l'axe d'inclinaison."
+        }
+      }
+    },
+    "group_lock": {
+      "name": "Groupe : verrouiller",
+      "description": "Gèle chaque membre des groupes de stores ciblés en place à la priorité de sécurité. Le propre déclencheur de sécurité d'un membre gagne toujours les égalités."
+    },
+    "group_unlock": {
+      "name": "Groupe : déverrouiller",
+      "description": "Libère le verrouillage du groupe. Une scène active est réappliquée ; sinon, les membres reviennent à leur propre automatisation."
+    },
+    "group_clear_overrides": {
+      "name": "Groupe : effacer les dérogations des membres",
+      "description": "Efface les dérogations manuelles sur chaque membre ACP des groupes de stores ciblés et renvoie la position du pipeline de chaque membre."
+    },
+    "group_set_automation": {
+      "name": "Groupe : définir l'automatisation",
+      "description": "Active ou désactive en masse l'automatisation du suivi du soleil sur chaque membre ACP des groupes de stores ciblés.",
+      "fields": {
+        "enabled": {
+          "name": "Activé",
+          "description": "True pour activer l'automatisation des membres, false pour la désactiver."
         }
       }
     }

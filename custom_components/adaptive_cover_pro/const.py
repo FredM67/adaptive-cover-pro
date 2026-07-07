@@ -96,6 +96,51 @@ CONF_PROFILE_SENSOR_OVERRIDES = "profile_sensor_overrides"
 # multi-select becomes an exclude list instead of an include list).
 CONF_SYNC_SELECT_ALL = "select_all_targets"
 
+# Cover-group membership rosters, stored on the GROUP entry only (issue #790).
+# Two lists because the member kinds are structural: ACP members are config
+# entries (orchestrated through their own coordinator — an ACP instance may
+# expose no cover entity at all when the proxy is off), generic members are
+# plain ``cover.*`` entity_ids (adopt mode, commanded directly).
+CONF_MEMBER_ENTRIES = "member_entries"  # ACP member config-entry ids
+CONF_MEMBER_COVERS = "member_covers"  # generic cover entity_ids
+
+# Optional area-based membership source (issue #790, Phase 4). LIVE, not a
+# one-shot seed: the effective rosters are the static lists ∪ the area's
+# resolved members (ACP entries with a controlled cover in the area; free
+# ``cover.*`` entities in the area), re-resolved on registry changes.
+CONF_GROUP_AREA = "group_area"
+
+# Per-member scene opt-out, stored on the GROUP entry keyed by member
+# entry_id so a member removal prunes cleanly: {member_id: [scene, ...]}.
+# The sentinel OPT_OUT_ALL_SCENES ("*") opts a member out of every scene.
+# Enforced group-side at intent-push time (the member handler stays dumb);
+# the group lock ignores opt-out — it is a safety claim on every member.
+CONF_GROUP_MEMBER_OPT_OUT = "group_member_opt_out"
+OPT_OUT_ALL_SCENES = "*"
+
+# Seconds between successive member commands during a group fan-out
+# (scene activation). 0 = simultaneous. Issue #790 Phase 2.
+CONF_GROUP_STAGGER_DELAY = "group_stagger_delay"
+DEFAULT_GROUP_STAGGER_DELAY = 0.0
+_RANGE_GROUP_STAGGER = (0.0, 30.0)
+
+# The scene select's "no scene" option (wire-stable select state). Not a
+# GroupScene member — it is the absence of a scene: choosing it clears the
+# group's claim so members return to their own pipelines.
+GROUP_SCENE_SELECT_AUTO = "auto"
+
+# Entity-exposure toggles for a group entry (issue #790, Phase 3). The
+# aggregate cover entity defaults OFF (dashboard/voice clutter); the sensors
+# default ON. The active-scene sensor, scene controls, and bulk switches are
+# always created (primary control surface, no toggle).
+CONF_GROUP_ENABLE_COVER_ENTITY = "group_enable_cover_entity"
+DEFAULT_GROUP_ENABLE_COVER_ENTITY = False
+CONF_GROUP_ENABLE_POSITION_SENSOR = "group_enable_position_sensor"
+CONF_GROUP_ENABLE_STATE_SENSOR = "group_enable_state_sensor"
+CONF_GROUP_ENABLE_CLIMATE_SENSOR = "group_enable_climate_sensor"
+CONF_GROUP_ENABLE_WHO_WON_SENSOR = "group_enable_who_won_sensor"
+DEFAULT_GROUP_ENABLE_SENSOR = True  # shared default for the four sensor toggles
+
 # Default name prefix used by the config flow when auto-naming a cover from its
 # entity's friendly name (no linked device available) — see config_flow.py's
 # cover_entities auto-fill and async_step_update finalization fallback (#771).
@@ -123,6 +168,35 @@ CONF_ROOF_HEIGHT_ABOVE = (
 )
 DEFAULT_ROOF_PITCH = 40  # degrees — typical Velux roof window pitch
 DEFAULT_ROOF_HEIGHT_ABOVE = 0.0  # metres — 0 disables the ridge occlusion gate
+# Sliding-curtain shade-area geometry (#829, Part 2). A horizontal sliding
+# curtain can close a continuous fraction across the window from a two-point
+# shade area given in floor Cartesian coordinates (x = along the wall, signed,
+# positive = right facing the window from inside; y = depth into the room, > 0)
+# — the SAME frame as glare zones. When the shade area is disabled the curtain
+# falls back to the Part 1 binary open/close. ``SlideDirection`` / the default
+# live in the enums block near ``CoverType`` (needed before the config_fields
+# import); the flat point/width keys reuse the shared ``window_width`` field.
+CONF_SLIDING_ENABLE_SHADE_AREA = "sliding_enable_shade_area"  # bool master toggle
+CONF_SLIDING_SLIDE_DIRECTION = (
+    "sliding_slide_direction"  # one of SLIDING_SLIDE_DIRECTIONS
+)
+CONF_SLIDING_POINT1_X = "sliding_point1_x"  # shade point 1, along-wall x, m (signed)
+CONF_SLIDING_POINT1_Y = "sliding_point1_y"  # shade point 1, depth into room, m (>0)
+CONF_SLIDING_POINT2_X = "sliding_point2_x"  # shade point 2, along-wall x, m (signed)
+CONF_SLIDING_POINT2_Y = "sliding_point2_y"  # shade point 2, depth into room, m (>0)
+DEFAULT_SLIDING_ENABLE_SHADE_AREA = False
+DEFAULT_SLIDING_POINT_X = 0.0  # metres
+DEFAULT_SLIDING_POINT_Y = 0.0  # metres — y <= 0 → curtain fully open (guard)
+# Louvered (lamella) roof plane pitch default (#830). A louvered roof reuses
+# CONF_ROOF_PITCH / _RANGE_ROOF_PITCH but defaults to a FLAT plane (0° from
+# horizontal), unlike the roof window's 40° glass default.
+DEFAULT_LOUVERED_ROOF_PITCH = 0  # degrees from horizontal — 0 = flat roof
+# Louvered-roof physical max slat angle (#830 follow-up). Optional override of
+# the tilt-mode's 90°/180° ceiling for pergola drives whose mechanical travel is
+# neither (e.g. a 0–160° motor). 0 (the sentinel default) = use the tilt mode's
+# max. When set it becomes BOTH the clamp ceiling AND the tilt%→angle denominator.
+CONF_MAX_SLAT_ANGLE = "max_slat_angle"  # degrees; 0 = use tilt-mode max
+DEFAULT_MAX_SLAT_ANGLE = 0  # 0 sentinel → tilt mode's 90/180
 CONF_FOV_LEFT = "fov_left"  # left half-FOV from azimuth, degrees 0-180
 CONF_FOV_RIGHT = "fov_right"  # right half-FOV from azimuth, degrees 0-180
 DEFAULT_FOV_LEFT = 90  # degrees; matches config flow default
@@ -138,6 +212,9 @@ TRIGGER_PROXY_POSITION = "proxy_managed"
 TRIGGER_PROXY_OPEN = "proxy_open"
 TRIGGER_PROXY_CLOSE = "proxy_close"
 TRIGGER_PROXY_TILT = "proxy_tilt"
+# Cover-group aggregate cover entity commands (issue #790, Phase 3).
+TRIGGER_GROUP_COVER = "group_cover"
+TRIGGER_GROUP_COVER_TILT = "group_cover_tilt"
 
 
 # =============================================================================
@@ -532,6 +609,16 @@ CUSTOM_POSITION_SLOT_NUMBERS: tuple[int, ...] = tuple(
 # semantics: they command the cover outside the start/end time window and
 # bypass the delta-position/delta-time send gates (issue #563).
 CUSTOM_POSITION_SAFETY_PRIORITY = 100
+
+# Cover-group scene intents claim the pipeline at this priority (issue #790,
+# Phase 2): above manual_override (80) so "put the room in Privacy" wins over
+# a stale per-cover manual state, below weather (90) so wind/rain safety on an
+# outdoor member still overrides a group scene. Declared on GroupSceneHandler;
+# the const exists so the config-flow chain summary and tests import it. Not
+# user-overridable (group-injected handler, not one of HANDLER_PRIORITY_CONF).
+# The group lock reuses CUSTOM_POSITION_SAFETY_PRIORITY (100); a member's own
+# safety slot wins ties via handler build order.
+GROUP_SCENE_PRIORITY = 85
 
 
 def _custom_position_slot_keys(n: int) -> dict[str, str]:
@@ -1252,6 +1339,8 @@ _RANGE_AWNING_PIVOT_OFFSET = (0.0, 2.0)  # CONF_AWNING_PIVOT_OFFSET, metres
 # Geometry — roof / skylight window (#212).
 _RANGE_ROOF_PITCH = (0, 90)  # CONF_ROOF_PITCH, degrees (0=flat, 90=vertical)
 _RANGE_ROOF_HEIGHT_ABOVE = (0.0, 10.0)  # CONF_ROOF_HEIGHT_ABOVE, metres
+# Geometry — louvered roof (#830 follow-up).
+_RANGE_MAX_SLAT_ANGLE = (0, 180)  # CONF_MAX_SLAT_ANGLE, degrees (0 = use tilt mode)
 
 # Geometry — tilt / venetian slats.
 _RANGE_TILT_DEPTH = (0.1, 15.0)  # CONF_TILT_DEPTH, cm
@@ -1268,6 +1357,13 @@ _RANGE_AZIMUTH = (0, 359)  # CONF_AZIMUTH, degrees
 _RANGE_FOV = (0, 180)  # CONF_FOV_LEFT / CONF_FOV_RIGHT, degrees
 _RANGE_ELEVATION = (0, 90)  # min/max elevation, degrees
 _RANGE_DISTANCE = (0.0, 50.0)  # CONF_DISTANCE, metres
+
+# Geometry — sliding-curtain shade area (#829, Part 2). y (depth into the room)
+# reuses the 0–50 m distance span; x (along the wall) is signed — no existing
+# signed range spans a wide window's half-width (glare-zone x is only ±5 m), so a
+# dedicated ±25 m bound (half the 50 m max window width) is added here.
+_RANGE_SLIDING_POINT_X = (-25.0, 25.0)  # CONF_SLIDING_POINT{1,2}_X, metres (signed)
+_RANGE_SLIDING_POINT_Y = _RANGE_DISTANCE  # CONF_SLIDING_POINT{1,2}_Y, metres (0–50)
 
 # Blind spot.
 # Asymmetric LEFT vs RIGHT bounds are a historical quirk; preserved for compat.
@@ -1365,6 +1461,28 @@ DEFAULT_TEMPLATE_COMBINE_MODE = TemplateCombineMode.OR.value
 DEFAULT_MOTION_TEMPLATE_MODE = DEFAULT_TEMPLATE_COMBINE_MODE
 
 
+# Defined here (above the ``config_fields`` import at the bottom of this module)
+# because ``config_fields`` reads ``SLIDING_SLIDE_DIRECTIONS`` at its own import
+# time for the slide-direction ``FieldSpec`` select options.
+class SlideDirection(StrEnum):
+    """Which way a horizontal sliding curtain draws its fabric (#829, Part 2).
+
+    Wire-stable identifiers stored in the cover's options. ``LEFT`` / ``RIGHT``
+    are single-slide leaves anchored to one window edge; ``BI_PART`` parts from
+    the centre (both edges covered, a central gap opens). Governs how a covered
+    along-wall interval maps to an open percentage.
+    """
+
+    LEFT = "left"
+    RIGHT = "right"
+    BI_PART = "bi_part"
+
+
+# Default slide direction: centre-parting, the most common curtain layout.
+DEFAULT_SLIDING_SLIDE_DIRECTION = SlideDirection.BI_PART.value
+SLIDING_SLIDE_DIRECTIONS = tuple(d.value for d in SlideDirection)
+
+
 # ``OPTION_RANGES`` is now assembled from the single field registry in
 # ``config_fields`` (each ``FieldSpec`` carries its own ``rng``). It is
 # re-exported here so the many ``from .const import OPTION_RANGES`` call sites
@@ -1402,10 +1520,17 @@ class CoverType(StrEnum):
     VENETIAN = "cover_venetian"
     OSCILLATING_AWNING = "cover_oscillating_awning"
     ROOF_WINDOW = "cover_roof_window"
+    SLIDING_CURTAIN = "cover_sliding_curtain"
+    LOUVERED_ROOF = "cover_louvered_roof"
     # Virtual entry type — not a physical cover. Holds shared building-level
     # sensor entity IDs that linked covers copy into their own options. Its
     # policy registers no platforms (``controls_cover = False``).
     BUILDING_PROFILE = "cover_building_profile"
+    # Virtual entry type — orchestrates a roster of member covers (ACP
+    # entries + generic ``cover.*`` entities). Controls covers
+    # (``controls_cover = True``) but is not geometry-driven: setup branches
+    # on ``is_orchestrator`` to a ``GroupCoordinator`` (issue #790).
+    GROUP = "cover_group"
 
     @property
     def display_name(self) -> str:
@@ -1422,8 +1547,52 @@ class CoverType(StrEnum):
             self.VENETIAN: "Venetian",
             self.OSCILLATING_AWNING: "Oscillating Awning",
             self.ROOF_WINDOW: "Roof Window",
+            self.SLIDING_CURTAIN: "Sliding Curtain",
+            self.LOUVERED_ROOF: "Louvered Roof",
             self.BUILDING_PROFILE: "Building Profile",
+            self.GROUP: "Cover Group",
         }[self]
+
+
+class GroupScene(StrEnum):
+    """Built-in cover-group scenes (issue #790, Phase 1).
+
+    Wire-stable identifiers: stored as the group's active-scene state and the
+    scene ``select``/``button`` option values. Each scene is a semantic intent
+    resolved per member cover type via ``CoverTypePolicy.position_for_scene``
+    — never an absolute position shared across a mixed group.
+    """
+
+    ALL_OPEN = "all_open"
+    ALL_CLOSED = "all_closed"
+    PRIVACY = "privacy"
+
+
+class GroupIntentKind(StrEnum):
+    """What a cover-group intent asks of a member's pipeline (issue #790).
+
+    ``SCENE`` — claim the position axis at ``GROUP_SCENE_PRIORITY`` with the
+    member policy's resolution of the intent's scene. ``LOCK`` — freeze the
+    member at ``CUSTOM_POSITION_SAFETY_PRIORITY``: the handler wins the
+    pipeline but sends no command, so the cover holds its position.
+    """
+
+    SCENE = "scene"
+    LOCK = "lock"
+
+
+class GroupState(StrEnum):
+    """Aggregate open/closed classification of a cover group's members.
+
+    Wire-stable: the group state sensor reports these values. ``MIXED`` covers
+    every non-uniform roster (members disagree, or sit between endpoints);
+    ``UNKNOWN`` means no member position was readable.
+    """
+
+    OPEN = "open"
+    CLOSED = "closed"
+    MIXED = "mixed"
+    UNKNOWN = "unknown"
 
 
 # =============================================================================
@@ -1561,6 +1730,12 @@ class ControlMethod(StrEnum):
 
     GLARE_ZONE = "glare_zone"
     """Glare zone protection active; cover extends to shield a floor zone."""
+
+    GROUP_SCENE = "group_scene"
+    """A cover-group scene intent claims the position (issue #790, Phase 2)."""
+
+    GROUP_LOCK = "group_lock"
+    """A cover-group lock freezes the cover in place (issue #790, Phase 2)."""
 
 
 class SunState(StrEnum):

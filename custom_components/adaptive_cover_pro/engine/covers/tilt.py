@@ -21,6 +21,33 @@ from ...position_utils import PositionConverter
 from .base import AdaptiveGeneralCover
 
 
+def slat_cutoff_angle(
+    beta: float, slat_distance: float, depth: float
+) -> tuple[float, float, bool]:
+    """Solve the venetian slat cut-off angle for a profile angle ``beta``.
+
+    Single source of truth for the MDPI cut-off expression
+    (https://www.mdpi.com/1996-1073/13/7/1731) plus its negative-discriminant
+    guard, shared by :class:`AdaptiveTiltCover` (vertical-facade profile angle)
+    and the louvered-roof engine (pitched-plane profile angle). Only ``beta``
+    changes between callers; the slat geometry solve is identical.
+
+    Returns ``(slat_angle_deg, discriminant, negative_discriminant)``:
+
+    * ``negative_discriminant`` is ``True`` when the slat_distance/depth ratio is
+      large relative to ``tan(beta)`` (``sqrt`` of a negative). NumPy would
+      return ``nan`` silently; the caller returns ``0.0`` (closed) instead, so
+      the angle is ``0.0`` in that case.
+    * otherwise the angle is ``2·arctan((tan β + √disc)/(1 + ratio))`` in degrees.
+    """
+    ratio = slat_distance / depth
+    discriminant = (tan(beta) ** 2) - (ratio**2) + 1
+    if discriminant < 0:
+        return 0.0, float(discriminant), True
+    slat = 2 * np.arctan((tan(beta) + np.sqrt(discriminant)) / (1 + ratio))
+    return float(np.rad2deg(slat)), float(discriminant), False
+
+
 @dataclass
 class AdaptiveTiltCover(AdaptiveGeneralCover):
     """Calculate state for tilted blinds."""
@@ -62,6 +89,25 @@ class AdaptiveTiltCover(AdaptiveGeneralCover):
         if isinstance(self.mode, TiltMode):
             return self.mode.max_degrees
         return TiltMode(self.mode).max_degrees
+
+    def _effective_max_degrees(self) -> int:
+        """Ceiling + percentage denominator for the slat angle.
+
+        Polymorphic hook. Base: the tilt mode's max (90 for MODE1, 180 for
+        MODE2). The louvered-roof engine overrides this to honour a configurable
+        physical ``max_slat_angle`` for pergola drives whose mechanical travel
+        is neither 90° nor 180°.
+        """
+        return self._max_degrees()
+
+    def _resolve_slat_angle(self, cutoff_angle: float) -> float:
+        """Map the magnitude cut-off angle to the physical slat angle.
+
+        Polymorphic hook. Base: identity — the vertical-facade venetian/tilt
+        angle IS the physical slat angle. The louvered-roof engine overrides
+        this to realize far-side sun as the flipped face (``180° − θ``).
+        """
+        return cutoff_angle
 
     def _build_trace(
         self,
@@ -119,13 +165,17 @@ class AdaptiveTiltCover(AdaptiveGeneralCover):
 
         """
         beta = self.beta
-        max_degrees = self._max_degrees()
+        max_degrees = self._effective_max_degrees()
 
         # Guard: discriminant can be negative when slat_distance/depth ratio is
         # large relative to tan(beta), making sqrt of a negative.  NumPy returns
-        # nan silently; we return 0.0 (closed) as a safe fallback instead.
-        discriminant = (tan(beta) ** 2) - ((self.slat_distance / self.depth) ** 2) + 1
-        if discriminant < 0:
+        # nan silently; we return 0.0 (closed) as a safe fallback instead. The
+        # cut-off math is shared with the louvered-roof engine via
+        # ``slat_cutoff_angle`` (only ``beta`` differs between them).
+        result, discriminant, negative_discriminant = slat_cutoff_angle(
+            beta, self.slat_distance, self.depth
+        )
+        if negative_discriminant:
             self.logger.debug(
                 "Tilt calc: negative discriminant (%.4f) — returning 0° (closed)",
                 float(discriminant),
@@ -140,11 +190,6 @@ class AdaptiveTiltCover(AdaptiveGeneralCover):
                 result=0.0,
             )
             return 0.0
-
-        slat = 2 * np.arctan(
-            (tan(beta) + np.sqrt(discriminant)) / (1 + self.slat_distance / self.depth)
-        )
-        result = np.rad2deg(slat)
 
         # Additional nan guard in case of unexpected floating-point edge cases
         if np.isnan(result):
@@ -165,6 +210,10 @@ class AdaptiveTiltCover(AdaptiveGeneralCover):
             )
             return 0.0
 
+        # Realize the physical slat angle from the magnitude cut-off (identity
+        # for tilt/venetian; the louvered-roof engine flips the far-side face to
+        # ``180° − θ`` here, before the safety margin closes it toward 180).
+        result = self._resolve_slat_angle(result)
         slat_angle_raw_deg = float(result)
 
         # Configurable safety margin (issue #783): reuse the vertical axis'
@@ -215,13 +264,6 @@ class AdaptiveTiltCover(AdaptiveGeneralCover):
         """
         # 0 degrees is closed, 90 degrees is open (mode1), 180 degrees is closed (mode2)
         position = self.calculate_position()
-
-        # Handle both string and TiltMode enum for backward compatibility
-        if isinstance(self.mode, TiltMode):
-            max_degrees = self.mode.max_degrees
-        else:
-            # Convert string to TiltMode
-            mode_enum = TiltMode(self.mode)
-            max_degrees = mode_enum.max_degrees
-
-        return PositionConverter.to_percentage(position, max_degrees)
+        # Same effective ceiling the position solve clamps to (the mode max for
+        # tilt/venetian; a configurable physical max for the louvered roof).
+        return PositionConverter.to_percentage(position, self._effective_max_degrees())

@@ -117,7 +117,7 @@ from .pipeline.handlers import (
 from .pipeline.floors import effective_floor, gather_active_floors
 from .pipeline.registry import PipelineRegistry
 from .pipeline.snapshot_builder import PipelineSnapshotBuilder
-from .pipeline.types import CustomPositionSensorState
+from .pipeline.types import CustomPositionSensorState, GroupIntent
 from .templates import TemplateResolver
 from .const import ControlMethod
 from .state.climate_provider import ClimateProvider, ClimateReadings
@@ -332,6 +332,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # each can carry an independent priority configured by the user.
         self._pipeline = self._build_pipeline()
         self._pipeline_result = None
+
+        # Live cover-group intents, one per group entry pushing to this member
+        # (issue #790, Phase 2). Mutable manager-style state: groups write via
+        # set_group_intent(); each snapshot folds effective_group_intent in.
+        self._group_intents: dict[str, GroupIntent] = {}
 
         # Resolved-target signature last handed to the dispatch path (issue
         # #756). The dispatch decision compares the current cycle's resolved
@@ -1268,6 +1273,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             cover_capabilities=getattr(
                 getattr(self, "_snapshot", None), "cover_capabilities", None
             ),
+            group_intent=self.effective_group_intent,
         )
         self._pipeline_result = self._pipeline.evaluate(snapshot)
 
@@ -1668,6 +1674,109 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             )
             return None
         return await self._cmd_svc.apply_position(cover, state, reason, context=ctx)
+
+    def set_group_intent(self, group_id: str, intent: GroupIntent | None) -> None:
+        """Store or remove one cover-group's live intent for this member.
+
+        ``None`` removes the group's claim (scene cleared, lock released, or
+        the group unloaded). The next snapshot folds ``effective_group_intent``
+        in; the caller is responsible for triggering a refresh.
+        """
+        if intent is None:
+            self._group_intents.pop(group_id, None)
+        else:
+            self._group_intents[group_id] = intent
+
+    @property
+    def effective_group_intent(self) -> GroupIntent | None:
+        """The highest-priority live group intent, or None.
+
+        Priority-ranked, not last-write-wins, so a whole-house lock is never
+        silently clobbered by a facade scene from another group (issue #790).
+        """
+        if not self._group_intents:
+            return None
+        return max(self._group_intents.values(), key=lambda intent: intent.priority)
+
+    @property
+    def pipeline_winner_name(self) -> str | None:
+        """Name of the handler that won the last pipeline evaluation.
+
+        The winner is the first ``matched`` step in trace order (handler
+        steps precede synthetic floor/tilt steps). Read by the cover-group
+        who-won sensor; ``None`` before the first evaluation.
+        """
+        result = self._pipeline_result
+        if result is None:
+            return None
+        return next(
+            (step.handler for step in result.decision_trace if step.matched), None
+        )
+
+    async def async_reset_manual_overrides(
+        self,
+        entities: list[str] | None = None,
+        *,
+        trigger: str = "manual_reset",
+    ) -> list[str]:
+        """Clear manual override on covers and resend the pipeline position.
+
+        Single authoritative reset sequence shared by the Reset Manual
+        Override button and the cover-group bulk clear (issue #790): clear the
+        override flag, suppress re-detection during the refresh, re-run the
+        pipeline, then delegate to the shared post-override send path. Returns
+        the entities whose override was actually cleared.
+        """
+        covers = (
+            entities
+            if entities is not None
+            else self.config_entry.options.get(CONF_ENTITIES, [])
+        )
+        reset_entities: list[str] = []
+        for entity in covers:
+            if self.manager.is_cover_manual(entity):
+                _LOGGER.debug("Resetting manual override for: %s", entity)
+                self.manager.reset(entity)
+                # Suppress re-detection: cover state events during refresh must
+                # not be treated as a new manual override.
+                self._cmd_svc.set_waiting(entity, True)
+                self.cover_state_change = False
+                reset_entities.append(entity)
+            else:
+                _LOGGER.debug(
+                    "Resetting manual override for %s is not needed since it is already auto-controlled",
+                    entity,
+                )
+
+        if not reset_entities:
+            return []
+
+        # Refresh so the pipeline re-runs without the override active,
+        # producing the correct post-override position (climate, solar,
+        # default — whichever handler wins now).
+        await self.async_refresh()
+
+        # Time-window and automatic-control gates live in the shared send
+        # path, along with force=True so time_delta/position_delta are
+        # bypassed for this intentional reset.
+        sent = await self._async_send_after_override_clear(
+            self.state,
+            self.config_entry.options,
+            entities=reset_entities,
+            trigger=trigger,
+        )
+
+        # Entities not sent to (gated by time window / auto-control, or
+        # skipped inside apply_position) must have wait_for_target cleared so
+        # later cover state events are not silently swallowed.
+        for entity in reset_entities:
+            if entity not in sent:
+                _LOGGER.debug(
+                    "Manual override reset: no position change sent for %s",
+                    entity,
+                )
+                self._cmd_svc.set_waiting(entity, False)
+        return reset_entities
 
     async def _async_send_after_override_clear(
         self,
@@ -2443,6 +2552,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             cover_capabilities=getattr(
                 getattr(self, "_snapshot", None), "cover_capabilities", None
             ),
+            group_intent=self.effective_group_intent,
         )
         floors = gather_active_floors(snapshot)
         effective_floor_pos, _ = effective_floor(floors)

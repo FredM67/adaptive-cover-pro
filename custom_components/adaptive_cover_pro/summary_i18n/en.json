@@ -76,7 +76,8 @@
     "somfy_my_unset": "⚠️ Somfy My preset is enabled for one or more targets but My Preset Value is not set — falls back to configured %.",
     "proxy_no_min": "⚠️ Proxy cover is enabled but no custom-position slot has Use as minimum on — the managed cover will not clamp.",
     "custom_and_no_sensors": "⚠️ Custom #{slot}: combine mode AND is set but no trigger sensors are configured — the template alone activates the slot.",
-    "custom_safety_bypass": "⚠️ Custom #{slot} is at safety priority ({safety}) — it bypasses the automatic-control toggle, manual override, and the start/end time window, so it can move the cover even when automatic control is OFF and outside your schedule. Lower its priority below {safety} to make it respect those gates."
+    "custom_safety_bypass": "⚠️ Custom #{slot} is at safety priority ({safety}) — it bypasses the automatic-control toggle, manual override, and the start/end time window, so it can move the cover even when automatic control is OFF and outside your schedule. Lower its priority below {safety} to make it respect those gates.",
+    "group_empty": "⚠️ This group has no members — it will not command anything."
   },
   "motion": {
     "template_source": "occupancy template",
@@ -200,7 +201,9 @@
     "tilt": "Venetian / Tilt Blind",
     "oscillating_awning": "Oscillating Awning",
     "venetian": "Venetian Blind (Dual-Axis)",
-    "roof_window": "Roof Window"
+    "roof_window": "Roof Window",
+    "sliding_curtain": "Sliding Curtain",
+    "louvered_roof": "Louvered Roof"
   },
   "geometry": {
     "window": {
@@ -228,7 +231,17 @@
     },
     "roof": {
       "pitch": "roof pitch {v}° from horizontal",
-      "height_above": "{v}m roof above window (ridge gate)"
+      "height_above": "{v}m roof above window (ridge gate)",
+      "max_slat_angle": "max slat angle {v}°"
+    },
+    "sliding": {
+      "slide": "slide: {v}",
+      "dir_left": "single (left)",
+      "dir_right": "single (right)",
+      "dir_bi_part": "centre-parting",
+      "width": "{v}m window width",
+      "shade_area": "shade area ({x1}, {y1})–({x2}, {y2}) m",
+      "binary": "binary open/close (no shade area)"
     },
     "venetian": {
       "skip_tilt": "skip tilt when position > {skip_above}%",
@@ -247,5 +260,16 @@
     "fov": {
       "computed": "Computed FOV ≈ {deg}°/{deg}° ({w} m width, {d} m reveal depth)"
     }
+  },
+  "group": {
+    "header": "**Cover Group**",
+    "members": "Controls {acp_count} ACP member(s) + {generic_count} generic cover(s)",
+    "member_acp": "- 🪟 {title} (ACP)",
+    "member_generic": "- 🪟 {entity} (generic)",
+    "scene_priority": "Group scenes apply at priority {scene_priority} (above manual override, below weather safety)",
+    "lock": "🔒 Group lock at priority {lock_priority} — freezes members in place; a member's own safety still wins ties",
+    "stagger": "Members commanded {stagger}s apart",
+    "cover_entity": "Aggregate cover entity exposed — dragging it commands every member",
+    "area": "Membership tracks area '{area}' — covers there join automatically"
   }
 }

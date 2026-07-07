@@ -102,6 +102,7 @@ from .const import (
     CONF_MAX_COVERAGE_STEPS,
     CONF_MAX_ELEVATION,
     CONF_MAX_POSITION,
+    CONF_MAX_SLAT_ANGLE,
     CONF_MAX_TILT,
     CONF_MIN_ELEVATION,
     CONF_MIN_POSITION,
@@ -135,6 +136,12 @@ from .const import (
     CONF_SUNSET_TIME_ENTITY,
     CONF_ROOF_HEIGHT_ABOVE,
     CONF_ROOF_PITCH,
+    CONF_SLIDING_ENABLE_SHADE_AREA,
+    CONF_SLIDING_POINT1_X,
+    CONF_SLIDING_POINT1_Y,
+    CONF_SLIDING_POINT2_X,
+    CONF_SLIDING_POINT2_Y,
+    CONF_SLIDING_SLIDE_DIRECTION,
     CONF_SUNSET_USE_MY,
     CONF_TEMP_ENTITY,
     CONF_TEMP_HIGH,
@@ -222,6 +229,10 @@ SECTION_CUSTOM_POSITION = "custom_position"
 SECTION_MOTION_OVERRIDE = "motion_override"
 SECTION_PIPELINE_PRIORITIES = "pipeline_priorities"
 SECTION_DEBUG = "debug"
+# Cover-group-only fields (issue #790). Not in COMMON_SECTION_ORDER, so the
+# section never renders in a cover's options flow — it exists so group
+# numeric fields feed OPTION_RANGES / FIELD_VALIDATORS like every other one.
+SECTION_GROUP = "group"
 
 
 # =============================================================================
@@ -1616,6 +1627,53 @@ _GEOMETRY_SPECS = _spec(
         ValidatorKind.RANGE,
         rng=const._RANGE_ROOF_HEIGHT_ABOVE,
     ),
+    # Louvered-roof physical max slat angle (#830 follow-up). The dynamic
+    # selector is built by the policy's geometry_schema; this spec single-sources
+    # the bounds / validator entry for OPTION_RANGES + FIELD_VALIDATORS.
+    FieldSpec(
+        CONF_MAX_SLAT_ANGLE,
+        SECTION_GEOMETRY,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_MAX_SLAT_ANGLE,
+    ),
+    # Sliding-curtain shade-area geometry (#829, Part 2). Dynamic selectors are
+    # built by the policy's geometry_schema; these specs single-source the
+    # bounds / validator entries for OPTION_RANGES + FIELD_VALIDATORS.
+    FieldSpec(
+        CONF_SLIDING_ENABLE_SHADE_AREA,
+        SECTION_GEOMETRY,
+        ValidatorKind.BOOL,
+    ),
+    FieldSpec(
+        CONF_SLIDING_SLIDE_DIRECTION,
+        SECTION_GEOMETRY,
+        ValidatorKind.SELECT,
+        select_options=const.SLIDING_SLIDE_DIRECTIONS,
+    ),
+    FieldSpec(
+        CONF_SLIDING_POINT1_X,
+        SECTION_GEOMETRY,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_SLIDING_POINT_X,
+    ),
+    FieldSpec(
+        CONF_SLIDING_POINT1_Y,
+        SECTION_GEOMETRY,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_SLIDING_POINT_Y,
+    ),
+    FieldSpec(
+        CONF_SLIDING_POINT2_X,
+        SECTION_GEOMETRY,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_SLIDING_POINT_X,
+    ),
+    FieldSpec(
+        CONF_SLIDING_POINT2_Y,
+        SECTION_GEOMETRY,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_SLIDING_POINT_Y,
+    ),
     FieldSpec(
         CONF_TILT_DEPTH,
         SECTION_GEOMETRY,
@@ -1720,6 +1778,23 @@ _GLARE_ZONE_SPECS = _spec(
 # Registry assembly
 # =============================================================================
 
+_GROUP_SPECS = _spec(
+    FieldSpec(
+        const.CONF_GROUP_STAGGER_DELAY,
+        SECTION_GROUP,
+        ValidatorKind.RANGE,
+        rng=const._RANGE_GROUP_STAGGER,
+        default=const.DEFAULT_GROUP_STAGGER_DELAY,
+        make_selector=_number(
+            minimum=const._RANGE_GROUP_STAGGER[0],
+            maximum=const._RANGE_GROUP_STAGGER[1],
+            step=0.5,
+            unit="s",
+        ),
+    ),
+)
+
+
 _ALL_SPEC_GROUPS: tuple[list[FieldSpec], ...] = (
     _GEOMETRY_SPECS,
     _SUN_TRACKING_SPECS,
@@ -1739,6 +1814,7 @@ _ALL_SPEC_GROUPS: tuple[list[FieldSpec], ...] = (
     _MOTION_OVERRIDE_SPECS,
     _PIPELINE_PRIORITY_SPECS,
     _DEBUG_SPECS,
+    _GROUP_SPECS,
 )
 
 

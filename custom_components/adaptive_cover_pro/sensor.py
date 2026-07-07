@@ -686,16 +686,9 @@ def _motion_status_attrs(s: _ACPDiagnosticSensor) -> Mapping[str, Any] | None:
 
 
 def _climate_status_value(s: _ACPDiagnosticSensor) -> str | None:
-    if s.data.diagnostics is None:
-        return None
-    data = s.data.diagnostics.get("climate_conditions")
-    if data is None:
-        return None
-    if data.get("is_summer"):
-        return "summer_mode"
-    if data.get("is_winter"):
-        return "winter_mode"
-    return "intermediate"
+    from .helpers import climate_mode_from_diagnostics
+
+    return climate_mode_from_diagnostics(s.data.diagnostics)
 
 
 def _round_threshold(value: float | str | None) -> float | None:
@@ -1282,6 +1275,17 @@ async def async_setup_entry(
 ) -> None:
     """Initialize Adaptive Cover Pro config entry."""
     coordinator: AdaptiveDataUpdateCoordinator = config_entry.runtime_data
+
+    # Cover groups expose their own aggregate sensors, never the cover set.
+    from .cover_types import get_policy
+
+    if get_policy(config_entry.data.get(CONF_SENSOR_TYPE)).is_orchestrator:
+        from .group_entities import build_group_sensors
+
+        async_add_entities(
+            build_group_sensors(config_entry.entry_id, hass, config_entry, coordinator)
+        )
+        return
 
     entities: list[SensorEntity] = []
 

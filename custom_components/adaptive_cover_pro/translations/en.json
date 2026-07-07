@@ -6,7 +6,8 @@
         "menu_options": {
           "create_new": "Create new cover",
           "create_building_profile": "Create building profile",
-          "duplicate_existing": "Duplicate from existing cover"
+          "duplicate_existing": "Duplicate from existing cover",
+          "create_group": "Create cover group"
         }
       },
       "create_new": {
@@ -67,7 +68,14 @@
           "awning_housing_offset": "Housing Offset Above Window",
           "awning_pivot_offset": "Pivot Offset From Window",
           "roof_pitch": "Roof Pitch",
+          "max_slat_angle": "Maximum Slat Angle",
           "roof_height_above": "Roof Height Above Window",
+          "sliding_enable_shade_area": "Use a shade area (continuous coverage)",
+          "sliding_slide_direction": "Slide Direction",
+          "sliding_point1_x": "Shade Point 1 — Along Wall (X)",
+          "sliding_point1_y": "Shade Point 1 — Into Room (Y)",
+          "sliding_point2_x": "Shade Point 2 — Along Wall (X)",
+          "sliding_point2_y": "Shade Point 2 — Into Room (Y)",
           "set_azimuth": "Window Azimuth",
           "fov_compute": "Generate field of view from measurements",
           "fov_left": "Field of view left",
@@ -104,7 +112,14 @@
           "awning_housing_offset": "Vertical offset of the arm pivot above the top of the window (0–1 m). Combined with window height and arm length to locate the pivot. Set 0 when the housing sits flush with the window top.",
           "awning_pivot_offset": "Horizontal distance from the awning arm pivot (fabric plane) to the window glass (0–2 m). At low sun this lets the dropped fabric shade lower on the glass, because the fabric stands off the pane. Set this to the housing/arm standoff from the wall plus any window inset/reveal — use 0 when the fabric hangs flush against the glass. Example: 0.7 m / 28 in for an arm mounted well off the wall.",
           "roof_pitch": "Pitch of the roof glass measured FROM HORIZONTAL (0–90°). 0° = a flat skylight (sun lets in whenever it is above the horizon); 90° = a vertical window (behaves exactly like a vertical blind). Typical Velux-style roof windows are 30–50°. If you are migrating from the vertical-blind workaround that used a max-elevation limit, this pitch is the complement of that angle (e.g. a 35° roof ↔ a ~55° max-elevation workaround).",
+          "max_slat_angle": "Physical maximum slat angle in degrees, for a louvered-roof drive whose full mechanical travel is neither 90° (single-direction) nor 180° (bi-directional) — for example a pergola motor that rotates 0–160°. Leave at 0 (default) to use the range implied by the operating mode. When set, this value becomes BOTH the upper clamp on the commanded slat angle AND the reference for 100% tilt, so the tilt percentage maps onto your actuator's real travel.",
           "roof_height_above": "Along-slope distance from the top of the window up to the roof ridge (0–10 m). When > 0 the roof above the window can hide the sun once it swings past the ridge and drops low (the ridge occlusion gate). Set 0 (default) to disable the gate — e.g. a window sitting right at the ridge with no roof above it. Shown in the unit Home Assistant is configured for.",
+          "sliding_enable_shade_area": "When on, the curtain closes only as far as needed to keep a two-point floor shade area out of direct sun, giving continuous coverage instead of the default full open/close. Define the two shade-area points below. When off, the curtain draws fully across whenever direct sun reaches the window and retracts otherwise.",
+          "sliding_slide_direction": "How the fabric draws across the opening. **Centre-parting** (default): two leaves part from the middle. **Single (left)**: one leaf anchored at the left edge, closing rightward. **Single (right)**: one leaf anchored at the right edge, closing leftward. Determines how the covered floor area maps to an open percentage.",
+          "sliding_point1_x": "Along-wall position of shade-area point 1, measured from the window centre (0), positive to the right when facing the window from inside. Shown in the unit Home Assistant is configured for. Same coordinate frame as glare zones.",
+          "sliding_point1_y": "Depth of shade-area point 1 into the room, measured from the window plane (must be greater than 0). Shown in the unit Home Assistant is configured for. The two points bound the floor area you want kept in shadow.",
+          "sliding_point2_x": "Along-wall position of shade-area point 2, measured from the window centre (0), positive to the right when facing the window from inside. Shown in the unit Home Assistant is configured for. Same coordinate frame as glare zones.",
+          "sliding_point2_y": "Depth of shade-area point 2 into the room, measured from the window plane (must be greater than 0). Shown in the unit Home Assistant is configured for. The two points bound the floor area you want kept in shadow.",
           "set_azimuth": "Direction your window faces (0-359°). North=0°, East=90°, South=180°, West=270°. Example: A south-facing window = 180°. Use a compass app or check sun at noon to determine. This tells the integration where your window points so it can calculate sun angles accurately.",
           "fov_compute": "**{computed_fov}**\n\nFills the left/right field of view from the window width and the reveal depth — the reveal depth is measured from the outer wall face, where the cover is located. Set the window width and reveal depth above, then tick this and submit to apply it. The sliders stay editable, so you can adjust either angle afterwards.",
           "fov_left": "How wide the sun tracking area is on the LEFT side of the window (in degrees). Standard windows: 45° (90° total coverage with both sides), Wide windows or glass doors: 60-75°, Narrow windows: 30°. Think of this as peripheral vision - how far to the left should we track the sun? Combined with fov_right, this defines the horizontal tracking zone.",
@@ -758,6 +773,21 @@
         "data_description": {
           "building_profile_id": "Link this cover to a Building Profile to inherit its shared building-level sensors. Select 'None (unlinked)' to skip profile linking and manage this cover's sensors locally."
         }
+      },
+      "create_group": {
+        "title": "Create Cover Group",
+        "description": "A cover group commands a set of covers together: scenes (All Open, All Closed, Privacy), bulk automation control, and clearing manual overrides. Pick Adaptive Cover Pro instances as members, and add plain cover entities for covers without their own instance. [Learn more]({learn_more})",
+        "data": {
+          "name": "Group name",
+          "member_entries": "Adaptive Cover Pro members",
+          "member_covers": "Generic cover entities",
+          "group_area": "Area (live membership)"
+        },
+        "data_description": {
+          "member_entries": "Members are orchestrated through their own instance, so gates and overrides still apply.",
+          "member_covers": "Plain covers are commanded directly with the scene target. A cover already controlled by a selected member is skipped.",
+          "group_area": "Optional: covers in this area join the group automatically and membership tracks registry changes. Combined with the lists above."
+        }
       }
     },
     "abort": {
@@ -794,7 +824,10 @@
           "building_profile": "🏢 Building Profile",
           "profile_sensors": "📡 Shared Sensors",
           "profile_overview": "🏢 Profile Overview",
-          "profile_overrides": "🧹 Local Overrides"
+          "profile_overrides": "🧹 Local Overrides",
+          "group_membership": "👥 Group Members",
+          "group_arbitration": "⚖️ Arbitration & Timing",
+          "group_entities": "🧩 Exposed Entities"
         }
       },
       "pipeline_priorities": {
@@ -891,7 +924,14 @@
           "awning_housing_offset": "Housing Offset Above Window",
           "awning_pivot_offset": "Pivot Offset From Window",
           "roof_pitch": "Roof Pitch",
+          "max_slat_angle": "Maximum Slat Angle",
           "roof_height_above": "Roof Height Above Window",
+          "sliding_enable_shade_area": "Use a shade area (continuous coverage)",
+          "sliding_slide_direction": "Slide Direction",
+          "sliding_point1_x": "Shade Point 1 — Along Wall (X)",
+          "sliding_point1_y": "Shade Point 1 — Into Room (Y)",
+          "sliding_point2_x": "Shade Point 2 — Along Wall (X)",
+          "sliding_point2_y": "Shade Point 2 — Into Room (Y)",
           "set_azimuth": "Window Azimuth",
           "fov_compute": "Generate field of view from measurements",
           "fov_left": "Field of view left",
@@ -928,7 +968,14 @@
           "awning_housing_offset": "Vertical offset of the arm pivot above the top of the window (0–1 m). Combined with window height and arm length to locate the pivot. Set 0 when the housing sits flush with the window top.",
           "awning_pivot_offset": "Horizontal distance from the awning arm pivot (fabric plane) to the window glass (0–2 m). At low sun this lets the dropped fabric shade lower on the glass, because the fabric stands off the pane. Set this to the housing/arm standoff from the wall plus any window inset/reveal — use 0 when the fabric hangs flush against the glass. Example: 0.7 m / 28 in for an arm mounted well off the wall.",
           "roof_pitch": "Pitch of the roof glass measured FROM HORIZONTAL (0–90°). 0° = a flat skylight (sun lets in whenever it is above the horizon); 90° = a vertical window (behaves exactly like a vertical blind). Typical Velux-style roof windows are 30–50°. If you are migrating from the vertical-blind workaround that used a max-elevation limit, this pitch is the complement of that angle (e.g. a 35° roof ↔ a ~55° max-elevation workaround).",
+          "max_slat_angle": "Physical maximum slat angle in degrees, for a louvered-roof drive whose full mechanical travel is neither 90° (single-direction) nor 180° (bi-directional) — for example a pergola motor that rotates 0–160°. Leave at 0 (default) to use the range implied by the operating mode. When set, this value becomes BOTH the upper clamp on the commanded slat angle AND the reference for 100% tilt, so the tilt percentage maps onto your actuator's real travel.",
           "roof_height_above": "Along-slope distance from the top of the window up to the roof ridge (0–10 m). When > 0 the roof above the window can hide the sun once it swings past the ridge and drops low (the ridge occlusion gate). Set 0 (default) to disable the gate — e.g. a window sitting right at the ridge with no roof above it. Shown in the unit Home Assistant is configured for.",
+          "sliding_enable_shade_area": "When on, the curtain closes only as far as needed to keep a two-point floor shade area out of direct sun, giving continuous coverage instead of the default full open/close. Define the two shade-area points below. When off, the curtain draws fully across whenever direct sun reaches the window and retracts otherwise.",
+          "sliding_slide_direction": "How the fabric draws across the opening. **Centre-parting** (default): two leaves part from the middle. **Single (left)**: one leaf anchored at the left edge, closing rightward. **Single (right)**: one leaf anchored at the right edge, closing leftward. Determines how the covered floor area maps to an open percentage.",
+          "sliding_point1_x": "Along-wall position of shade-area point 1, measured from the window centre (0), positive to the right when facing the window from inside. Shown in the unit Home Assistant is configured for. Same coordinate frame as glare zones.",
+          "sliding_point1_y": "Depth of shade-area point 1 into the room, measured from the window plane (must be greater than 0). Shown in the unit Home Assistant is configured for. The two points bound the floor area you want kept in shadow.",
+          "sliding_point2_x": "Along-wall position of shade-area point 2, measured from the window centre (0), positive to the right when facing the window from inside. Shown in the unit Home Assistant is configured for. Same coordinate frame as glare zones.",
+          "sliding_point2_y": "Depth of shade-area point 2 into the room, measured from the window plane (must be greater than 0). Shown in the unit Home Assistant is configured for. The two points bound the floor area you want kept in shadow.",
           "set_azimuth": "Direction your window faces (0-359°). North=0°, East=90°, South=180°, West=270°. Example: A south-facing window = 180°. Use a compass app or check sun at noon to determine. This tells the integration where your window points so it can calculate sun angles accurately.",
           "fov_compute": "**{computed_fov}**\n\nFills the left/right field of view from the window width and the reveal depth — the reveal depth is measured from the outer wall face, where the cover is located. Set the window width and reveal depth above, then tick this and submit to apply it. The sliders stay editable, so you can adjust either angle afterwards.",
           "fov_left": "How wide the sun tracking area is on the LEFT side of the window (in degrees). Standard windows: 45° (90° total coverage with both sides), Wide windows or glass doors: 60-75°, Narrow windows: 30°. Think of this as peripheral vision - how far to the left should we track the sun? Combined with fov_right, this defines the horizontal tracking zone.",
@@ -1579,6 +1626,46 @@
         "data": {
           "clear_overrides": "Clear selected overrides"
         }
+      },
+      "group_membership": {
+        "title": "Group Members",
+        "description": "Edit which covers this group commands. [Learn more]({learn_more})",
+        "data": {
+          "member_entries": "Adaptive Cover Pro members",
+          "member_covers": "Generic cover entities",
+          "group_area": "Area (live membership)"
+        },
+        "data_description": {
+          "member_entries": "Members are orchestrated through their own instance, so gates and overrides still apply.",
+          "member_covers": "Plain covers are commanded directly with the scene target. A cover already controlled by a selected member is skipped.",
+          "group_area": "Optional: covers in this area join the group automatically and membership tracks registry changes. Combined with the lists above."
+        }
+      },
+      "group_arbitration": {
+        "title": "Arbitration & Timing",
+        "description": "Group scenes win over a member's manual override but yield to weather safety; the group lock outranks everything except a member's own safety trigger. [Learn more]({learn_more})",
+        "data": {
+          "group_stagger_delay": "Stagger delay",
+          "scene_opt_outs": "Scene opt-outs"
+        },
+        "data_description": {
+          "group_stagger_delay": "Seconds between successive member commands during a scene. 0 = command all members at once.",
+          "scene_opt_outs": "Members checked here are skipped for the selected scene. 'All scenes' skips the member for every scene. The group lock ignores opt-outs."
+        }
+      },
+      "group_entities": {
+        "title": "Exposed Entities",
+        "description": "Choose which aggregate entities this group creates. Scene controls and bulk switches are always available. [Learn more]({learn_more})",
+        "data": {
+          "group_enable_cover_entity": "Aggregate cover entity",
+          "group_enable_position_sensor": "Group position sensor",
+          "group_enable_state_sensor": "Group state sensor",
+          "group_enable_climate_sensor": "Group climate mode sensor",
+          "group_enable_who_won_sensor": "Group-driven members sensor"
+        },
+        "data_description": {
+          "group_enable_cover_entity": "A single cover entity for dashboards and voice assistants. Dragging it commands every member as a user action. Off by default to avoid clutter."
+        }
       }
     },
     "abort": {
@@ -1635,6 +1722,38 @@
       },
       "position_forecast": {
         "name": "Position Forecast"
+      },
+      "group_position": {
+        "name": "Group Position"
+      },
+      "group_state": {
+        "name": "Group State",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "mixed": "Mixed",
+          "unknown": "Unknown"
+        }
+      },
+      "group_active_scene": {
+        "name": "Active Scene",
+        "state": {
+          "all_open": "All Open",
+          "all_closed": "All Closed",
+          "privacy": "Privacy"
+        }
+      },
+      "group_who_won": {
+        "name": "Group-Driven Members"
+      },
+      "group_climate_mode": {
+        "name": "Group Climate Mode",
+        "state": {
+          "summer_mode": "Summer",
+          "winter_mode": "Winter",
+          "intermediate": "Intermediate",
+          "mixed": "Mixed"
+        }
       }
     },
     "switch": {
@@ -1684,16 +1803,50 @@
           "on": "On",
           "off": "Off"
         }
+      },
+      "group_automation": {
+        "name": "Group Automation"
+      },
+      "group_lock": {
+        "name": "Group Lock"
       }
     },
     "button": {
       "my_position": {
         "name": "Managed My Position"
+      },
+      "group_scene_all_open": {
+        "name": "Scene: All Open"
+      },
+      "group_scene_all_closed": {
+        "name": "Scene: All Closed"
+      },
+      "group_scene_privacy": {
+        "name": "Scene: Privacy"
+      },
+      "group_clear_overrides": {
+        "name": "Clear Member Overrides"
       }
     },
     "number": {
       "my_position_value": {
         "name": "Managed My Position Value"
+      }
+    },
+    "select": {
+      "group_scene_select": {
+        "name": "Scene",
+        "state": {
+          "auto": "Auto",
+          "all_open": "All Open",
+          "all_closed": "All Closed",
+          "privacy": "Privacy"
+        }
+      }
+    },
+    "cover": {
+      "group_cover": {
+        "name": "Group Cover"
       }
     }
   },
@@ -1705,13 +1858,22 @@
         "cover_tilt": "Tilted blind",
         "cover_venetian": "Venetian blind (dual-axis)",
         "cover_oscillating_awning": "Oscillating awning (drop-arm)",
-        "cover_roof_window": "Roof window"
+        "cover_roof_window": "Roof window",
+        "cover_sliding_curtain": "Sliding curtain (horizontal)",
+        "cover_louvered_roof": "Louvered roof"
       }
     },
     "tilt_mode": {
       "options": {
         "mode1": "single direction (0% = closed / 100% = open)",
         "mode2": "bi-directional (0% = closed / 50% = open / 100% = closed)"
+      }
+    },
+    "sliding_slide_direction": {
+      "options": {
+        "left": "Single leaf — anchored left, closes rightward",
+        "right": "Single leaf — anchored right, closes leftward",
+        "bi_part": "Centre-parting — two leaves meet in the middle"
       }
     },
     "template_combine_mode": {
@@ -2385,6 +2547,52 @@
         "duration": {
           "name": "Duration",
           "description": "Extend an active override by this much, or engage fresh for this long if none is active. Ignored when an end time is set."
+        }
+      }
+    },
+    "group_activate_scene": {
+      "name": "Group: activate scene",
+      "description": "Activates a scene on the targeted cover groups, or releases the claim with 'auto'. Scenes ride each member's pipeline — weather and member safety still win.",
+      "fields": {
+        "scene": {
+          "name": "Scene",
+          "description": "The scene to activate, or 'auto' to release the claim."
+        }
+      }
+    },
+    "group_set_position": {
+      "name": "Group: set position",
+      "description": "Moves every member of the targeted cover groups to the given position as a user command (manual-override engagement and floor clamps apply).",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Position (0-100%) to move member covers to. 0% = closed (blinds lowered / awning retracted), 100% = open (blinds raised / awning extended)."
+        },
+        "tilt": {
+          "name": "Tilt",
+          "description": "Optional slat tilt (0-100%) fanned out on the tilt axis."
+        }
+      }
+    },
+    "group_lock": {
+      "name": "Group: lock",
+      "description": "Freezes every member of the targeted cover groups in place at safety priority. A member's own safety trigger still wins ties."
+    },
+    "group_unlock": {
+      "name": "Group: unlock",
+      "description": "Releases the group lock. An active scene is re-applied; otherwise members return to their own automation."
+    },
+    "group_clear_overrides": {
+      "name": "Group: clear member overrides",
+      "description": "Clears manual overrides on every ACP member of the targeted cover groups and resends each member's pipeline position."
+    },
+    "group_set_automation": {
+      "name": "Group: set automation",
+      "description": "Bulk-enables or disables sun-tracking automation on every ACP member of the targeted cover groups.",
+      "fields": {
+        "enabled": {
+          "name": "Enabled",
+          "description": "True to enable member automation, false to disable it."
         }
       }
     }

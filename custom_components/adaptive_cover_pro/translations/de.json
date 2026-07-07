@@ -6,7 +6,8 @@
         "menu_options": {
           "create_new": "Neue Beschattung erstellen",
           "create_building_profile": "Gebäudeprofil erstellen",
-          "duplicate_existing": "Von vorhandener Beschattung duplizieren"
+          "duplicate_existing": "Von vorhandener Beschattung duplizieren",
+          "create_group": "Beschattungsgruppe erstellen"
         }
       },
       "create_new": {
@@ -62,6 +63,7 @@
           "venetian_tilt_reset_direction": "Drift-Reset-Richtung",
           "venetian_tilt_reset_scope": "Drift-Reset-Umfang",
           "roof_pitch": "Dachneigung",
+          "max_slat_angle": "Maximaler Lamellenwinkel",
           "roof_height_above": "Dachabstand über Fenster",
           "venetian_tilt_skip_mode": "Skip-Neigungsmodus",
           "set_azimuth": "Fenster-Azimut",
@@ -71,7 +73,13 @@
           "venetian_tilt_safety_margin": "Neigungssicherheitsmarge",
           "venetian_post_settle_mode": "Wartemodus nach Absetzen",
           "max_tilt_sun_only": "Maximale Neigung nur bei Sonnenverfolgung anwenden",
-          "min_tilt_sun_only": "Minimale Neigung nur bei Sonnenverfolgung anwenden"
+          "min_tilt_sun_only": "Minimale Neigung nur bei Sonnenverfolgung anwenden",
+          "sliding_enable_shade_area": "Beschattungsbereich verwenden (durchgehende Abdeckung)",
+          "sliding_slide_direction": "Schieberichtung",
+          "sliding_point1_x": "Schattenpunkt 1 – Entlang der Wand (X)",
+          "sliding_point1_y": "Schattenpunkt 1 – In den Raum (Y)",
+          "sliding_point2_x": "Schattenpunkt 2 – Entlang der Wand (X)",
+          "sliding_point2_y": "Schattenpunkt 2 – In den Raum (Y)"
         },
         "data_description": {
           "window_height": "Höhe Ihres Fensters (von unten bis oben des Glasbereichs). In der von Home Assistant konfigurierten Einheit angezeigt. Beispiele: Standard-Tür = 2,0 m / 79 in, Kleines Fenster = 1,5 m / 59 in, Vom Boden bis zur Decke = 2,5 m / 98 in. Messen Sie von dort, wo die Beschattung beginnt, bis dort, wo sie endet, wenn sie vollständig ausgefahren ist.",
@@ -99,6 +107,7 @@
           "venetian_tilt_reset_direction": "Bestimmt die Richtung, in die der Drift-Reset die Lamellen vor der Rückkehr zur Zielposition fährt. **Offen** (Standard): ganz öffnen und dann zurück — das ursprüngliche Verhalten. **Geschlossen**: ganz schließen und dann zurück. Wählen Sie Geschlossen, wenn die Beschattung während der Verfolgung nahe der geschlossenen Position sitzt (leiser und schneller zurückgesetzt) oder wenn Ihr Aktor die Lamellen beim Schließbefehl neu kalibriert.",
           "venetian_tilt_reset_scope": "Legt fest, welche Neigungsbefehle Drift ansammeln und einen Reset auslösen dürfen. **Alle Neigungsbefehle** (Standard): jede Neigungsbewegung zählt — das ursprüngliche Verhalten. **Nur Sonnenstandsverfolgung**: nur Bewegungen der Sonnenstandsverfolgung sammeln Drift an, sodass benutzerdefinierte Positionen sowie manuelle und klimabedingte Neigungen den vollständigen Öffnen-und-Zurück-Reset-Zyklus nicht mehr auslösen.",
           "roof_pitch": "Neigung der Dachverglasung gemessen VON DER HORIZONTALEN (0–90°). 0° = ein flaches Oberlicht (Sonne scheint herein, wann immer sie über dem Horizont ist); 90° = ein vertikales Fenster (verhält sich genau wie eine vertikale Jalousie). Typische Velux-Dachfenster haben 30–50°. Falls Sie von der vertikalen-Jalousie-Workaround migrieren, die eine maximale-Höhen-Begrenzung verwendete, ist diese Neigung das Komplement dieses Winkels (z. B. 35° Dach ↔ ~55° maximale-Höhen-Workaround).",
+          "max_slat_angle": "Physischer maximaler Lamellenwinkel in Grad, für einen Lamellendach-Antrieb, dessen voller mechanischer Weg weder 90° (eine Richtung) noch 180° (beide Richtungen) beträgt — zum Beispiel ein Pergola-Motor, der 0–160° dreht. Bei 0 (Standard) belassen, um den durch den Betriebsmodus vorgegebenen Bereich zu verwenden. Wenn gesetzt, wird dieser Wert SOWOHL zur oberen Begrenzung des befohlenen Lamellenwinkels ALS AUCH zur Referenz für 100% Neigung, sodass der Neigungsprozentsatz auf den echten Weg Ihres Aktors abgebildet wird.",
           "roof_height_above": "Entfernung entlang der Dachschräge von der Oberkante des Fensters zum Dachfirst (0–10 m). Bei Wert > 0 kann das Dach über dem Fenster die Sonne verbergen, wenn diese über den First hinaus wandert und tiefer sinkt (das First-Okklusions-Gate). Auf 0 (Standard) setzen, um das Gate zu deaktivieren — z. B. ein Fenster direkt am First ohne Dach darüber. Wird in der von Home Assistant konfigurierten Einheit angezeigt.",
           "venetian_tilt_skip_mode": "Was mit dem Neigungsbefehl passiert, wenn die Jalousie über die Skip-Schwelle gefahren wird. **Neutral** (Standard): sendet eine neutrale, vollständig offene Neigung, um die im Aktor gespeicherte Neigung zu überschreiben — notwendig für KNX/Shelly-Motoren, die sonst den vorherigen Lamellenwinkel bei einer angehobenen Jalousie erneut durchsetzen. **Suppress**: sendet keinen Neigungsbefehl ab. Wählen Sie Suppress für mechanisch gekoppelte Außenjalousien (z. B. Somfy auf Shelly), bei denen jeder Neigungsbefehl in der Endlage (vollständig offen) den Behang aus seiner Ruheposition zieht.",
           "set_azimuth": "Richtung, in die Ihr Fenster zeigt (0-359°). Nord=0°, Ost=90°, Süd=180°, West=270°. Beispiel: Ein nach Süden ausgerichtetes Fenster = 180°. Verwenden Sie eine Kompass-App oder überprüfen Sie mittags die Sonne, um dies zu bestimmen. Dies teilt der Integration mit, wohin Ihr Fenster zeigt, damit sie die Sonnenwinkel genau berechnen kann.",
@@ -108,7 +117,13 @@
           "venetian_tilt_safety_margin": "Zusätzliche Schließmarge für Randsonne (nur Jalousien), 0.0–1.0. Skaliert die automatische winkelabhängige Geometriemarge, die die vertikale Achse bereits anwendet, jedoch in der Schließrichtung. Standard 0.0 behält den exakten Grenzwinkel bei (heutiges Verhalten); erhöhen Sie auf 1.0, um die Lamellen bei extremem Sonnenwinkel etwas weiter zu schließen, sodass kein direktes Sonnenlicht eindringt. Verwenden Sie dies lieber, statt die Maximale Lamellenneigung zu senken, was eine pauschale globale Begrenzung ist.",
           "venetian_post_settle_mode": "Wie die Integration zwischen dem Absetzen des Schlittens und dem Senden des Neigungsbefehls wartet. **Feste Verzögerung** (Standard): Wartet immer auf die konfigurierte Nach-Absetzen-Haltezeit, bevor die Neigung gesendet wird — sicher für alle Aktoren. **Entity-Status**: Stattdessen den Status der Beschattung abfragen und den Neigungsbefehl sofort senden, sobald der Status nicht mehr 'opening'/'closing' ist, für Aktoren (z. B. Shelly 2PM) mit zuverlässigen Bewegungsstatus. Greift auf die feste Haltezeit zurück, wenn der Status nicht verfügbar ist oder der Schlitten sich noch bewegt, nachdem die Haltezeit abgelaufen ist.",
           "max_tilt_sun_only": "Wenn aus (Standard), wird die maximale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Obergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen.",
-          "min_tilt_sun_only": "Wenn aus (Standard), wird die minimale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Untergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen."
+          "min_tilt_sun_only": "Wenn aus (Standard), wird die minimale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Untergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen.",
+          "sliding_enable_shade_area": "Wenn aktiviert, schließt sich der Vorhang nur so weit wie nötig, um einen Beschattungsbereich auf dem Boden vor direkter Sonne zu schützen und bietet damit durchgehende Abdeckung statt des Standard-Vollöffnens/Schließens. Definieren Sie die zwei Beschattungspunkte unten. Wenn deaktiviert, wird der Vorhang vollständig über die Öffnung gezogen, wenn direkte Sonne das Fenster erreicht, und zieht sich ansonsten zurück.",
+          "sliding_slide_direction": "Wie der Stoff über die Öffnung gezogen wird. **Mittig öffnend** (Standard): zwei Flügel trennen sich in der Mitte. **Einflügelig (links)**: ein Flügel am linken Rand befestigt, schließt nach rechts. **Einflügelig (rechts)**: ein Flügel am rechten Rand befestigt, schließt nach links. Bestimmt, wie die abgedeckte Bodenfläche auf einen Öffnungsprozentsatz abgebildet wird.",
+          "sliding_point1_x": "Position des Beschattungspunkts 1 entlang der Wand, gemessen von der Fenstermitte (0), positiv nach rechts von innen. Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Gleiches Koordinatensystem wie Blendungszonen.",
+          "sliding_point1_y": "Tiefe des Beschattungspunkts 1 in den Raum, gemessen von der Fensterebene (muss größer als 0 sein). Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Die zwei Punkte begrenzen die Bodenfläche, die im Schatten bleiben soll.",
+          "sliding_point2_x": "Position des Beschattungspunkts 2 entlang der Wand, gemessen von der Fenstermitte (0), positiv nach rechts von innen. Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Gleiches Koordinatensystem wie Blendungszonen.",
+          "sliding_point2_y": "Tiefe des Beschattungspunkts 2 in den Raum, gemessen von der Fensterebene (muss größer als 0 sein). Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Die zwei Punkte begrenzen die Bodenfläche, die im Schatten bleiben soll."
         }
       },
       "sun_tracking": {
@@ -758,6 +773,21 @@
         "data_description": {
           "building_profile_id": "Verknüpfe diese Abdeckung mit einem Gebäudeprofil, um seine gemeinsamen gebäudeweiten Sensoren zu erben. Wähle „Keine (nicht verknüpft)\" aus, um die Profilverknüpfung zu überspringen und die Sensoren dieser Abdeckung lokal zu verwalten."
         }
+      },
+      "create_group": {
+        "title": "Beschattungsgruppe erstellen",
+        "description": "Eine Beschattungsgruppe steuert mehrere Beschattungen zusammen: Szenen (Alle offen, Alle geschlossen, Datenschutz), Massenautomatisierungskontrolle und Löschen manueller Übersteuerungen. Wählen Sie Adaptive-Cover-Pro-Instanzen als Mitglieder und fügen Sie einfache Beschattungsentitäten für Beschattungen ohne eigene Instanz hinzu. [Weitere Informationen]({learn_more})",
+        "data": {
+          "name": "Gruppenname",
+          "member_entries": "Adaptive-Cover-Pro-Mitglieder",
+          "member_covers": "Allgemeine Beschattungsentitäten",
+          "group_area": "Bereich (Live-Mitgliedschaft)"
+        },
+        "data_description": {
+          "member_entries": "Mitglieder werden über ihre eigene Instanz gesteuert, daher gelten Eingaben und Übersteuerungen weiterhin.",
+          "member_covers": "Einfache Beschattungen werden direkt mit dem Szenenziel angesteuert. Eine Beschattung, die bereits von einem ausgewählten Mitglied gesteuert wird, wird übersprungen.",
+          "group_area": "Optional: Beschattungen in diesem Bereich treten der Gruppe automatisch bei und die Mitgliedschaft folgt Registrierungsänderungen. Kombiniert mit den obigen Listen."
+        }
       }
     },
     "abort": {
@@ -793,7 +823,10 @@
           "building_profile": "🏢 Gebäudeprofil",
           "profile_sensors": "📡 Gemeinsame Sensoren",
           "profile_overview": "🏢 Profil-Übersicht",
-          "profile_overrides": "🧹 Lokale Übersteuerungen"
+          "profile_overrides": "🧹 Lokale Übersteuerungen",
+          "group_membership": "👥 Gruppenmitglieder",
+          "group_arbitration": "⚖️ Schiedsverfahren & Zeitplanung",
+          "group_entities": "🧩 Verfügbar gemachte Entitäten"
         },
         "description": "Konfiguration: **{instance_name}**{profile_line}\n\nWenn Adaptive Cover Pro hilfreich für dich war, kannst du [☕ Buy Me a Coffee]({coffee_url}) unterstützen."
       },
@@ -864,6 +897,7 @@
           "venetian_tilt_reset_direction": "Drift-Reset-Richtung",
           "venetian_tilt_reset_scope": "Drift-Reset-Umfang",
           "roof_pitch": "Dachneigung",
+          "max_slat_angle": "Maximaler Lamellenwinkel",
           "roof_height_above": "Dachabstand über Fenster",
           "venetian_tilt_skip_mode": "Skip-Neigungsmodus",
           "set_azimuth": "Fenster-Azimut",
@@ -873,7 +907,13 @@
           "venetian_tilt_safety_margin": "Neigungssicherheitsmarge",
           "venetian_post_settle_mode": "Wartemodus nach Absetzen",
           "max_tilt_sun_only": "Maximale Neigung nur bei Sonnenverfolgung anwenden",
-          "min_tilt_sun_only": "Minimale Neigung nur bei Sonnenverfolgung anwenden"
+          "min_tilt_sun_only": "Minimale Neigung nur bei Sonnenverfolgung anwenden",
+          "sliding_enable_shade_area": "Beschattungsbereich verwenden (durchgehende Abdeckung)",
+          "sliding_slide_direction": "Schieberichtung",
+          "sliding_point1_x": "Schattenpunkt 1 – Entlang der Wand (X)",
+          "sliding_point1_y": "Schattenpunkt 1 – In den Raum (Y)",
+          "sliding_point2_x": "Schattenpunkt 2 – Entlang der Wand (X)",
+          "sliding_point2_y": "Schattenpunkt 2 – In den Raum (Y)"
         },
         "data_description": {
           "window_height": "Höhe Ihres Fensters (von unten bis oben des Glasbereichs). In der von Home Assistant konfigurierten Einheit angezeigt. Beispiele: Standard-Tür = 2,0 m / 79 in, Kleines Fenster = 1,5 m / 59 in, Vom Boden bis zur Decke = 2,5 m / 98 in. Messen Sie von dort, wo die Beschattung beginnt, bis dort, wo sie endet, wenn sie vollständig ausgefahren ist.",
@@ -901,6 +941,7 @@
           "venetian_tilt_reset_direction": "Bestimmt die Richtung, in die der Drift-Reset die Lamellen vor der Rückkehr zur Zielposition fährt. **Offen** (Standard): ganz öffnen und dann zurück — das ursprüngliche Verhalten. **Geschlossen**: ganz schließen und dann zurück. Wählen Sie Geschlossen, wenn die Beschattung während der Verfolgung nahe der geschlossenen Position sitzt (leiser und schneller zurückgesetzt) oder wenn Ihr Aktor die Lamellen beim Schließbefehl neu kalibriert.",
           "venetian_tilt_reset_scope": "Legt fest, welche Neigungsbefehle Drift ansammeln und einen Reset auslösen dürfen. **Alle Neigungsbefehle** (Standard): jede Neigungsbewegung zählt — das ursprüngliche Verhalten. **Nur Sonnenstandsverfolgung**: nur Bewegungen der Sonnenstandsverfolgung sammeln Drift an, sodass benutzerdefinierte Positionen sowie manuelle und klimabedingte Neigungen den vollständigen Öffnen-und-Zurück-Reset-Zyklus nicht mehr auslösen.",
           "roof_pitch": "Neigung der Dachverglasung gemessen VON DER HORIZONTALEN (0–90°). 0° = ein flaches Oberlicht (Sonne scheint herein, wann immer sie über dem Horizont ist); 90° = ein vertikales Fenster (verhält sich genau wie eine vertikale Jalousie). Typische Velux-Dachfenster haben 30–50°. Falls Sie von der vertikalen-Jalousie-Workaround migrieren, die eine maximale-Höhen-Begrenzung verwendete, ist diese Neigung das Komplement dieses Winkels (z. B. 35° Dach ↔ ~55° maximale-Höhen-Workaround).",
+          "max_slat_angle": "Physischer maximaler Lamellenwinkel in Grad, für einen Lamellendach-Antrieb, dessen voller mechanischer Weg weder 90° (eine Richtung) noch 180° (beide Richtungen) beträgt — zum Beispiel ein Pergola-Motor, der 0–160° dreht. Bei 0 (Standard) belassen, um den durch den Betriebsmodus vorgegebenen Bereich zu verwenden. Wenn gesetzt, wird dieser Wert SOWOHL zur oberen Begrenzung des befohlenen Lamellenwinkels ALS AUCH zur Referenz für 100% Neigung, sodass der Neigungsprozentsatz auf den echten Weg Ihres Aktors abgebildet wird.",
           "roof_height_above": "Entfernung entlang der Dachschräge von der Oberkante des Fensters zum Dachfirst (0–10 m). Bei Wert > 0 kann das Dach über dem Fenster die Sonne verbergen, wenn diese über den First hinaus wandert und tiefer sinkt (das First-Okklusions-Gate). Auf 0 (Standard) setzen, um das Gate zu deaktivieren — z. B. ein Fenster direkt am First ohne Dach darüber. Wird in der von Home Assistant konfigurierten Einheit angezeigt.",
           "venetian_tilt_skip_mode": "Was mit dem Neigungsbefehl passiert, wenn die Jalousie über die Skip-Schwelle gefahren wird. **Neutral** (Standard): sendet eine neutrale, vollständig offene Neigung, um die im Aktor gespeicherte Neigung zu überschreiben — notwendig für KNX/Shelly-Motoren, die sonst den vorherigen Lamellenwinkel bei einer angehobenen Jalousie erneut durchsetzen. **Suppress**: sendet keinen Neigungsbefehl ab. Wählen Sie Suppress für mechanisch gekoppelte Außenjalousien (z. B. Somfy auf Shelly), bei denen jeder Neigungsbefehl in der Endlage (vollständig offen) den Behang aus seiner Ruheposition zieht.",
           "set_azimuth": "Richtung, in die Ihr Fenster zeigt (0-359°). Nord=0°, Ost=90°, Süd=180°, West=270°. Beispiel: Ein nach Süden ausgerichtetes Fenster = 180°. Verwenden Sie eine Kompass-App oder überprüfen Sie mittags die Sonne, um dies zu bestimmen. Dies teilt der Integration mit, wohin Ihr Fenster zeigt, damit sie die Sonnenwinkel genau berechnen kann.",
@@ -910,7 +951,13 @@
           "venetian_tilt_safety_margin": "Zusätzliche Schließmarge für Randsonne (nur Jalousien), 0.0–1.0. Skaliert die automatische winkelabhängige Geometriemarge, die die vertikale Achse bereits anwendet, jedoch in der Schließrichtung. Standard 0.0 behält den exakten Grenzwinkel bei (heutiges Verhalten); erhöhen Sie auf 1.0, um die Lamellen bei extremem Sonnenwinkel etwas weiter zu schließen, sodass kein direktes Sonnenlicht eindringt. Verwenden Sie dies lieber, statt die Maximale Lamellenneigung zu senken, was eine pauschale globale Begrenzung ist.",
           "venetian_post_settle_mode": "Wie die Integration zwischen dem Absetzen des Schlittens und dem Senden des Neigungsbefehls wartet. **Feste Verzögerung** (Standard): Wartet immer auf die konfigurierte Nach-Absetzen-Haltezeit, bevor die Neigung gesendet wird — sicher für alle Aktoren. **Entity-Status**: Stattdessen den Status der Beschattung abfragen und den Neigungsbefehl sofort senden, sobald der Status nicht mehr 'opening'/'closing' ist, für Aktoren (z. B. Shelly 2PM) mit zuverlässigen Bewegungsstatus. Greift auf die feste Haltezeit zurück, wenn der Status nicht verfügbar ist oder der Schlitten sich noch bewegt, nachdem die Haltezeit abgelaufen ist.",
           "max_tilt_sun_only": "Wenn aus (Standard), wird die maximale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Obergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen.",
-          "min_tilt_sun_only": "Wenn aus (Standard), wird die minimale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Untergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen."
+          "min_tilt_sun_only": "Wenn aus (Standard), wird die minimale Neigung zu allen Zeiten erzwungen, auch bei der Standardneigung, wenn die Sonne außerhalb des Sichtfelds liegt. Wenn an, wird die Untergrenze nur während der aktiven Sonnenverfolgung angewendet. Sonnenuntergangsneigung und benutzerdefinierte Positionsneigungen sind in beiden Fällen nicht betroffen.",
+          "sliding_enable_shade_area": "Wenn aktiviert, schließt sich der Vorhang nur so weit wie nötig, um einen Beschattungsbereich auf dem Boden vor direkter Sonne zu schützen und bietet damit durchgehende Abdeckung statt des Standard-Vollöffnens/Schließens. Definieren Sie die zwei Beschattungspunkte unten. Wenn deaktiviert, wird der Vorhang vollständig über die Öffnung gezogen, wenn direkte Sonne das Fenster erreicht, und zieht sich ansonsten zurück.",
+          "sliding_slide_direction": "Wie der Stoff über die Öffnung gezogen wird. **Mittig öffnend** (Standard): zwei Flügel trennen sich in der Mitte. **Einflügelig (links)**: ein Flügel am linken Rand befestigt, schließt nach rechts. **Einflügelig (rechts)**: ein Flügel am rechten Rand befestigt, schließt nach links. Bestimmt, wie die abgedeckte Bodenfläche auf einen Öffnungsprozentsatz abgebildet wird.",
+          "sliding_point1_x": "Position des Beschattungspunkts 1 entlang der Wand, gemessen von der Fenstermitte (0), positiv nach rechts von innen. Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Gleiches Koordinatensystem wie Blendungszonen.",
+          "sliding_point1_y": "Tiefe des Beschattungspunkts 1 in den Raum, gemessen von der Fensterebene (muss größer als 0 sein). Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Die zwei Punkte begrenzen die Bodenfläche, die im Schatten bleiben soll.",
+          "sliding_point2_x": "Position des Beschattungspunkts 2 entlang der Wand, gemessen von der Fenstermitte (0), positiv nach rechts von innen. Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Gleiches Koordinatensystem wie Blendungszonen.",
+          "sliding_point2_y": "Tiefe des Beschattungspunkts 2 in den Raum, gemessen von der Fensterebene (muss größer als 0 sein). Wird in der Einheit angezeigt, die Home Assistant konfiguriert hat. Die zwei Punkte begrenzen die Bodenfläche, die im Schatten bleiben soll."
         }
       },
       "sun_tracking": {
@@ -1579,6 +1626,46 @@
         "data": {
           "clear_overrides": "Ausgewählte Übersteuerungen löschen"
         }
+      },
+      "group_membership": {
+        "title": "Gruppenmitglieder",
+        "description": "Bearbeiten Sie, welche Beschattungen diese Gruppe steuert. [Weitere Informationen]({learn_more})",
+        "data": {
+          "member_entries": "Adaptive-Cover-Pro-Mitglieder",
+          "member_covers": "Allgemeine Beschattungsentitäten",
+          "group_area": "Bereich (Live-Mitgliedschaft)"
+        },
+        "data_description": {
+          "member_entries": "Mitglieder werden über ihre eigene Instanz gesteuert, daher gelten Eingaben und Übersteuerungen weiterhin.",
+          "member_covers": "Einfache Beschattungen werden direkt mit dem Szenenziel angesteuert. Eine Beschattung, die bereits von einem ausgewählten Mitglied gesteuert wird, wird übersprungen.",
+          "group_area": "Optional: Beschattungen in diesem Bereich treten der Gruppe automatisch bei und die Mitgliedschaft folgt Registrierungsänderungen. Kombiniert mit den obigen Listen."
+        }
+      },
+      "group_arbitration": {
+        "title": "Schiedsverfahren & Zeitplanung",
+        "description": "Beschattungsgruppen-Szenen übersteuern die manuelle Übersteuerung eines Mitglieds, weichen aber dem Wetterschutz; die Gruppensperre übertrumpft alles außer einem Sicherheitsauslöser eines Mitglieds. [Weitere Informationen]({learn_more})",
+        "data": {
+          "group_stagger_delay": "Staffelverzögerung",
+          "scene_opt_outs": "Szenen-Ausnahmen"
+        },
+        "data_description": {
+          "group_stagger_delay": "Sekunden zwischen aufeinanderfolgenden Befehlen für Mitglieder während einer Szene. 0 = alle Mitglieder auf einmal befehlen.",
+          "scene_opt_outs": "Überprüfte Mitglieder werden für die ausgewählte Szene übersprungen. 'Alle Szenen' überspringt das Mitglied für jede Szene. Die Gruppensperre ignoriert Ausnahmen."
+        }
+      },
+      "group_entities": {
+        "title": "Verfügbar gemachte Entitäten",
+        "description": "Wählen Sie, welche aggregierten Entitäten diese Gruppe erstellt. Szenensteuerungen und Gruppenschalter sind immer verfügbar. [Weitere Informationen]({learn_more})",
+        "data": {
+          "group_enable_cover_entity": "Aggregierte Beschattungs-Entität",
+          "group_enable_position_sensor": "Gruppierungspositions-Sensor",
+          "group_enable_state_sensor": "Gruppen-Statussensor",
+          "group_enable_climate_sensor": "Gruppen-Klimamodus-Sensor",
+          "group_enable_who_won_sensor": "Sensor für Gruppenmitglieder"
+        },
+        "data_description": {
+          "group_enable_cover_entity": "Eine einzelne Beschattungs-Entität für Dashboards und Sprachassistenten. Das Ziehen befiehlt jedem Mitglied als Benutzeraktion. Standardmäßig deaktiviert, um Unordnung zu vermeiden."
+        }
       }
     },
     "abort": {
@@ -1635,6 +1722,38 @@
       },
       "solar_calculation": {
         "name": "Solarberechnung"
+      },
+      "group_position": {
+        "name": "Gruppenposition"
+      },
+      "group_state": {
+        "name": "Gruppenstatus",
+        "state": {
+          "open": "Offen",
+          "closed": "Geschlossen",
+          "mixed": "Gemischt",
+          "unknown": "Unbekannt"
+        }
+      },
+      "group_active_scene": {
+        "name": "Aktive Szene",
+        "state": {
+          "all_open": "Alle offen",
+          "all_closed": "Alle geschlossen",
+          "privacy": "Datenschutz"
+        }
+      },
+      "group_who_won": {
+        "name": "Gruppengesteuerte Mitglieder"
+      },
+      "group_climate_mode": {
+        "name": "Gruppen-Klimamodus",
+        "state": {
+          "summer_mode": "Sommer",
+          "winter_mode": "Winter",
+          "intermediate": "Zwischenmodus",
+          "mixed": "Gemischt"
+        }
       }
     },
     "switch": {
@@ -1684,16 +1803,50 @@
           "on": "An",
           "off": "Aus"
         }
+      },
+      "group_automation": {
+        "name": "Gruppenautomatisierung"
+      },
+      "group_lock": {
+        "name": "Gruppensperre"
       }
     },
     "button": {
       "my_position": {
         "name": "Verwaltete My-Position"
+      },
+      "group_scene_all_open": {
+        "name": "Szene: Alle offen"
+      },
+      "group_scene_all_closed": {
+        "name": "Szene: Alle geschlossen"
+      },
+      "group_scene_privacy": {
+        "name": "Szene: Datenschutz"
+      },
+      "group_clear_overrides": {
+        "name": "Mitglied-Übersteuerungen löschen"
       }
     },
     "number": {
       "my_position_value": {
         "name": "Verwalteter My-Positionswert"
+      }
+    },
+    "select": {
+      "group_scene_select": {
+        "name": "Szene",
+        "state": {
+          "all_open": "Alle offen",
+          "all_closed": "Alle geschlossen",
+          "privacy": "Datenschutz",
+          "auto": "Auto"
+        }
+      }
+    },
+    "cover": {
+      "group_cover": {
+        "name": "Gruppenabdeckung"
       }
     }
   },
@@ -1705,7 +1858,9 @@
         "cover_tilt": "Dreh-Jalousie",
         "cover_venetian": "Jalousette (zweiachsig)",
         "cover_oscillating_awning": "Gelenkarmmarkise (drop-arm)",
-        "cover_roof_window": "Dachfenster"
+        "cover_roof_window": "Dachfenster",
+        "cover_sliding_curtain": "Schiebevorhang (horizontal)",
+        "cover_louvered_roof": "Lamellendach"
       }
     },
     "tilt_mode": {
@@ -1768,6 +1923,13 @@
       "options": {
         "below": "Unterhalb — blockiert tiefe Sonne (Baum oder Dachüberhang)",
         "above": "Oberhalb — blockiert hohe Sonne (Hindernis über Kopf, z.B. Balkon)"
+      }
+    },
+    "sliding_slide_direction": {
+      "options": {
+        "bi_part": "Mittig öffnend – zwei Flügel treffen sich in der Mitte",
+        "left": "Einflügelig – am linken Rand befestigt, schließt nach rechts",
+        "right": "Einflügelig – am rechten Rand befestigt, schließt nach links"
       }
     }
   },
@@ -2385,6 +2547,52 @@
         "filename": {
           "name": "Dateipfad",
           "description": "Pfad zur JSON-Datei zum Importieren. Relative Pfade werden relativ zum Konfigurationsverzeichnis von Home Assistant aufgelöst und müssen darin bleiben. Standard: adaptive_cover_pro_export.json."
+        }
+      }
+    },
+    "group_activate_scene": {
+      "name": "Gruppe: Szene aktivieren",
+      "description": "Aktiviert eine Szene auf den angestrebten Beschattungsgruppen oder gibt die Anspruch mit „auto\" frei. Szenen nutzen die Pipeline jedes Mitglieds — Wetter und Mitgliedersicherheit gewinnen immer noch.",
+      "fields": {
+        "scene": {
+          "name": "Szene",
+          "description": "Die Szene zum Aktivieren oder „auto\" um den Anspruch freizugeben."
+        }
+      }
+    },
+    "group_set_position": {
+      "name": "Gruppe: Position festlegen",
+      "description": "Verschiebt alle Mitglieder der angestrebten Beschattungsgruppen zur angegebenen Position als Benutzerbefehl (manuelle Übersteuerung und Positionsgrenzen gelten).",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Position (0–100%), zu der Mitgliedsbeschattungen verschoben werden. 0% = geschlossen (Jalousien heruntergefahren / Markise eingefahren), 100% = offen (Jalousien hochgefahren / Markise ausgefahren)."
+        },
+        "tilt": {
+          "name": "Neigung",
+          "description": "Optionale Lamellenneigung (0–100%), ausgebreitet auf der Neigungsachse."
+        }
+      }
+    },
+    "group_lock": {
+      "name": "Gruppe: Sperre",
+      "description": "Friert alle Mitglieder der angestrebten Beschattungsgruppen mit Sicherheitspriorität an Ort und Stelle ein. Das eigene Sicherheitsauslöser eines Mitglieds gewinnt bei Gleichstand."
+    },
+    "group_unlock": {
+      "name": "Gruppe: Entsperren",
+      "description": "Gibt die Gruppensperrung frei. Eine aktive Szene wird erneut angewendet; andernfalls kehren Mitglieder zu ihrer eigenen Automatisierung zurück."
+    },
+    "group_clear_overrides": {
+      "name": "Gruppe: Manuelle Übersteuerungen von Mitgliedern löschen",
+      "description": "Löscht manuelle Übersteuerungen auf jedem ACP-Mitglied der angestrebten Beschattungsgruppen und sendet die Pipeline-Position jedes Mitglieds erneut."
+    },
+    "group_set_automation": {
+      "name": "Gruppe: Automatisierung festlegen",
+      "description": "Aktiviert oder deaktiviert Sonnen-Tracking-Automatisierung in Massen auf jedem ACP-Mitglied der angestrebten Beschattungsgruppen.",
+      "fields": {
+        "enabled": {
+          "name": "Aktiviert",
+          "description": "true zum Aktivieren der Mitgliedersautomatisierung, false zum Deaktivieren."
         }
       }
     }
