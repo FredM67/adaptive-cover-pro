@@ -162,6 +162,7 @@ from .const import (
     CONF_TILT_DEPTH,
     CONF_TILT_DISTANCE,
     CONF_TILT_MODE,
+    CONF_TRACKING_SEASONS,
     CONF_TRANSPARENT_BLIND,
     CONF_WINTER_CLOSE_INSULATION,
     CONF_WEATHER_ENTITY,
@@ -3038,6 +3039,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_TEMP_EXTREME_HEAT,
             CONF_EXTREME_HEAT_POSITION,
             CONF_PRESENCE_TEMPLATE_MODE,
+            CONF_TRACKING_SEASONS,
         }
     ),
     "temperature_climate_sensors": frozenset(
@@ -3067,6 +3069,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_SUMMER_CLOSE_BYPASS_SUN_FLOOR,
             CONF_TEMP_EXTREME_HEAT,
             CONF_EXTREME_HEAT_POSITION,
+            CONF_TRACKING_SEASONS,
         }
     ),
     # Legacy alias for backward compat
@@ -3100,6 +3103,7 @@ SYNC_CATEGORIES: dict[str, frozenset[str]] = {
             CONF_SUMMER_CLOSE_BYPASS_SUN_FLOOR,
             CONF_TEMP_EXTREME_HEAT,
             CONF_EXTREME_HEAT_POSITION,
+            CONF_TRACKING_SEASONS,
         }
     ),
     "glare_zones": frozenset(
