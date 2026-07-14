@@ -22,25 +22,78 @@ def _load():
         return yaml.safe_load(fh)
 
 
-def test_set_blind_spot_left_description_uses_acceptance_frame():
-    svc = _load()["set_blind_spot"]["fields"]["blind_spot_left"]
-    desc = svc["description"]
-    assert "window azimuth" not in desc.lower()
-    assert "acceptance edge" in desc.lower()
+def test_set_blind_spot_gamma_fields_exist_with_signed_range():
+    """The primary signed-gamma fields are documented with a -180..180 range."""
+    fields = _load()["set_blind_spot"]["fields"]
+    for key in ("blind_spot_left_gamma", "blind_spot_right_gamma"):
+        assert key in fields
+        number = fields[key]["selector"]["number"]
+        assert number["min"] == -180
+        assert number["max"] == 180
 
 
-def test_set_blind_spot_right_description_uses_acceptance_frame():
-    svc = _load()["set_blind_spot"]["fields"]["blind_spot_right"]
-    desc = svc["description"]
-    assert "window azimuth" not in desc.lower()
-    assert "acceptance edge" in desc.lower()
-    assert "greater than" in desc.lower()
+def test_set_blind_spot_gamma_description_uses_window_normal_frame():
+    left = _load()["set_blind_spot"]["fields"]["blind_spot_left_gamma"]["description"]
+    assert "window normal" in left.lower()
 
 
-def test_set_blind_spot_service_description_mentions_acceptance_frame():
-    svc = _load()["set_blind_spot"]
-    desc = svc["description"].lower()
-    assert "acceptance" in desc
+def test_set_blind_spot_legacy_fields_are_deprecated():
+    """Legacy fields remain accepted for back-compat but are flagged deprecated."""
+    fields = _load()["set_blind_spot"]["fields"]
+    for key in ("blind_spot_left", "blind_spot_right"):
+        assert key in fields
+        assert "deprecated" in fields[key]["description"].lower()
+
+
+def test_set_blind_spot_service_description_mentions_window_normal():
+    desc = _load()["set_blind_spot"]["description"].lower()
+    assert "window normal" in desc
+
+
+def test_set_blind_spot_en_json_fields_match_services_yaml():
+    """en.json set_blind_spot.fields must document exactly the yaml fields.
+
+    Without this lock a new yaml field (the signed-gamma edges, #247) can ship
+    with a stale en.json that still describes the old FOV-relative frame and
+    lacks the gamma fields — HA then renders no label/description for them. Keys
+    must match 1:1 in both directions.
+    """
+    import json
+
+    yaml_fields = set(_load()["set_blind_spot"]["fields"])
+    en_path = (
+        Path(__file__).parent.parent
+        / "custom_components"
+        / "adaptive_cover_pro"
+        / "translations"
+        / "en.json"
+    )
+    with en_path.open(encoding="utf-8") as fh:
+        en = json.load(fh)
+    en_fields = set(en["services"]["set_blind_spot"]["fields"])
+    assert en_fields == yaml_fields, (
+        "services.yaml and en.json set_blind_spot fields disagree: "
+        f"only in yaml={sorted(yaml_fields - en_fields)}, "
+        f"only in en.json={sorted(en_fields - yaml_fields)}"
+    )
+
+
+def test_set_blind_spot_en_json_legacy_fields_marked_deprecated():
+    """The legacy edges in en.json must be flagged deprecated (frame switch #247)."""
+    import json
+
+    en_path = (
+        Path(__file__).parent.parent
+        / "custom_components"
+        / "adaptive_cover_pro"
+        / "translations"
+        / "en.json"
+    )
+    with en_path.open(encoding="utf-8") as fh:
+        en = json.load(fh)
+    fields = en["services"]["set_blind_spot"]["fields"]
+    for key in ("blind_spot_left", "blind_spot_right"):
+        assert "deprecated" in fields[key]["description"].lower()
 
 
 def test_set_position_service_exists_in_yaml():

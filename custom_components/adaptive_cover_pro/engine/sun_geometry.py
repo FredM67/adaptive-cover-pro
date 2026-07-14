@@ -273,20 +273,36 @@ class SunGeometry:
         )
         return after_sunset or before_sunrise
 
-    def _sun_in_blind_spot(self, bs: BlindSpot) -> bool:
+    def _sun_in_blind_spot(
+        self, bs: BlindSpot, frame_angle: float | None = None
+    ) -> bool:
         """Check if the sun is inside a single blind-spot wedge.
 
-        The ONE containment computation — a horizontal wedge (``fov_left`` minus
-        the slot's left/right offsets, compared against ``gamma``) plus an
-        optional elevation clause. Looped by :pyattr:`is_sun_in_blind_spot` over
-        every active slot. The elevation clause honours the slot's
-        ``elevation_mode`` (issue #702): ``"below"`` (default) blocks LOW sun
-        (``sol_elev <= elevation``); ``"above"`` blocks HIGH sun
-        (``sol_elev >= elevation``).
+        The ONE containment computation — a signed-gamma wedge
+        ``-bs.right <= angle <= bs.left`` (issue #247) plus an optional
+        elevation clause. Looped by :pyattr:`is_sun_in_blind_spot` /
+        :meth:`is_sun_in_blind_spot_at` over every active slot.
+
+        The wedge edges are stored as signed gamma from the window normal — the
+        SAME frame as ``gamma`` / ``fov_left`` / ``fov_right`` — so no
+        ``fov_left`` term appears here anymore. The wedge is compared against
+        ``frame_angle`` — the *evaluation frame*, which must equal the caller's
+        acceptance frame (issue #913). When ``frame_angle`` is ``None`` (the
+        default) it falls back to raw ``self.gamma``, so every existing
+        direct-``SunGeometry`` caller is unchanged bit-for-bit. Cover engines
+        whose acceptance cone is not the raw horizontal azimuth (e.g. a pitched
+        roof window) inject their effective ``fov_angle`` here so the blind spot
+        is tested in the SAME frame the FOV gate accepts — mirroring the
+        ``fov_angle_series`` injection in :meth:`solar_times_with_position`.
+        ``SunGeometry`` stays cover-type agnostic: it never computes the
+        effective angle itself.
+
+        The elevation clause honours the slot's ``elevation_mode`` (issue #702):
+        ``"below"`` (default) blocks LOW sun (``sol_elev <= elevation``);
+        ``"above"`` blocks HIGH sun (``sol_elev >= elevation``).
         """
-        left_edge = self.config.fov_left - bs.left
-        right_edge = self.config.fov_left - bs.right
-        inside = (self.gamma <= left_edge) & (self.gamma >= right_edge)
+        angle = self.gamma if frame_angle is None else frame_angle
+        inside = (angle >= -bs.right) & (angle <= bs.left)
         if bs.elevation is not None:
             if bs.elevation_mode == BLIND_SPOT_ELEV_MODE_ABOVE:
                 inside = inside & (self.sol_elev >= bs.elevation)
@@ -294,9 +310,16 @@ class SunGeometry:
                 inside = inside & (self.sol_elev <= bs.elevation)
         return bool(inside)
 
-    @property
-    def is_sun_in_blind_spot(self) -> bool:
-        """Check if sun is currently within any configured blind spot area.
+    def is_sun_in_blind_spot_at(self, frame_angle: float) -> bool:
+        """Check if the sun is in any blind spot, evaluated in ``frame_angle``.
+
+        The injectable-frame counterpart of :pyattr:`is_sun_in_blind_spot`. The
+        evaluation frame ``frame_angle`` must equal the caller's acceptance frame
+        (issue #913): a cover engine passes its polymorphic ``fov_angle`` so the
+        wedge is tested in the same frame the FOV gate accepts. For vertical /
+        awning / tilt / venetian covers ``fov_angle == gamma``, so this is
+        identical to :pyattr:`is_sun_in_blind_spot`; for a pitched roof window it
+        uses the tilted-plane effective gamma.
 
         Returns:
             True if sun is within any active blind spot wedge and blind spot
@@ -306,9 +329,26 @@ class SunGeometry:
         """
         if not self.config.blind_spot_on:
             return False
-        result = any(self._sun_in_blind_spot(bs) for bs in self.config.blind_spots)
+        result = any(
+            self._sun_in_blind_spot(bs, frame_angle) for bs in self.config.blind_spots
+        )
         self.logger.debug("Is sun in blind spot? %s", result)
         return result
+
+    @property
+    def is_sun_in_blind_spot(self) -> bool:
+        """Check if sun is currently within any configured blind spot area.
+
+        Raw-``gamma`` default frame for direct ``SunGeometry`` consumers;
+        delegates to :meth:`is_sun_in_blind_spot_at` so both share one code path.
+
+        Returns:
+            True if sun is within any active blind spot wedge and blind spot
+            enabled. False if blind spot not configured, disabled, or sun
+            outside every wedge.
+
+        """
+        return self.is_sun_in_blind_spot_at(self.gamma)
 
     @property
     def direct_sun_valid(self) -> bool:

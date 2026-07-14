@@ -53,6 +53,7 @@ Section index
 import logging
 from dataclasses import dataclass
 from enum import Enum, StrEnum
+from typing import Any
 
 # =============================================================================
 # 1. Module Identity & Logging
@@ -209,6 +210,31 @@ CONF_FOV_LEFT = "fov_left"  # left half-FOV from azimuth, degrees 0-180
 CONF_FOV_RIGHT = "fov_right"  # right half-FOV from azimuth, degrees 0-180
 DEFAULT_FOV_LEFT = 90  # degrees; matches config flow default
 DEFAULT_FOV_RIGHT = 90  # degrees; matches config flow default
+
+
+def resolve_fov_left(options: dict) -> int:
+    """Return ``fov_left`` from *options*, tolerant of a present-but-``None`` key.
+
+    ``int(options.get(CONF_FOV_LEFT, 90))`` raises ``TypeError`` when the key is
+    present but ``None`` (a cleared field) — and this now runs inside
+    ``async_migrate_entry`` at startup, where it could brick entry loading. This
+    is the single None-tolerant resolver, mirroring ``CoverConfig.from_options``;
+    every fov-reading site (migration, blind-spot clamp/schema, config-summary,
+    services) delegates here so they can never diverge.
+    """
+    v = options.get(CONF_FOV_LEFT)
+    return int(v) if v is not None else DEFAULT_FOV_LEFT
+
+
+def resolve_fov_right(options: dict) -> int:
+    """Return ``fov_right`` from *options*, tolerant of a present-but-``None`` key.
+
+    Companion to :func:`resolve_fov_left`.
+    """
+    v = options.get(CONF_FOV_RIGHT)
+    return int(v) if v is not None else DEFAULT_FOV_RIGHT
+
+
 CONF_FOV_COMPUTE = "fov_compute"  # transient form button: derive fov_left/right
 # from window width + reveal depth (#565). Never persisted. Legacy ``fov_mode``
 # values left in older entries' options are inert — the engine reads
@@ -435,8 +461,19 @@ EVENT_FOV_EXIT = "fov_exit"  # boundary event: sun leaves window FOV
 # so direct-sun handling switches off even if geometry says otherwise.
 
 CONF_ENABLE_BLIND_SPOT = "blind_spot"  # master enable
-CONF_BLIND_SPOT_LEFT = "blind_spot_left"  # left edge, azimuth deg 0-359
-CONF_BLIND_SPOT_RIGHT = "blind_spot_right"  # right edge, azimuth deg 0-360
+# --- Legacy FOV-relative edges (migration-read-only, issue #247) -------------
+# These measure the wedge as an offset INWARD from the left acceptance edge.
+# As of v3.8 writers emit the signed-gamma keys below; these are retained only
+# so a rolled-back older build keeps reading its untouched config (additive,
+# rollback-safe). ``blind_spot_legacy_to_gamma`` converts them on read.
+CONF_BLIND_SPOT_LEFT = "blind_spot_left"  # legacy left offset, deg 0-359
+CONF_BLIND_SPOT_RIGHT = "blind_spot_right"  # legacy right offset, deg 0-360
+# --- Signed gamma from the window normal (primary storage, issue #247) -------
+# Same frame as ``gamma`` / ``fov_left`` / ``fov_right``: 0 = straight ahead,
+# positive = toward the left acceptance edge. The engine wedge is simply
+# ``-blind_spot_right_gamma <= gamma <= blind_spot_left_gamma``.
+CONF_BLIND_SPOT_LEFT_GAMMA = "blind_spot_left_gamma"  # upper gamma edge
+CONF_BLIND_SPOT_RIGHT_GAMMA = "blind_spot_right_gamma"  # negated lower gamma edge
 # Sun elevation below which the blind-spot wedge applies, degrees 0-90.
 CONF_BLIND_SPOT_ELEVATION = "blind_spot_elevation"
 
@@ -465,9 +502,74 @@ CONF_BLIND_SPOT_ELEVATION_MODE = "blind_spot_elevation_mode"
 BLIND_SPOT_SLOT_NUMBERS: tuple[int, ...] = (1, 2, 3)  # slot 1 = legacy keys
 
 
+def blind_spot_legacy_to_gamma(
+    fov_left: float, old_left: float, old_right: float
+) -> tuple[int, int]:
+    """Convert legacy FOV-relative blind-spot edges to signed gamma (issue #247).
+
+    The ONE conversion formula — used by both the v3.8 config migration and the
+    runtime legacy fallback in :meth:`CoverConfig.from_options`, so the two can
+    never drift (single-source-of-truth rule).
+
+    Legacy semantics: the wedge is ``fov_left - old_right <= gamma <=
+    fov_left - old_left`` (offsets inward from the left acceptance edge).
+    Signed-gamma semantics: ``-new_right <= gamma <= new_left``. Substituting
+
+        new_left  = fov_left - old_left
+        new_right = old_right - fov_left
+
+    reproduces the identical interval. (The formula in issue #247's notes is
+    wrong — it swaps sides; this derivation is verified bit-for-bit.)
+    """
+    return int(fov_left) - int(old_left), int(old_right) - int(fov_left)
+
+
+def clamp_gamma_pair(
+    left: Any,
+    right: Any,
+    fov_left: int,
+    fov_right: int,
+) -> tuple[int | None, int | None]:
+    """Clamp a signed-gamma blind-spot ``(left, right)`` edge pair to the FOV.
+
+    The ONE clamp-arithmetic source (single-source-of-truth rule): the config
+    migration, the config-flow clamp-on-save, and any schema-bound derivation
+    delegate here so the bounds and the empty-wedge repair can never drift.
+
+    ``left`` (upper edge) is clamped to ``[-fov_right, fov_left]`` and ``right``
+    (negated lower edge) to ``[-fov_left, fov_right]`` — the same bounds the
+    slider schema exposes. Either edge may be ``None`` (that side stays ``None``
+    and no repair runs).
+
+    Non-empty repair (issue #247, finding 3): a wedge is non-empty only when
+    ``left + right > 0``. When BOTH edges are present and the clamp collapses a
+    *previously* non-empty wedge into an empty one (e.g. the default 1° sliver
+    at a wide FOV, re-clamped after the FOV narrows), the right edge — then the
+    left edge if still needed — is nudged back out to restore a minimal 1°
+    sliver, so a valid or default wedge can never be clamped into the
+    empty-wedge lockout that hard-blocks the options step. An input wedge that
+    was ALREADY empty is left exactly as configured.
+    """
+    new_left = None if left is None else max(-fov_right, min(int(left), fov_left))
+    new_right = None if right is None else max(-fov_left, min(int(right), fov_right))
+    if new_left is not None and new_right is not None:
+        was_non_empty = int(left) + int(right) > 0
+        if was_non_empty and new_left + new_right <= 0:
+            new_right = min(fov_right, 1 - new_left)
+            if new_left + new_right <= 0:
+                new_left = min(fov_left, 1 - new_right)
+    return new_left, new_right
+
+
 @dataclass(frozen=True, slots=True)
 class BlindSpot:
-    """One blind-spot wedge.
+    """One blind-spot wedge, stored as signed gamma from the window normal.
+
+    ``left`` is the upper gamma edge and ``right`` is the NEGATED lower gamma
+    edge, so the containment test is ``-right <= gamma <= left`` (issue #247) —
+    the same frame as ``gamma`` / ``fov_left`` / ``fov_right``. For a legacy
+    FOV-relative config the values are converted on read via
+    :func:`blind_spot_legacy_to_gamma`.
 
     ``elevation`` (None = applies at all elevations). ``elevation_mode``
     (issue #702) selects which side of ``elevation`` the wedge applies to:
@@ -487,12 +589,17 @@ def _blind_spot_slot_keys(n: int) -> dict[str, str]:
     """Return the wire-format option keys for blind-spot slot *n*.
 
     Slot 1 keeps the legacy unsuffixed keys (no data migration); slots 2+ are
-    suffixed ``_<n>``.
+    suffixed ``_<n>``. Each slot carries BOTH the legacy FOV-relative edges
+    (``left`` / ``right``, migration-read-only) and the primary signed-gamma
+    edges (``left_gamma`` / ``right_gamma``, issue #247).
     """
     s = "" if n == 1 else f"_{n}"
     return {
         "left": f"blind_spot_left{s}",
         "right": f"blind_spot_right{s}",
+        # Signed-gamma edges (issue #247) — the primary storage as of v3.8.
+        "left_gamma": f"blind_spot_left_gamma{s}",
+        "right_gamma": f"blind_spot_right_gamma{s}",
         "elevation": f"blind_spot_elevation{s}",
         # Per-slot below/above elevation selector (issue #702).
         "elevation_mode": f"blind_spot_elevation_mode{s}",
@@ -1577,9 +1684,16 @@ _RANGE_SLIDING_POINT_X = (-25.0, 25.0)  # CONF_SLIDING_POINT{1,2}_X, metres (sig
 _RANGE_SLIDING_POINT_Y = _RANGE_DISTANCE  # CONF_SLIDING_POINT{1,2}_Y, metres (0–50)
 
 # Blind spot.
-# Asymmetric LEFT vs RIGHT bounds are a historical quirk; preserved for compat.
+# Legacy FOV-relative edges (migration-read-only): asymmetric LEFT vs RIGHT
+# bounds are a historical quirk; the ranges are kept so OPTION_RANGES still
+# validates the read-only legacy keys.
 _RANGE_BLIND_SPOT_LEFT = (0, 359)  # CONF_BLIND_SPOT_LEFT, degrees
 _RANGE_BLIND_SPOT_RIGHT = (0, 360)  # CONF_BLIND_SPOT_RIGHT, degrees
+# Signed gamma from the window normal (issue #247): the effective per-slot
+# slider bounds are FOV-aware ([-fov_right, fov_left] / [-fov_left, fov_right]),
+# but the coarse OPTION_RANGES / service bound is the full signed span.
+_RANGE_BLIND_SPOT_LEFT_GAMMA = (-180, 180)  # CONF_BLIND_SPOT_LEFT_GAMMA, degrees
+_RANGE_BLIND_SPOT_RIGHT_GAMMA = (-180, 180)  # CONF_BLIND_SPOT_RIGHT_GAMMA, degrees
 _RANGE_BLIND_SPOT_ELEVATION = (0, 90)  # CONF_BLIND_SPOT_ELEVATION, degrees
 
 # Position limits & sunset.
