@@ -128,6 +128,9 @@ class TestHoldDebouncer:
         callback.assert_awaited()
         assert commits == [(False, True)]
 
+        # Expiry was simulated directly; cancel the still-sleeping timer.
+        d.cancel()
+
     @pytest.mark.asyncio
     async def test_expiry_with_no_pending_is_noop(self, logger):
         d = HoldDebouncer(logger, label="test")
@@ -155,6 +158,9 @@ class TestHoldDebouncer:
         # On expiry the LATEST pending target commits.
         await d._on_hold_timeout_expired(AsyncMock())
         assert d.resolved == (True, True)
+
+        # Expiry was simulated directly; cancel the still-sleeping timer.
+        d.cancel()
 
     def test_reset_restores_initial_and_clears_pending(self, logger):
         d = HoldDebouncer(logger, label="test")

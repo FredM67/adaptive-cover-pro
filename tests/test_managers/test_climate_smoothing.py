@@ -205,6 +205,9 @@ class TestTimerExpiry:
         assert m.resolved_flags.winter is True
         callback.assert_awaited()
 
+        # Expiry was simulated directly; cancel the still-sleeping timer.
+        m.cancel_hold_timeout()
+
 
 # ---------------------------------------------------------------------------
 # (e) update_config default references the DEFAULT constant
