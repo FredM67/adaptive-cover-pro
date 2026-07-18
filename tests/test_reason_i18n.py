@@ -267,6 +267,41 @@ LEGACY_CASES: list[tuple[str, dict, str]] = [
         {"tilt": 30, "handler": "solar", "winner_tilt": 45},
         "tilt-only 30% deferred — solar already set tilt 45%",
     ),
+    (
+        ReasonCode.REGISTRY_CEILING_LOWERED,
+        {"from_pos": 80, "to_pos": 60, "label": "Awning sensor"},
+        "ceiling lowered winner from 80% to 60% by Awning sensor",
+    ),
+    (
+        ReasonCode.REGISTRY_CEILING_INACTIVE,
+        {"ceiling_pos": 60, "to_pos": 40},
+        "ceiling 60% inactive (resolved 40% at or below ceiling)",
+    ),
+    (
+        ReasonCode.REGISTRY_CEILING_OVERRIDDEN,
+        {"ceiling_pos": 40, "to_pos": 60},
+        "ceiling 40% overridden — a floor raised the cover to 60%",
+    ),
+    (
+        ReasonCode.REGISTRY_FLOOR_OVERRIDES_CEILING,
+        {"to_pos": 60, "ceiling_pos": 40, "label": "Floor sensor", "from_pos": 80},
+        "floor raised to 60% over ceiling 40% by Floor sensor (winner was 80%)",
+    ),
+    (
+        ReasonCode.REGISTRY_TILT_BOUND_ACTIVE,
+        {"low_label": "50%", "high_label": "—", "label": "Door sensor"},
+        "tilt bound 50%–— active by Door sensor; awaiting the resolved tilt",
+    ),
+    (
+        ReasonCode.REGISTRY_TILT_BOUND_INACTIVE,
+        {"low_label": "50%", "high_label": "—", "label": "Door sensor", "tilt": 75},
+        "tilt bound 50%–— inactive by Door sensor; resolved tilt 75% already within",
+    ),
+    (
+        ReasonCode.REGISTRY_TILT_CLAMPED,
+        {"from_tilt": 30, "to_tilt": 50, "label": "Door sensor"},
+        "tilt clamped from 30% to 50% by Door sensor",
+    ),
     # --- builder ---
     (ReasonCode.BUILDER_UNKNOWN, {}, "Unknown"),
     (ReasonCode.BUILDER_CONTROL_OCCUPANCY_TIMEOUT, {}, "Occupancy Timeout"),

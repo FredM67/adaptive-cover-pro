@@ -140,6 +140,30 @@ _REASON_TEMPLATES_EN: dict[str, str] = {
     ReasonCode.REGISTRY_TILT_DEFERRED: (
         "tilt-only {tilt}% deferred — {handler} already set tilt {winner_tilt}%"
     ),
+    ReasonCode.REGISTRY_CEILING_LOWERED: (
+        "ceiling lowered winner from {from_pos}% to {to_pos}% by {label}"
+    ),
+    ReasonCode.REGISTRY_CEILING_INACTIVE: (
+        "ceiling {ceiling_pos}% inactive (resolved {to_pos}% at or below ceiling)"
+    ),
+    ReasonCode.REGISTRY_CEILING_OVERRIDDEN: (
+        "ceiling {ceiling_pos}% overridden — a floor raised the cover to {to_pos}%"
+    ),
+    ReasonCode.REGISTRY_FLOOR_OVERRIDES_CEILING: (
+        "floor raised to {to_pos}% over ceiling {ceiling_pos}% by {label} "
+        "(winner was {from_pos}%)"
+    ),
+    ReasonCode.REGISTRY_TILT_BOUND_ACTIVE: (
+        "tilt bound {low_label}–{high_label} active by {label}; "
+        "awaiting the resolved tilt"
+    ),
+    ReasonCode.REGISTRY_TILT_BOUND_INACTIVE: (
+        "tilt bound {low_label}–{high_label} inactive by {label}; "
+        "resolved tilt {tilt}% already within"
+    ),
+    ReasonCode.REGISTRY_TILT_CLAMPED: (
+        "tilt clamped from {from_tilt}% to {to_tilt}% by {label}"
+    ),
     # -- diagnostics builder
     ReasonCode.BUILDER_UNKNOWN: "Unknown",
     ReasonCode.BUILDER_CONTROL_OCCUPANCY_TIMEOUT: "Occupancy Timeout",

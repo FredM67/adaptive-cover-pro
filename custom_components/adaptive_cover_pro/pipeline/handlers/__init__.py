@@ -101,9 +101,9 @@ def _custom_position_handlers(options: Mapping[str, Any]) -> list[OverrideHandle
     """Build one ``CustomPositionHandler`` per configured + enabled slot.
 
     A slot contributes a handler only when it has a trigger (sensors and/or
-    template) and a position and is enabled. Each carries an independent
-    priority so the registry sorts it into the correct evaluation order
-    alongside the rest of the chain.
+    template) and an axis claim — a position or one of the axis constraints —
+    and is enabled. Each carries an independent priority so the registry sorts
+    it into the correct evaluation order alongside the rest of the chain.
     """
     handlers: list[OverrideHandler] = []
     for slot, slot_keys in CUSTOM_POSITION_SLOTS.items():
@@ -116,10 +116,16 @@ def _custom_position_handlers(options: Mapping[str, Any]) -> list[OverrideHandle
             )
             raw_tilt = options.get(slot_keys["tilt"])
             tilt = int(raw_tilt) if raw_tilt is not None else None
+            # A constraint-only slot (e.g. trigger → minimum tilt) has no
+            # position claim. Pass None rather than a 0 sentinel: the ``use_my``
+            # path bypasses the non-FIXED deferral, so a 0 here would fully
+            # close the cover when the My value is also unavailable (audit
+            # finding 3). The handler defers instead when it has nothing to send.
+            raw_position = options.get(slot_keys["position"])
             handlers.append(
                 CustomPositionHandler(
                     slot=slot,
-                    position=int(options.get(slot_keys["position"])),
+                    position=int(raw_position) if raw_position is not None else None,
                     priority=priority,
                     tilt=tilt,
                 )
