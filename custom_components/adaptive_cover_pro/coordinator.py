@@ -31,13 +31,15 @@ try:
 except ImportError:
     # Fallback for older Home Assistant versions
     EventStateChangedData = dict  # type: ignore[misc,assignment]
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from .config_types import RuntimeConfig
+from .config_types import CoverConfig, RuntimeConfig
 from .helpers import (
     compute_effective_default,
+    custom_position_slot_delivers_fixed_position,
     custom_position_slot_sensors,
     get_datetime_from_str,
     get_safe_state,
@@ -88,11 +90,17 @@ from .const import (
     CONF_TRANSIT_TIMEOUT,
     CUSTOM_POSITION_SAFETY_PRIORITY,
     CUSTOM_POSITION_SLOTS,
+    DEFAULT_CUSTOM_POSITION_ENABLED,
+    DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEFAULT_DEBUG_EVENT_BUFFER_SIZE,
     DEFAULT_MANUAL_OVERRIDE_STRATEGY,
     DEFAULT_TRANSIT_TIMEOUT_SECONDS,
     DIAG_CACHE_KEY,
     DOMAIN,
+    ISSUE_CONFIG_POSITION_ENVELOPE,
+    ISSUE_CONFIG_TIME_WINDOW,
+    ISSUE_COVER_UNAVAILABLE,
+    ISSUE_SUN_UNAVAILABLE,
     ISSUE_TEMP_SENSOR_UNAVAILABLE,
     LOGGER,
     POSITION_TOLERANCE_PERCENT,
@@ -115,6 +123,7 @@ from .managers.manual_override import (
 from .managers.climate_smoothing import ClimateSmoothingManager
 from .managers.cloud_suppression import CloudSuppressionManager
 from .managers.motion import MotionManager
+from .managers.repair import RepairManager
 from .managers.sensor_health import SensorHealthManager
 from .managers.weather import WeatherManager
 from .managers.time_window import TimeWindowManager
@@ -357,6 +366,25 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._temp_issue_key = (
             f"{ISSUE_TEMP_SENSOR_UNAVAILABLE}_{self.config_entry.entry_id}"
         )
+        # Non-sensor health checks (issue #975): controlled-cover + sun.sun
+        # availability (entity-shaped, on SensorHealthManager) and config-coherence
+        # predicates (envelope, time window) on the RepairManager sibling. Same
+        # informational contract and debounce as the temp watch. Issue keys are
+        # per-config-entry namespaced so each cover instance owns its Repairs.
+        self._repair = RepairManager(self.hass, self.logger, domain=DOMAIN)
+        entry_id = self.config_entry.entry_id
+        self._sun_issue_key = f"{ISSUE_SUN_UNAVAILABLE}_{entry_id}"
+        self._envelope_issue_key = f"{ISSUE_CONFIG_POSITION_ENVELOPE}_{entry_id}"
+        self._time_window_issue_key = f"{ISSUE_CONFIG_TIME_WINDOW}_{entry_id}"
+        # Namespaced cover-availability watch keys currently registered, so a
+        # cover dropped from config gets unwatched (its Repair cleared) next cycle.
+        self._cover_issue_keys: set[str] = set()
+        # One-shot: the first health-check cycle of this lifetime sweeps the issue
+        # registry for A1 Repairs orphaned by a prior lifetime (removing a cover
+        # reloads the entry, so a cross-lifetime orphan is in neither the fresh
+        # ``desired`` set nor the in-lifetime unwatch loop). Mirrors the base's
+        # ``_reconciled`` first-pass philosophy — see _evaluate_health_checks.
+        self._a1_orphans_swept = False
         # Override pipeline — custom position handlers are created per-slot so
         # each can carry an independent priority configured by the user.
         self._pipeline = self._build_pipeline()
@@ -1412,6 +1440,155 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             )
             self._start_weather_timeout()
 
+    def _evaluate_health_checks(self, options: dict) -> None:
+        """Raise/clear informational Repairs for sensor + config health.
+
+        One fail-open guard covers all checks (issue #786, #975) so none can
+        break the update cycle. Entity-availability checks (temp sensor, each
+        controlled cover, ``sun.sun``) ride the ``SensorHealthManager``; config
+        coherence (position envelope, time window) rides the ``RepairManager``
+        predicate sibling. Everything is per-config-entry namespaced and cleared
+        automatically on recovery.
+        """
+        try:
+            name = self.config_entry.data.get("name", "") or ""
+
+            # Temp sensor (issue #786): watch the effective indoor temp entity
+            # only when climate mode is on — an unavailable sensor is not worth
+            # nagging about when climate is off. Watching the resolved effective
+            # entity covers both explicit and area-resolved cases.
+            climate_on = bool(options.get(CONF_CLIMATE_MODE, False))
+            effective_temp = (
+                self._weather_readings.inside_temperature_entity_id
+                if climate_on
+                else None
+            )
+            self._sensor_health.update_watch(
+                self._temp_issue_key,
+                effective_temp,
+                translation_key=ISSUE_TEMP_SENSOR_UNAVAILABLE,
+                placeholders={"entity_id": effective_temp or "", "name": name},
+            )
+
+            # C1 — sun.sun availability. Always watched; the whole integration
+            # depends on it, so an unavailable sun entity is always worth flagging.
+            self._sensor_health.update_watch(
+                self._sun_issue_key,
+                "sun.sun",
+                translation_key=ISSUE_SUN_UNAVAILABLE,
+                placeholders={"name": name},
+            )
+
+            # A1 — each controlled cover's availability. Watch every entity under
+            # its own namespaced key; unwatch (and clear) any cover dropped from
+            # config since last cycle. A cover removed from the registry has no
+            # state → already treated unhealthy.
+            desired: set[str] = set()
+            for eid in self.entities:
+                key = f"{ISSUE_COVER_UNAVAILABLE}_{self.config_entry.entry_id}_{eid}"
+                desired.add(key)
+                self._sensor_health.update_watch(
+                    key,
+                    eid,
+                    translation_key=ISSUE_COVER_UNAVAILABLE,
+                    placeholders={"entity_id": eid, "name": name},
+                )
+            for stale in self._cover_issue_keys - desired:
+                self._sensor_health.update_watch(
+                    stale, None, translation_key=ISSUE_COVER_UNAVAILABLE
+                )
+            self._cover_issue_keys = desired
+
+            # B1 — position-envelope coherence. Consume the canonical min/max
+            # resolution from CoverConfig (single source of truth) instead of
+            # re-deriving the defaults here, and render the placeholders as plain
+            # ints so a HA NumberSelector float doesn't surface as "80.0".
+            cover_cfg = CoverConfig.from_options(options)
+            min_pos = int(cover_cfg.min_pos)
+            max_pos = int(cover_cfg.max_pos)
+            self._repair.update_predicate(
+                self._envelope_issue_key,
+                self._position_envelope_incoherent(options, min_pos, max_pos),
+                translation_key=ISSUE_CONFIG_POSITION_ENVELOPE,
+                placeholders={"name": name, "min": str(min_pos), "max": str(max_pos)},
+            )
+
+            # B2 — time-window coherence. Only fire when BOTH sides resolve, so an
+            # entity-provided-but-unavailable start/end never false-fires.
+            start = self._time_mgr.resolved_start_time
+            end = self._time_mgr.end_time
+            self._repair.update_predicate(
+                self._time_window_issue_key,
+                start is not None and end is not None and start >= end,
+                translation_key=ISSUE_CONFIG_TIME_WINDOW,
+                placeholders={
+                    "name": name,
+                    "start": start.strftime("%H:%M") if start is not None else "",
+                    "end": end.strftime("%H:%M") if end is not None else "",
+                },
+            )
+
+            self._sensor_health.evaluate()
+            self._repair.evaluate()
+
+            # A1 cross-lifetime orphan sweep (issue #975 audit). The primary fix
+            # for a cover_unavailable Repair is REMOVING the cover, which reloads
+            # the config entry → a fresh coordinator with an empty
+            # ``_cover_issue_keys``. The removed cover's key is in neither
+            # ``desired`` (recomputed above) nor the in-lifetime unwatch loop, so
+            # its Repair would orphan until an HA restart. Once per lifetime,
+            # enumerate this integration's issues and delete any A1 Repair for
+            # this entry that is no longer desired. Runs last (inside the single
+            # fail-open guard) so a registry hiccup can never skip A1/B1/B2. The
+            # ``desired``-membership filter is critical: a still-configured but
+            # unavailable cover IS in ``desired`` (it is watched), so its valid
+            # warning is preserved rather than flapped on every restart.
+            if not self._a1_orphans_swept:
+                a1_prefix = f"{ISSUE_COVER_UNAVAILABLE}_{self.config_entry.entry_id}_"
+                registry = ir.async_get(self.hass)
+                for reg_domain, issue_id in list(registry.issues):
+                    if (
+                        reg_domain == DOMAIN
+                        and issue_id.startswith(a1_prefix)
+                        and issue_id not in self._cover_issue_keys
+                    ):
+                        ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                self._a1_orphans_swept = True
+        except Exception:  # noqa: BLE001 — health check must never break the cycle
+            self.logger.debug("Health-check evaluation failed", exc_info=True)
+
+    @staticmethod
+    def _position_envelope_incoherent(
+        options: dict, min_pos: int, max_pos: int
+    ) -> bool:
+        """Whether the position envelope is self-contradictory (issue #975, B1).
+
+        True when ``min > max`` or an enabled, non-safety slot that would deliver
+        an exact (FIXED) cover position pins it outside ``[min, max]``. Slots that
+        never deliver a fixed position claim — ``use_my``, tilt-only, or a
+        non-FIXED constraint mode (floor / ceiling / range) — are exempt: they
+        compose as constraints the envelope clamps and cannot conflict with it.
+        Cover-type-agnostic: loops the slots generically and delegates the
+        fixed-position determination to the shared helper (same seam the pipeline
+        handler uses), with no branching on cover type or capabilities.
+        """
+        if min_pos > max_pos:
+            return True
+        for slot_keys in CUSTOM_POSITION_SLOTS.values():
+            if not options.get(slot_keys["enabled"], DEFAULT_CUSTOM_POSITION_ENABLED):
+                continue
+            priority = options.get(
+                slot_keys["priority"], DEFAULT_CUSTOM_POSITION_PRIORITY
+            )
+            if priority == CUSTOM_POSITION_SAFETY_PRIORITY:
+                continue  # safety slots command outside the envelope by design
+            if not custom_position_slot_delivers_fixed_position(options, slot_keys):
+                continue  # only exact-position slots can contradict the envelope
+            position = options.get(slot_keys["position"])
+            if position < min_pos or position > max_pos:
+                return True
+        return False
+
     def _calculate_cover_state(self, cover_data, options) -> int:
         """Calculate cover state via pipeline and return final position.
 
@@ -1440,30 +1617,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # snapshot sees this cycle's resolved flags.
         self._reconcile_climate_smoothing(self._weather_readings)
 
-        # Sensor-health Repair (issue #786): watch the effective indoor temp
-        # entity only when climate mode is on (the sensor is otherwise unused,
-        # so an unavailable one is not worth nagging about). Watching the
-        # resolved effective entity covers both explicit and area-resolved
-        # cases. Fail-open: never let this raise into the update cycle.
-        try:
-            climate_on = bool(options.get(CONF_CLIMATE_MODE, False))
-            effective_temp = (
-                self._weather_readings.inside_temperature_entity_id
-                if climate_on
-                else None
-            )
-            self._sensor_health.update_watch(
-                self._temp_issue_key,
-                effective_temp,
-                translation_key=ISSUE_TEMP_SENSOR_UNAVAILABLE,
-                placeholders={
-                    "entity_id": effective_temp or "",
-                    "name": self.config_entry.data.get("name", "") or "",
-                },
-            )
-            self._sensor_health.evaluate()
-        except Exception:  # noqa: BLE001 — health check must never break the cycle
-            self.logger.debug("Sensor-health evaluation failed", exc_info=True)
+        # Health-check Repairs (issue #786, #975): sensor availability + config
+        # coherence, all informational and debounced. Runs inside one fail-open
+        # guard so no check can break the update cycle.
+        self._evaluate_health_checks(options)
 
         # Compute the effective default position from astronomical sunset/sunrise.
         # This is the single source of truth — all pipeline handlers use it via
@@ -3688,8 +3845,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # Cancel weather clear-delay timeout task
         self._cancel_weather_timeout()
 
-        # Cancel any in-flight sensor-health debounce timers (issue #786).
+        # Cancel any in-flight health-check debounce timers (issue #786, #975).
         self._sensor_health.shutdown()
+        self._repair.shutdown()
 
         # Stop cover command service reconciliation timer
         self._cmd_svc.stop()
