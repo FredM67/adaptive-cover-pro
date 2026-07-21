@@ -384,12 +384,16 @@ class AdaptiveVerticalCover(AdaptiveGeneralCover):
         )
         return PositionConverter.to_percentage(position, self.h_win)
 
-    def calculate_raw_percentage(self) -> float:
+    def calculate_raw_percentage(
+        self, effective_distance_override: float | None = None
+    ) -> float:
         """Unrounded geometry fraction for directional rounding (issue #978).
 
         Bypasses the ``round()`` inside ``PositionConverter.to_percentage`` so
-        that :func:`pipeline.helpers.solar_position_from_geometry` can apply
-        ``floor()`` / ``ceil()`` / ``round()`` as configured.
+        that callers can apply ``floor()`` / ``ceil()`` / ``round()`` as needed.
+        Accepts the same *effective_distance_override* as
+        :meth:`calculate_percentage` so the glare-zone handler can use it
+        without the internal ``round()`` applied by that method.
         """
-        position = self.calculate_position()
+        position = self.calculate_position(effective_distance_override)
         return (float(position) / self.h_win) * 100.0

@@ -23,11 +23,9 @@ from collections.abc import Callable
 
 from .const import (
     CONF_END_OF_WINDOW_POS,
-    CONF_CONSERVATIVE_ROUNDING,
     CONF_MAX_COVERAGE_STEPS,
     CONF_MINIMIZE_MOVEMENTS,
     CONF_RETURN_SUNSET,
-    DEFAULT_CONSERVATIVE_ROUNDING,
     DEFAULT_MAX_COVERAGE_STEPS,
     DEFAULT_MINIMIZE_MOVEMENTS,
     EVENT_FOV_ENTER,
@@ -127,7 +125,6 @@ def build_forecast(
     step_minutes: int = FORECAST_STEP_MINUTES,
     minimize_movements: bool = False,
     max_coverage_steps: int = 1,
-    conservative_rounding: bool = False,
     floor_active: bool = True,
     end_of_window_pos: int | None = None,
     end_of_window_time: datetime | None = None,
@@ -176,7 +173,6 @@ def build_forecast(
         step_minutes=step_minutes,
         minimize_movements=minimize_movements,
         max_coverage_steps=max_coverage_steps,
-        conservative_rounding=conservative_rounding,
         floor_active=floor_active,
         end_of_window_pos=end_of_window_pos,
         end_of_window_time=end_of_window_time,
@@ -197,7 +193,6 @@ def _build_samples(
     step_minutes: int,
     minimize_movements: bool = False,
     max_coverage_steps: int = 1,
-    conservative_rounding: bool = False,
     floor_active: bool = True,
     end_of_window_pos: int | None = None,
     end_of_window_time: datetime | None = None,
@@ -256,7 +251,6 @@ def _build_samples(
                 config,
                 minimize_movements=minimize_movements,
                 max_coverage_steps=max_coverage_steps,
-                conservative_rounding=conservative_rounding,
                 policy=policy,
                 floor_active=floor_active,
             )
@@ -479,9 +473,6 @@ def build_forecast_for_coord(coord: AdaptiveDataUpdateCoordinator) -> Forecast:
     max_coverage_steps = int(
         options.get(CONF_MAX_COVERAGE_STEPS, DEFAULT_MAX_COVERAGE_STEPS)
     )
-    conservative_rounding = bool(
-        options.get(CONF_CONSERVATIVE_ROUNDING, DEFAULT_CONSERVATIVE_ROUNDING)
-    )
 
     # Secondary-axis projection (#724): build the closure from the polymorphic
     # policy hook — the shim never branches on the cover type. Single-axis
@@ -513,7 +504,6 @@ def build_forecast_for_coord(coord: AdaptiveDataUpdateCoordinator) -> Forecast:
         now=dt_util.now(),
         minimize_movements=minimize_movements,
         max_coverage_steps=max_coverage_steps,
-        conservative_rounding=conservative_rounding,
         floor_active=not all_positionable,
         end_of_window_pos=eow_pos,
         end_of_window_time=eow_time,

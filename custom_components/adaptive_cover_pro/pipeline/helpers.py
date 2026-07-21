@@ -128,7 +128,6 @@ def solar_position_from_geometry(
     max_coverage_steps: int,
     policy: CoverTypePolicy | None,
     floor_active: bool = True,
-    conservative_rounding: bool = False,
 ) -> int:
     """Sun-tracked position from raw geometry, with all standard transforms.
 
@@ -136,8 +135,7 @@ def solar_position_from_geometry(
     live pipeline (:func:`compute_solar_position`) and the forecast:
 
     1. Calls ``cover.calculate_raw_percentage()`` (pure geometry, unrounded float).
-       When *conservative_rounding* is True (opt-in, issue #978), rounds toward
-       full coverage instead of nearest integer: floor() for blinds/tilt/venetian
+       Rounds toward full coverage (issue #978): floor() for blinds/tilt/venetian
        (0%=closed=full coverage), ceil() for awnings (100%=extended=full coverage).
        Requires *policy* to determine the coverage direction; falls back to
        round() when policy is None.
@@ -156,7 +154,7 @@ def solar_position_from_geometry(
 
     """
     pct = cover.calculate_raw_percentage()
-    if conservative_rounding and policy is not None:
+    if policy is not None:
         # full_coverage_at_zero=True means 0% = closed = full coverage (blind/tilt/venetian)
         # → round DOWN (floor) toward 0 to keep more coverage.
         # full_coverage_at_zero=False means 100% = extended = full coverage (awning)
@@ -195,7 +193,6 @@ def compute_solar_position(snapshot: PipelineSnapshot) -> int:
         max_coverage_steps=getattr(snapshot, "max_coverage_steps", 1),
         policy=getattr(snapshot, "policy", None),
         floor_active=getattr(snapshot, "solar_floor_active", True),
-        conservative_rounding=getattr(snapshot, "conservative_rounding", False),
     )
 
 
@@ -280,7 +277,6 @@ def anticipated_solar_position(snapshot: PipelineSnapshot) -> int:
             max_coverage_steps=getattr(snapshot, "max_coverage_steps", 1),
             policy=policy,
             floor_active=getattr(snapshot, "solar_floor_active", True),
-            conservative_rounding=getattr(snapshot, "conservative_rounding", False),
         )
         best = policy.more_protective_position(best, candidate)
 

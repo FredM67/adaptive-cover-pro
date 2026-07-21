@@ -422,12 +422,6 @@ CONF_MAX_COVERAGE_STEPS = "max_coverage_steps"  # discrete coverage levels, 1-10
 DEFAULT_MINIMIZE_MOVEMENTS = False
 DEFAULT_MAX_COVERAGE_STEPS = 1
 # Opt-in directional (conservative) rounding: bias the solar position toward
-# full coverage rather than nearest integer. For blinds/tilt/venetian (0%=closed)
-# this rounds DOWN (floor); for awnings (100%=extended=max block) this rounds UP
-# (ceil). Keeps a cover a hair on the safe side when geometry lands mid-integer.
-# Defaults off to preserve long-standing behavior.
-CONF_CONSERVATIVE_ROUNDING = "conservative_rounding"  # opt-in toggle
-DEFAULT_CONSERVATIVE_ROUNDING = False
 # True if blind passes some light even when closed (used by glare/climate).
 CONF_TRANSPARENT_BLIND = "transparent_blind"
 

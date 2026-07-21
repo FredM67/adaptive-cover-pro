@@ -48,7 +48,6 @@ from ..const import (
     CONF_LUX_ENTITY,
     CONF_LUX_RELEASE_THRESHOLD,
     CONF_LUX_THRESHOLD,
-    CONF_CONSERVATIVE_ROUNDING,
     CONF_MAX_COVERAGE_STEPS,
     CONF_MAX_TILT,
     CONF_MAX_TILT_SUN_ONLY,
@@ -92,7 +91,6 @@ from ..const import (
     DEFAULT_TRACKING_SEASONS,
     DEFAULT_CUSTOM_POSITION_PRIORITY,
     DEFAULT_CUSTOM_POSITION_TILT_ONLY,
-    DEFAULT_CONSERVATIVE_ROUNDING,
     DEFAULT_MAX_COVERAGE_STEPS,
     DEFAULT_MAX_TILT,
     DEFAULT_MAX_TILT_SUN_ONLY,
@@ -532,9 +530,6 @@ class PipelineSnapshotBuilder:
             ),
             max_coverage_steps=int(
                 options.get(CONF_MAX_COVERAGE_STEPS, DEFAULT_MAX_COVERAGE_STEPS)
-            ),
-            conservative_rounding=bool(
-                options.get(CONF_CONSERVATIVE_ROUNDING, DEFAULT_CONSERVATIVE_ROUNDING)
             ),
             default_tilt=options.get(CONF_DEFAULT_TILT),
             sunset_tilt=options.get(CONF_SUNSET_TILT),
