@@ -47,6 +47,7 @@ def _make_vertical_cover(
     cover.gamma = gamma
     cover.sol_elev = sol_elev
     cover.calculate_percentage = MagicMock(return_value=calculate_percentage_return)
+    cover.calculate_raw_percentage = MagicMock(return_value=float(calculate_percentage_return))
     cover.config = MagicMock()
     cover.config.min_pos = None
     cover.config.max_pos = None

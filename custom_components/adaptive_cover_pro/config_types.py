@@ -668,6 +668,9 @@ class TrackingSlice:
     # Opt-in sun-tracking movement minimization (quantize to N coverage levels).
     minimize_movements: bool = False
     max_coverage_steps: int = 1
+    # Opt-in directional (conservative) rounding: bias the solar position toward
+    # full coverage (floor for blinds, ceil for awnings) instead of round().
+    conservative_rounding: bool = False
     # When True, the reconciliation pass resends until the cover reaches target.
     # When False (default), command once and let a settle past tolerance become
     # a manual override (issue #591).
@@ -757,6 +760,7 @@ class RuntimeConfig:
             CONF_MANUAL_OVERRIDE_INPUT_TEMPLATE,
             CONF_MANUAL_OVERRIDE_RESET,
             CONF_MANUAL_THRESHOLD,
+            CONF_CONSERVATIVE_ROUNDING,
             CONF_MAX_COVERAGE_STEPS,
             CONF_MINIMIZE_MOVEMENTS,
             CONF_MOTION_MEDIA_PLAYERS,
@@ -801,6 +805,7 @@ class RuntimeConfig:
             DEFAULT_ENABLE_POSITION_MATCHING,
             DEFAULT_ENDPOINT_USE_OPEN_CLOSE,
             DEFAULT_ENFORCE_DELTA_AT_ENDPOINTS,
+            DEFAULT_CONSERVATIVE_ROUNDING,
             DEFAULT_MAX_COVERAGE_STEPS,
             DEFAULT_MINIMIZE_MOVEMENTS,
             DEFAULT_MOTION_TIMEOUT,
@@ -846,6 +851,9 @@ class RuntimeConfig:
                 ),
                 max_coverage_steps=int(
                     options.get(CONF_MAX_COVERAGE_STEPS, DEFAULT_MAX_COVERAGE_STEPS)
+                ),
+                conservative_rounding=bool(
+                    options.get(CONF_CONSERVATIVE_ROUNDING, DEFAULT_CONSERVATIVE_ROUNDING)
                 ),
                 enable_position_matching=options.get(
                     CONF_ENABLE_POSITION_MATCHING, DEFAULT_ENABLE_POSITION_MATCHING

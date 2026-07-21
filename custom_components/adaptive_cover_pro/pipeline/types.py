@@ -393,6 +393,13 @@ class PipelineSnapshot:
     # the sun is in the FOV. Defaults preserve the un-quantized behavior.
     minimize_movements: bool = False
     max_coverage_steps: int = 1
+    # Directional (conservative) rounding (opt-in, issue #978). When True, the
+    # solar branch rounds the raw geometry percentage toward full coverage instead
+    # of toward the nearest integer: floor() for blinds/tilt/venetian (0%=closed),
+    # ceil() for awnings (100%=extended=max block). At most 1% difference per
+    # cycle; never increases churn beyond what round() would produce when the
+    # value is already an integer. Defaults False to preserve existing behavior.
+    conservative_rounding: bool = False
 
     # Whether the sun-tracking 1 % floor applies this cycle (issue #569). The
     # solar branch and the glare-zone handler floor the geometric position at
