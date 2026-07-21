@@ -853,7 +853,9 @@ class RuntimeConfig:
                     options.get(CONF_MAX_COVERAGE_STEPS, DEFAULT_MAX_COVERAGE_STEPS)
                 ),
                 conservative_rounding=bool(
-                    options.get(CONF_CONSERVATIVE_ROUNDING, DEFAULT_CONSERVATIVE_ROUNDING)
+                    options.get(
+                        CONF_CONSERVATIVE_ROUNDING, DEFAULT_CONSERVATIVE_ROUNDING
+                    )
                 ),
                 enable_position_matching=options.get(
                     CONF_ENABLE_POSITION_MATCHING, DEFAULT_ENABLE_POSITION_MATCHING

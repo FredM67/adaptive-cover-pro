@@ -21,7 +21,6 @@ from custom_components.adaptive_cover_pro.pipeline.helpers import (
     solar_position_from_geometry,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -85,11 +84,13 @@ class TestBlindConservativeRounding:
             (45.4, 45),  # round() also gives 45; floor agrees
             (10.9, 10),  # round() would give 11; floor gives 10
             (99.9, 99),  # round() would give 100; floor gives 99 (still covered)
-            (0.9, 0),    # floor → 0; solar floor clamp NOT active → stays 0
+            (0.9, 0),  # floor → 0; solar floor clamp NOT active → stays 0
         ],
     )
     def test_floor_rounds_toward_closed(self, pct, expected):
-        snap = _snapshot(calc_pct=pct, open_blocks_sun=False, conservative_rounding=True)
+        snap = _snapshot(
+            calc_pct=pct, open_blocks_sun=False, conservative_rounding=True
+        )
         assert compute_solar_position(snap) == expected
 
     @pytest.mark.parametrize("pct", [0.0, 10.0, 45.0, 67.0, 100.0])
@@ -108,8 +109,12 @@ class TestBlindConservativeRounding:
     def test_conservative_more_closed_than_round_when_fractional(self):
         """floor(x) <= round(x) for blinds — conservative is never more open."""
         pct = 45.7  # round→46, floor→45
-        snap_c = _snapshot(calc_pct=pct, open_blocks_sun=False, conservative_rounding=True)
-        snap_n = _snapshot(calc_pct=pct, open_blocks_sun=False, conservative_rounding=False)
+        snap_c = _snapshot(
+            calc_pct=pct, open_blocks_sun=False, conservative_rounding=True
+        )
+        snap_n = _snapshot(
+            calc_pct=pct, open_blocks_sun=False, conservative_rounding=False
+        )
         assert compute_solar_position(snap_c) <= compute_solar_position(snap_n)
 
 
@@ -128,7 +133,7 @@ class TestAwningConservativeRounding:
             (45.1, 46),  # round() would give 45; ceil gives 46 (more extended)
             (45.6, 46),  # round() also gives 46; ceil agrees
             (10.1, 11),  # round() would give 10; ceil gives 11
-            (0.1, 1),    # round() would give 0; ceil gives 1
+            (0.1, 1),  # round() would give 0; ceil gives 1
             (99.0, 99),  # already integer — no change
         ],
     )
@@ -152,8 +157,12 @@ class TestAwningConservativeRounding:
     def test_conservative_more_extended_than_round_when_fractional(self):
         """ceil(x) >= round(x) for awnings — conservative is never less extended."""
         pct = 45.3  # round→45, ceil→46
-        snap_c = _snapshot(calc_pct=pct, open_blocks_sun=True, conservative_rounding=True)
-        snap_n = _snapshot(calc_pct=pct, open_blocks_sun=True, conservative_rounding=False)
+        snap_c = _snapshot(
+            calc_pct=pct, open_blocks_sun=True, conservative_rounding=True
+        )
+        snap_n = _snapshot(
+            calc_pct=pct, open_blocks_sun=True, conservative_rounding=False
+        )
         assert compute_solar_position(snap_c) >= compute_solar_position(snap_n)
 
 
@@ -167,12 +176,16 @@ class TestConservativeRoundingOptIn:
 
     @pytest.mark.parametrize("pct", [45.1, 45.4, 45.6, 45.9, 10.7, 99.3])
     def test_blind_disabled_matches_round(self, pct):
-        snap = _snapshot(calc_pct=pct, open_blocks_sun=False, conservative_rounding=False)
+        snap = _snapshot(
+            calc_pct=pct, open_blocks_sun=False, conservative_rounding=False
+        )
         assert compute_solar_position(snap) == int(round(pct))
 
     @pytest.mark.parametrize("pct", [45.1, 45.4, 45.6, 45.9, 10.7, 99.3])
     def test_awning_disabled_matches_round(self, pct):
-        snap = _snapshot(calc_pct=pct, open_blocks_sun=True, conservative_rounding=False)
+        snap = _snapshot(
+            calc_pct=pct, open_blocks_sun=True, conservative_rounding=False
+        )
         assert compute_solar_position(snap) == int(round(pct))
 
     def test_default_snapshot_attribute_is_false(self):

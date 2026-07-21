@@ -1221,7 +1221,9 @@ def _make_glare_climate_cover(calculate_percentage_return: float = 91.0):
     cover.gamma = 0.0
     cover.sol_elev = 45.0
     cover.calculate_percentage = MagicMock(return_value=calculate_percentage_return)
-    cover.calculate_raw_percentage = MagicMock(return_value=float(calculate_percentage_return))
+    cover.calculate_raw_percentage = MagicMock(
+        return_value=float(calculate_percentage_return)
+    )
     config = MagicMock()
     config.min_pos = None
     config.max_pos = None
