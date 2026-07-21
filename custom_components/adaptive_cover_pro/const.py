@@ -421,7 +421,6 @@ CONF_MINIMIZE_MOVEMENTS = "minimize_movements"  # opt-in toggle
 CONF_MAX_COVERAGE_STEPS = "max_coverage_steps"  # discrete coverage levels, 1-10
 DEFAULT_MINIMIZE_MOVEMENTS = False
 DEFAULT_MAX_COVERAGE_STEPS = 1
-# Opt-in directional (conservative) rounding: bias the solar position toward
 # True if blind passes some light even when closed (used by glare/climate).
 CONF_TRANSPARENT_BLIND = "transparent_blind"
 
