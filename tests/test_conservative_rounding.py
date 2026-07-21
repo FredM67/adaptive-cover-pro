@@ -176,7 +176,7 @@ class TestConservativeRoundingOptIn:
         assert compute_solar_position(snap) == int(round(pct))
 
     def test_default_snapshot_attribute_is_false(self):
-        """getattr fallback: missing attribute behaves like conservative_rounding=False."""
+        """Getattr fallback: missing attribute behaves like conservative_rounding=False."""
         # SimpleNamespace without the attribute — same as legacy snapshots.
         snap = SimpleNamespace(
             cover=SimpleNamespace(
