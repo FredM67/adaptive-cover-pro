@@ -167,7 +167,7 @@ def solar_position_from_geometry(
         state = PositionConverter.quantize_to_coverage_steps(
             state,
             max_coverage_steps,
-            full_coverage_at_zero=not policy.axes[0].open_blocks_sun,
+            full_coverage_at_zero=full_coverage_at_zero,
         )
     state = solar_floor(state, floor_active=floor_active)
     return apply_config_limits(state, config, sun_valid=True)

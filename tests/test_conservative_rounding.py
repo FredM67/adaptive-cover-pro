@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,6 +21,7 @@ from custom_components.adaptive_cover_pro.pipeline.helpers import (
     compute_solar_position,
     solar_position_from_geometry,
 )
+from tests.cover_helpers import build_tilt_cover
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,3 +207,61 @@ class TestSolarPositionFromGeometryPrimitive:
             floor_active=False,
         )
         assert result == int(round(pct))
+
+
+# ---------------------------------------------------------------------------
+# Tilt: legacy/custom-max modes round internally via to_percentage(), so tilt
+# overrides calculate_raw_percentage() to expose the true fraction (issue #978).
+# Without the override, floor()/ceil() would see an already-rounded value and
+# the direction signal would be a no-op.
+# ---------------------------------------------------------------------------
+
+
+class TestTiltRawPercentage:
+    """AdaptiveTiltCover exposes an unrounded raw percentage in legacy modes."""
+
+    def _mode1_tilt(self):
+        return build_tilt_cover(
+            logger=MagicMock(),
+            sol_azi=180,
+            sol_elev=45,
+            sunset_pos=0,
+            sunset_off=0,
+            sunrise_off=0,
+            sun_data=MagicMock(),
+            fov_left=90,
+            fov_right=90,
+            win_azi=180,
+            h_def=50,
+            max_pos=100,
+            min_pos=0,
+            max_pos_bool=False,
+            min_pos_bool=False,
+            blind_spot_left=None,
+            blind_spot_right=None,
+            blind_spot_elevation=None,
+            blind_spot_on=False,
+            min_elevation=None,
+            max_elevation=None,
+            slat_distance=0.03,
+            depth=0.02,
+            mode="mode1",
+        )
+
+    def test_override_exposes_unrounded_fraction(self):
+        """Raw % keeps the sub-integer fraction that calculate_percentage() rounds away."""
+        cover = self._mode1_tilt()
+        assert not cover._is_specify_angles()
+        # 41° in the mode1 0–90° range → 45.5556 %. calculate_percentage() rounds
+        # to 46; calculate_raw_percentage() must keep the fraction so the solar
+        # branch can floor toward coverage.
+        cover.calculate_position = MagicMock(return_value=41.0)
+        raw = cover.calculate_raw_percentage()
+        assert raw == pytest.approx(41.0 / 90.0 * 100.0)
+        assert cover.calculate_percentage() == 46.0
+        assert math.floor(raw) == 45  # conservative floor differs from round()
+
+    def test_override_is_defined_on_the_class(self):
+        """The tilt class carries its own override, not the base delegation."""
+        cover = self._mode1_tilt()
+        assert "calculate_raw_percentage" in type(cover).__dict__
